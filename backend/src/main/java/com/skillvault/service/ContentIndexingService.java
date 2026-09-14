@@ -1,0 +1,276 @@
+package com.skillvault.service;
+
+import com.skillvault.model.Course;
+import com.skillvault.model.CourseModule;
+import com.skillvault.model.Lesson;
+import com.skillvault.repository.CourseModuleRepository;
+import com.skillvault.repository.CourseRepository;
+import com.skillvault.repository.LessonRepository;
+import jakarta.annotation.PostConstruct;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.util.*;
+
+@Service
+public class ContentIndexingService {
+
+    private static final Logger log = LoggerFactory.getLogger(ContentIndexingService.class);
+
+    private final CourseRepository courseRepository;
+    private final CourseModuleRepository moduleRepository;
+    private final LessonRepository lessonRepository;
+
+    @Value("${skillvault.content.path:../content}")
+    private String contentBasePath;
+
+    public ContentIndexingService(CourseRepository courseRepository,
+                                  CourseModuleRepository moduleRepository,
+                                  LessonRepository lessonRepository) {
+        this.courseRepository = courseRepository;
+        this.moduleRepository = moduleRepository;
+        this.lessonRepository = lessonRepository;
+    }
+
+    @PostConstruct
+    public void init() {
+        new Thread(() -> {
+            try {
+                Thread.sleep(1500);
+                indexContent();
+            } catch (Exception e) {
+                log.error("Error during background content indexing", e);
+            }
+        }).start();
+    }
+
+    @Transactional
+    public void indexContent() {
+        File contentDir = new File(contentBasePath);
+        if (!contentDir.exists() || !contentDir.isDirectory()) {
+            contentDir = new File("content");
+        }
+        if (!contentDir.exists()) {
+            log.warn("Content directory not found at: " + contentBasePath);
+            return;
+        }
+
+        log.info("Starting SkillVault content indexing from: {}", contentDir.getAbsolutePath());
+
+        File[] courseDirs = contentDir.listFiles(File::isDirectory);
+        if (courseDirs == null) return;
+
+        Arrays.sort(courseDirs, Comparator.comparing(File::getName));
+
+        for (File courseDir : courseDirs) {
+            String dirName = courseDir.getName();
+            if (dirName.startsWith(".") || dirName.equalsIgnoreCase("docs")) continue;
+
+            try {
+                indexSingleCourse(courseDir);
+            } catch (Exception e) {
+                log.error("Failed indexing course: " + dirName, e);
+            }
+        }
+
+        log.info("SkillVault content indexing complete! Total courses in DB: {}", courseRepository.count());
+    }
+
+    private void indexSingleCourse(File courseDir) {
+        String slug = courseDir.getName().toLowerCase();
+        String title = formatCourseTitle(courseDir.getName());
+        String category = categorizeCourse(courseDir.getName());
+        String level = "Intermediate";
+        String icon = getCourseIcon(slug);
+
+        Course course = courseRepository.findBySlug(slug).orElse(new Course());
+        course.setSlug(slug);
+        course.setTitle(title);
+        course.setCategory(category);
+        course.setLevel(level);
+        course.setIcon(icon);
+
+        File readme = new File(courseDir, "README.md");
+        if (readme.exists()) {
+            try {
+                String firstLines = extractDescriptionFromReadme(readme);
+                course.setDescription(firstLines);
+            } catch (Exception ignored) {}
+        } else {
+            course.setDescription("Comprehensive production-grade mastery course on " + title + ".");
+        }
+
+        course = courseRepository.save(course);
+
+        File[] subFiles = courseDir.listFiles();
+        if (subFiles == null) return;
+
+        Arrays.sort(subFiles, Comparator.comparing(File::getName));
+
+        int moduleOrder = 0;
+        int totalLessonCount = 0;
+
+        List<CourseModule> existingModules = course.getModules();
+        Map<String, CourseModule> moduleMap = new HashMap<>();
+        for (CourseModule m : existingModules) {
+            moduleMap.put(m.getSlug(), m);
+        }
+
+        List<File> standaloneMdFiles = new ArrayList<>();
+
+        for (File file : subFiles) {
+            if (file.getName().startsWith(".")) continue;
+
+            if (file.isDirectory()) {
+                String modName = file.getName();
+                String modSlug = modName.toLowerCase();
+                String modTitle = formatModuleTitle(modName);
+
+                CourseModule module = moduleMap.getOrDefault(modSlug, new CourseModule());
+                module.setCourse(course);
+                module.setSlug(modSlug);
+                module.setTitle(modTitle);
+                module.setSortOrder(++moduleOrder);
+                module = moduleRepository.save(module);
+
+                int lessonCount = indexLessonsInModule(file, module, course);
+                totalLessonCount += lessonCount;
+            } else if (file.getName().endsWith(".md") && !file.getName().equalsIgnoreCase("README.md")) {
+                standaloneMdFiles.add(file);
+            }
+        }
+
+        if (!standaloneMdFiles.isEmpty()) {
+            CourseModule generalModule = moduleMap.getOrDefault("core-material", new CourseModule());
+            generalModule.setCourse(course);
+            generalModule.setSlug("core-material");
+            generalModule.setTitle("Core Guides & Materials");
+            generalModule.setSortOrder(++moduleOrder);
+            generalModule = moduleRepository.save(generalModule);
+
+            Map<String, Lesson> existingLessons = new HashMap<>();
+            for (Lesson l : generalModule.getLessons()) {
+                existingLessons.put(l.getSlug(), l);
+            }
+
+            int order = 0;
+            for (File mdFile : standaloneMdFiles) {
+                String lessonSlug = mdFile.getName().replace(".md", "").toLowerCase();
+                String lessonTitle = formatLessonTitle(mdFile.getName().replace(".md", ""));
+                Lesson lesson = existingLessons.getOrDefault(lessonSlug, new Lesson());
+                lesson.setTitle(lessonTitle);
+                lesson.setSlug(lessonSlug);
+                lesson.setFilePath(mdFile.getAbsolutePath());
+                lesson.setSortOrder(++order);
+                lesson.setEstimatedMinutes(20);
+                lesson.setModule(generalModule);
+                lessonRepository.save(lesson);
+                totalLessonCount++;
+            }
+        }
+
+        course.setTotalLessons(totalLessonCount);
+        course.setEstimatedHours(Math.max(10, totalLessonCount * 45 / 60));
+        courseRepository.save(course);
+    }
+
+    private int indexLessonsInModule(File moduleDir, CourseModule module, Course course) {
+        File[] files = moduleDir.listFiles((dir, name) -> name.endsWith(".md") && !name.equalsIgnoreCase("README.md"));
+        if (files == null || files.length == 0) return 0;
+
+        Arrays.sort(files, Comparator.comparing(File::getName));
+        
+        Map<String, Lesson> existingLessons = new HashMap<>();
+        for (Lesson l : module.getLessons()) {
+            existingLessons.put(l.getSlug(), l);
+        }
+
+        int order = 0;
+        for (File f : files) {
+            String lessonSlug = f.getName().replace(".md", "").toLowerCase();
+            String lessonTitle = formatLessonTitle(f.getName().replace(".md", ""));
+            
+            Lesson lesson = existingLessons.getOrDefault(lessonSlug, new Lesson());
+            lesson.setTitle(lessonTitle);
+            lesson.setSlug(lessonSlug);
+            lesson.setFilePath(f.getAbsolutePath());
+            lesson.setSortOrder(++order);
+            lesson.setEstimatedMinutes(20);
+            lesson.setModule(module);
+            lessonRepository.save(lesson);
+        }
+        return files.length;
+    }
+
+    private String formatCourseTitle(String name) {
+        if ("AWS".equalsIgnoreCase(name)) return "Amazon Web Services (AWS)";
+        if ("AWS-Local".equalsIgnoreCase(name)) return "AWS Local Development";
+        if ("DSA".equalsIgnoreCase(name)) return "Data Structures & Algorithms";
+        if ("HLD".equalsIgnoreCase(name)) return "High-Level Design (HLD)";
+        if ("LLD".equalsIgnoreCase(name)) return "Low-Level Design (LLD)";
+        if ("RAG".equalsIgnoreCase(name)) return "Retrieval-Augmented Generation (RAG)";
+        if ("SpringBoot".equalsIgnoreCase(name)) return "Spring Boot 3 & 4 Backend";
+        if ("NextJS".equalsIgnoreCase(name)) return "Next.js Full Stack";
+        if ("NodeJS".equalsIgnoreCase(name)) return "Node.js Architecture";
+        if ("NestJS".equalsIgnoreCase(name)) return "NestJS Enterprise Microservices";
+        return name.replaceAll("([a-z])([A-Z])", "$1 $2");
+    }
+
+    private String formatModuleTitle(String name) {
+        String cleaned = name.replaceAll("^Phase-\\d+-?", "");
+        cleaned = cleaned.replace("-", " ");
+        return cleaned.isEmpty() ? name : cleaned;
+    }
+
+    private String formatLessonTitle(String name) {
+        String cleaned = name.replaceAll("^\\d+-?", "");
+        cleaned = cleaned.replace("-", " ");
+        return cleaned.isEmpty() ? name : cleaned;
+    }
+
+    private String categorizeCourse(String name) {
+        String n = name.toLowerCase();
+        if (n.contains("aws") || n.contains("cloud") || n.contains("terraform")) return "Cloud & DevOps";
+        if (n.contains("docker") || n.contains("kubernetes") || n.contains("git") || n.contains("action")) return "DevOps";
+        if (n.contains("spring") || n.contains("nest") || n.contains("node") || n.contains("java") || n.contains("microservice")) return "Backend";
+        if (n.contains("react") || n.contains("angular") || n.contains("next") || n.contains("javascript") || n.contains("typescript")) return "Frontend";
+        if (n.contains("database") || n.contains("sql") || n.contains("redis")) return "Databases";
+        if (n.contains("hld") || n.contains("lld") || n.contains("system")) return "System Design";
+        if (n.contains("rag") || n.contains("langchain") || n.contains("langgraph")) return "AI & LLMs";
+        if (n.contains("os") || n.contains("operating") || n.contains("network") || n.contains("fundamental")) return "Computer Science";
+        if (n.contains("dsa") || n.contains("aptitude")) return "Interview Prep";
+        return "Software Engineering";
+    }
+
+    private String getCourseIcon(String slug) {
+        if (slug.contains("aws")) return "cloud";
+        if (slug.contains("spring")) return "leaf";
+        if (slug.contains("java")) return "coffee";
+        if (slug.contains("react") || slug.contains("next")) return "atom";
+        if (slug.contains("docker") || slug.contains("kube")) return "box";
+        if (slug.contains("data") || slug.contains("sql")) return "database";
+        if (slug.contains("ai") || slug.contains("rag") || slug.contains("lang")) return "brain";
+        if (slug.contains("hld") || slug.contains("lld")) return "layers";
+        return "terminal";
+    }
+
+    private String extractDescriptionFromReadme(File readme) throws IOException {
+        List<String> lines = Files.readAllLines(readme.toPath());
+        StringBuilder sb = new StringBuilder();
+        for (String line : lines) {
+            String trimmed = line.trim();
+            if (trimmed.startsWith("#") || trimmed.startsWith("---") || trimmed.startsWith("```") || trimmed.isEmpty()) {
+                continue;
+            }
+            sb.append(trimmed).append(" ");
+            if (sb.length() > 220) break;
+        }
+        return sb.toString().trim();
+    }
+}
