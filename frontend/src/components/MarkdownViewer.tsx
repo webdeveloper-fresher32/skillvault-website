@@ -38,14 +38,17 @@ function CodeBlockContainer({ children }: { children: React.ReactNode }) {
 
   const handleCopy = () => {
     let textToCopy = '';
-    React.Children.forEach(children, (child) => {
-      if (React.isValidElement(child)) {
-        const props = child.props as any;
-        if (props?.children) {
-          textToCopy = String(props.children);
-        }
+    const extractText = (node: any) => {
+      if (!node) return;
+      if (typeof node === 'string' || typeof node === 'number') {
+        textToCopy += node;
+      } else if (Array.isArray(node)) {
+        node.forEach(extractText);
+      } else if (React.isValidElement(node)) {
+        extractText((node.props as any)?.children);
       }
-    });
+    };
+    extractText(children);
 
     navigator.clipboard.writeText(textToCopy);
     setCopied(true);
@@ -53,34 +56,29 @@ function CodeBlockContainer({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <div className="relative group my-4 rounded-xl border border-slate-800 bg-[#0b1120] overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-2 bg-slate-900/90 border-b border-slate-800/80 text-xs text-slate-400">
-        <div className="flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-full bg-red-500/80 inline-block" />
-          <span className="h-2.5 w-2.5 rounded-full bg-amber-500/80 inline-block" />
-          <span className="h-2.5 w-2.5 rounded-full bg-emerald-500/80 inline-block" />
-          <span className="ml-2 font-mono text-[11px] text-slate-400">code snippet</span>
-        </div>
+    <div className="relative group my-4 rounded-md border border-[#30363d] bg-[#161b22]">
+      {/* GitHub-style Copy button in the top right corner */}
+      <div className="absolute top-2 right-2 z-10 opacity-70 group-hover:opacity-100 transition-opacity">
         <button
           onClick={handleCopy}
-          className="flex items-center gap-1 text-[11px] font-mono text-slate-400 hover:text-slate-200 transition-colors bg-slate-800/60 px-2 py-0.5 rounded"
+          aria-label="Copy code"
+          className="flex items-center gap-1.5 rounded-md border border-[#30363d] bg-[#21262d] px-2 py-1 text-xs text-slate-300 hover:border-[#8b949e] hover:bg-[#30363d] transition-all shadow-sm"
         >
           {copied ? (
             <>
-              <Check className="h-3 w-3 text-emerald-400" />
-              <span className="text-emerald-400">Copied</span>
+              <Check className="h-3.5 w-3.5 text-emerald-400" />
+              <span className="text-[11px] text-emerald-400 font-sans">Copied!</span>
             </>
           ) : (
-            <>
-              <Copy className="h-3 w-3" />
-              <span>Copy</span>
-            </>
+            <Copy className="h-3.5 w-3.5 text-slate-400" />
           )}
         </button>
       </div>
-      <div className="p-4 overflow-x-auto text-sm font-mono leading-relaxed">
+
+      {/* GitHub-style pre code viewport */}
+      <pre className="p-4 overflow-x-auto text-[13px] sm:text-sm font-mono leading-[1.45] text-[#e6edf3] !bg-transparent !border-0 !m-0">
         {children}
-      </div>
+      </pre>
     </div>
   );
 }

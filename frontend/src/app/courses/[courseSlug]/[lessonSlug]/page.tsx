@@ -304,7 +304,7 @@ export default function LessonPage({ params }: PageProps) {
       </aside>
 
       {/* 2. SCROLLABLE MIDDLE SECTION: Full Continuous Markdown Content (No middle accordions) */}
-      <main className="flex-1 lg:ml-80 sm:lg:ml-88 xl:mr-72 min-w-0 px-4 sm:px-8 lg:px-12 py-8 max-w-4xl mx-auto w-full">
+      <main className="flex-1 lg:ml-80 sm:lg:ml-88 xl:mr-72 min-w-0 px-4 sm:px-8 lg:px-10 py-8 max-w-5xl mx-auto w-full">
         {/* GitHub Breadcrumb Navigation Bar */}
         <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-[#30363d] text-xs text-slate-400">
           <div className="flex items-center gap-2 font-mono truncate">
