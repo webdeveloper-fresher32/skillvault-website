@@ -6,15 +6,13 @@ import { useRouter } from 'next/navigation';
 import { 
   ChevronRight, 
   ChevronDown, 
-  ChevronUp,
-  FileText, 
   Check, 
   PlaySquare, 
   Bookmark, 
   Share2, 
   Menu, 
   X,
-  ListTree
+  ListOrdered
 } from 'lucide-react';
 import { 
   fetchLessonDetail, 
@@ -46,11 +44,11 @@ export default function LessonPage({ params }: PageProps) {
   // Accordion state for sidebar course sections
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
 
-  // Accordion state for subtopics inside the markdown lesson content
-  const [openSubtopics, setOpenSubtopics] = useState<Record<string, boolean>>({});
-
-  // Individual completion checklist state
+  // Individual completion checklist state for topics
   const [completedItems, setCompletedItems] = useState<Record<string, boolean>>({});
+
+  // Active section in timeline
+  const [activeHeadingId, setActiveHeadingId] = useState<string>('');
 
   useEffect(() => {
     async function load() {
@@ -72,15 +70,6 @@ export default function LessonPage({ params }: PageProps) {
           map[m.slug] = isCurrent;
         });
         setOpenSections(map);
-
-        // Auto-expand all subtopics by default in the reading area
-        if (lData.subtopics && lData.subtopics.length > 0) {
-          const subMap: Record<string, boolean> = {};
-          lData.subtopics.forEach((s) => {
-            subMap[s.id] = true;
-          });
-          setOpenSubtopics(subMap);
-        }
       } catch (err) {
         console.error(err);
       } finally {
@@ -90,17 +79,30 @@ export default function LessonPage({ params }: PageProps) {
     load();
   }, [courseSlug, lessonSlug]);
 
+  // Observer to highlight active heading on scroll
+  useEffect(() => {
+    const handleScroll = () => {
+      const headings = document.querySelectorAll('.markdown-body h2, .markdown-body h3');
+      let currentId = '';
+      headings.forEach((heading) => {
+        const top = heading.getBoundingClientRect().top;
+        if (top <= 140) {
+          currentId = heading.id || heading.textContent || '';
+        }
+      });
+      if (currentId) {
+        setActiveHeadingId(currentId);
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [lesson]);
+
   const toggleSection = (slug: string) => {
     setOpenSections((prev) => ({
       ...prev,
       [slug]: !prev[slug],
-    }));
-  };
-
-  const toggleSubtopic = (id: string) => {
-    setOpenSubtopics((prev) => ({
-      ...prev,
-      [id]: !prev[id],
     }));
   };
 
@@ -137,6 +139,20 @@ export default function LessonPage({ params }: PageProps) {
     setTimeout(() => setIsCopied(false), 2000);
   };
 
+  const scrollToSection = (title: string) => {
+    // Look for heading matching title
+    const headings = Array.from(document.querySelectorAll('.markdown-body h2, .markdown-body h3'));
+    const cleanTitle = title.replace(/^\d+[\.\-\s]+/, '').trim().toLowerCase();
+    const target = headings.find((h) => {
+      const hText = (h.textContent || '').replace(/^\d+[\.\-\s]+/, '').trim().toLowerCase();
+      return hText === cleanTitle || (h.textContent || '').toLowerCase().includes(cleanTitle);
+    });
+
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex h-[80vh] items-center justify-center">
@@ -168,14 +184,14 @@ export default function LessonPage({ params }: PageProps) {
         {isSidebarOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
       </button>
 
-      {/* LEFT SIDEBAR: Udemy / EdTech Course Curriculum Accordion */}
+      {/* 1. FIXED LEFT SIDEBAR: Udemy / EdTech Course Curriculum Accordion */}
       <aside
-        className={`fixed inset-y-0 left-0 z-30 w-80 sm:w-96 transform border-r border-[#30363d] bg-[#161b22] transition-transform duration-200 lg:static lg:block lg:translate-x-0 overflow-y-auto ${
+        className={`fixed top-16 bottom-0 left-0 z-30 w-80 sm:w-88 border-r border-[#30363d] bg-[#161b22] transition-transform duration-200 lg:translate-x-0 overflow-y-auto ${
           isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
         {/* Course Title Header */}
-        <div className="p-4 border-b border-[#30363d] bg-[#0d1117]/90 sticky top-0 z-10">
+        <div className="p-4 border-b border-[#30363d] bg-[#0d1117]/95 sticky top-0 z-10 backdrop-blur">
           <Link
             href={`/courses/${course.slug}`}
             className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-indigo-400 transition-colors mb-2"
@@ -190,7 +206,7 @@ export default function LessonPage({ params }: PageProps) {
           </div>
         </div>
 
-        {/* Collapsible Sections */}
+        {/* Sections Accordion */}
         <div className="divide-y divide-[#30363d]/80">
           {course.modules?.map((mod, modIdx) => {
             const isOpen = !!openSections[mod.slug];
@@ -200,7 +216,7 @@ export default function LessonPage({ params }: PageProps) {
 
             return (
               <div key={mod.id} className="bg-transparent">
-                {/* Accordion Header (Matching exact screenshot) */}
+                {/* Accordion Section Header */}
                 <button
                   onClick={() => toggleSection(mod.slug)}
                   className={`w-full flex items-center justify-between p-4 text-left transition-colors ${
@@ -218,14 +234,14 @@ export default function LessonPage({ params }: PageProps) {
 
                   <div className="text-slate-400 shrink-0">
                     {isOpen ? (
-                      <ChevronUp className="h-5 w-5 text-slate-300" />
+                      <ChevronDown className="h-5 w-5 text-slate-300" />
                     ) : (
-                      <ChevronDown className="h-5 w-5 text-slate-400" />
+                      <ChevronRight className="h-5 w-5 text-slate-400" />
                     )}
                   </div>
                 </button>
 
-                {/* Accordion Body: Lessons with purple checkboxes */}
+                {/* Accordion Section Items */}
                 {isOpen && (
                   <div className="bg-[#0d1117] py-2 border-t border-[#30363d]/60">
                     {mod.lessons?.map((l, lIdx) => {
@@ -287,21 +303,21 @@ export default function LessonPage({ params }: PageProps) {
         </div>
       </aside>
 
-      {/* RIGHT MAIN CONTENT AREA: Complete Markdown Document with Subtopic Accordions */}
-      <main className="flex-1 overflow-y-auto px-4 sm:px-8 lg:px-12 py-8 max-w-5xl mx-auto w-full">
-        {/* Breadcrumb Path (Matching GitHub style) */}
+      {/* 2. SCROLLABLE MIDDLE SECTION: Full Continuous Markdown Content (No middle accordions) */}
+      <main className="flex-1 lg:ml-80 sm:lg:ml-88 xl:mr-72 min-w-0 px-4 sm:px-8 lg:px-12 py-8 max-w-4xl mx-auto w-full">
+        {/* GitHub Breadcrumb Navigation Bar */}
         <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-[#30363d] text-xs text-slate-400">
-          <div className="flex items-center gap-2 font-mono">
-            <Link href={`/courses/${course.slug}`} className="text-blue-400 hover:underline">
+          <div className="flex items-center gap-2 font-mono truncate">
+            <Link href={`/courses/${course.slug}`} className="text-blue-400 hover:underline truncate">
               {course.title}
             </Link>
             <span>/</span>
-            <span className="text-blue-400">{lesson.moduleTitle}</span>
+            <span className="text-blue-400 truncate">{lesson.moduleTitle}</span>
             <span>/</span>
-            <span className="text-slate-200 font-semibold">{lesson.slug}.md</span>
+            <span className="text-slate-200 font-semibold truncate">{lesson.slug}.md</span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={handleToggleBookmark}
               className={`flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-medium border transition-all ${
@@ -336,71 +352,12 @@ export default function LessonPage({ params }: PageProps) {
           </div>
         </div>
 
-        {/* Lesson Main Title Header */}
-        <div className="py-6 border-b border-[#30363d]">
-          <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
-            {lesson.title}
-          </h1>
-          <p className="mt-2 text-xs text-slate-400">
-            {lesson.moduleTitle} • {subtopicsList.length} Subtopics
-          </p>
+        {/* Clean, Full-Stream Markdown Document (Normal Continuous Reading) */}
+        <div className="py-6">
+          <MarkdownViewer content={lesson.markdownContent} />
         </div>
 
-        {/* SUBTOPICS ACCORDION IN MAIN CONTENT AREA */}
-        {subtopicsList.length > 0 ? (
-          <div className="mt-8 space-y-4">
-            {subtopicsList.map((sub, sIdx) => {
-              const isOpen = !!openSubtopics[sub.id];
-
-              return (
-                <div
-                  key={sub.id}
-                  className="rounded-xl border border-[#30363d] bg-[#161b22] overflow-hidden transition-all shadow-md"
-                >
-                  {/* Subtopic Accordion Header */}
-                  <button
-                    onClick={() => toggleSubtopic(sub.id)}
-                    className="w-full flex items-center justify-between p-4 bg-[#1c2128] hover:bg-[#22272e] transition-colors text-left"
-                  >
-                    <div className="flex items-center gap-3">
-                      <span className="flex h-6 w-6 items-center justify-center rounded bg-[#7c3aed]/20 font-mono text-xs font-bold text-[#a78bfa] border border-[#7c3aed]/40">
-                        {sIdx + 1}
-                      </span>
-                      <h2 className="text-base sm:text-lg font-bold text-white">
-                        {sub.title}
-                      </h2>
-                    </div>
-
-                    <div className="flex items-center gap-2 text-slate-400">
-                      <span className="text-xs font-mono hidden sm:inline text-slate-400">
-                        {isOpen ? 'Collapse' : 'Expand'}
-                      </span>
-                      {isOpen ? (
-                        <ChevronUp className="h-5 w-5 text-slate-300" />
-                      ) : (
-                        <ChevronDown className="h-5 w-5 text-slate-400" />
-                      )}
-                    </div>
-                  </button>
-
-                  {/* Subtopic Accordion Body: Markdown Info */}
-                  {isOpen && (
-                    <div className="p-6 bg-[#0d1117] border-t border-[#30363d]/80">
-                      <MarkdownViewer content={sub.content} />
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          /* Fallback if no subtopics parsed */
-          <div className="py-6">
-            <MarkdownViewer content={lesson.markdownContent} />
-          </div>
-        )}
-
-        {/* Prev / Next Footer */}
+        {/* Prev / Next Footer Navigation */}
         <div className="mt-12 flex items-center justify-between border-t border-[#30363d] pt-6 pb-12">
           {lesson.prevLessonSlug ? (
             <Link
@@ -421,6 +378,62 @@ export default function LessonPage({ params }: PageProps) {
           )}
         </div>
       </main>
+
+      {/* 3. FIXED RIGHT SIDEBAR: Interactive Timeline of Subtopics / Headings */}
+      <aside className="hidden xl:block fixed top-16 bottom-0 right-0 w-72 border-l border-[#30363d] bg-[#161b22] p-5 overflow-y-auto">
+        <div className="pb-3 border-b border-[#30363d] mb-4">
+          <div className="flex items-center gap-2 text-xs font-bold text-slate-200 uppercase tracking-wider">
+            <ListOrdered className="h-4 w-4 text-[#7c3aed]" />
+            <span>On This Page (Timeline)</span>
+          </div>
+          <div className="text-[11px] text-slate-400 mt-1">
+            {subtopicsList.length} Key Subtopics
+          </div>
+        </div>
+
+        {/* Timeline Path */}
+        <div className="relative pl-3 space-y-4">
+          {/* Vertical Connecting Line */}
+          <div className="absolute left-[17px] top-2 bottom-2 w-0.5 bg-[#30363d]" />
+
+          {subtopicsList.map((sub, sIdx) => {
+            const isCurrent = activeHeadingId.toLowerCase().includes(sub.title.toLowerCase()) || 
+                              sub.title.toLowerCase().includes(activeHeadingId.toLowerCase());
+
+            return (
+              <div
+                key={sub.id}
+                onClick={() => scrollToSection(sub.title)}
+                className="group relative flex items-start gap-3 cursor-pointer"
+              >
+                {/* Timeline node bullet */}
+                <div
+                  className={`mt-1 h-3 w-3 rounded-full border-2 transition-all shrink-0 z-10 ${
+                    isCurrent
+                      ? 'bg-[#7c3aed] border-white ring-4 ring-[#7c3aed]/30'
+                      : 'bg-[#161b22] border-slate-500 group-hover:border-[#7c3aed]'
+                  }`}
+                />
+
+                <div className="flex-1">
+                  <div
+                    className={`text-xs leading-snug transition-colors line-clamp-2 ${
+                      isCurrent
+                        ? 'font-bold text-[#a78bfa]'
+                        : 'text-slate-400 group-hover:text-slate-200'
+                    }`}
+                  >
+                    {sub.title}
+                  </div>
+                  <div className="text-[10px] font-mono text-slate-500 mt-0.5">
+                    Step {sIdx + 1}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </aside>
     </div>
   );
 }
