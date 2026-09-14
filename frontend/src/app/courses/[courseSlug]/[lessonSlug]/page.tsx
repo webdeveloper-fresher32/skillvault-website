@@ -33,9 +33,11 @@ export default function LessonPage({ params }: PageProps) {
   const resolvedParams = use(params);
   const { courseSlug, lessonSlug } = resolvedParams;
 
+  const [activeLessonSlug, setActiveLessonSlug] = useState<string>(lessonSlug);
   const [lesson, setLesson] = useState<LessonDetail | null>(null);
   const [course, setCourse] = useState<Course | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [isLessonSwitching, setIsLessonSwitching] = useState(false);
   const [completed, setCompleted] = useState(false);
   const [bookmarked, setBookmarked] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -47,57 +49,112 @@ export default function LessonPage({ params }: PageProps) {
   // Individual completion checklist state for topics
   const [completedItems, setCompletedItems] = useState<Record<string, boolean>>({});
 
-  // Active section in timeline
-  const [activeHeadingId, setActiveHeadingId] = useState<string>('');
+  // Fetch or switch lesson
+  const loadLessonData = async (targetLessonSlug: string, isInitial = false) => {
+    if (isInitial) {
+      setInitialLoading(true);
+    } else {
+      setIsLessonSwitching(true);
+    }
 
-  useEffect(() => {
-    async function load() {
-      setLoading(true);
-      try {
+    try {
+      if (isInitial || !course) {
         const [lData, cData] = await Promise.all([
-          fetchLessonDetail(courseSlug, lessonSlug),
+          fetchLessonDetail(courseSlug, targetLessonSlug),
           fetchCourseBySlug(courseSlug),
         ]);
         setLesson(lData);
         setCourse(cData);
         setCompleted(lData.completed);
         setBookmarked(lData.bookmarked);
+        setActiveLessonSlug(targetLessonSlug);
 
         // Auto-open current section in sidebar
         const map: Record<string, boolean> = {};
         cData.modules?.forEach((m) => {
-          const isCurrent = m.lessons?.some((l) => l.slug === lessonSlug);
+          const isCurrent = m.lessons?.some((l) => l.slug === targetLessonSlug);
           map[m.slug] = isCurrent;
         });
         setOpenSections(map);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setLoading(false);
+      } else {
+        const lData = await fetchLessonDetail(courseSlug, targetLessonSlug);
+        setLesson(lData);
+        setCompleted(lData.completed);
+        setBookmarked(lData.bookmarked);
+        setActiveLessonSlug(targetLessonSlug);
+
+        // Auto-open section containing this lesson if closed
+        course.modules?.forEach((m) => {
+          if (m.lessons?.some((l) => l.slug === targetLessonSlug)) {
+            setOpenSections((prev) => ({ ...prev, [m.slug]: true }));
+          }
+        });
       }
+
+      // Scroll to top of content smoothly
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (err) {
+      console.error(err);
+    } finally {
+      if (isInitial) {
+        setInitialLoading(false);
+      }
+      setIsLessonSwitching(false);
     }
-    load();
+  };
+
+  useEffect(() => {
+    loadLessonData(lessonSlug, true);
   }, [courseSlug, lessonSlug]);
+
+  // Handler for seamless topic click
+  const handleSwitchTopic = (targetSlug: string) => {
+    if (targetSlug === activeLessonSlug) return;
+    window.history.pushState({}, '', `/courses/${courseSlug}/${targetSlug}`);
+    loadLessonData(targetSlug, false);
+  };
+
+  // Active subtopic index in timeline (0 to N-1)
+  const [activeSubtopicIndex, setActiveSubtopicIndex] = useState<number>(0);
+
+  const subtopicsList = lesson?.subtopics || [];
 
   // Observer to highlight active heading on scroll
   useEffect(() => {
     const handleScroll = () => {
-      const headings = document.querySelectorAll('.markdown-body h2, .markdown-body h3');
-      let currentId = '';
-      headings.forEach((heading) => {
-        const top = heading.getBoundingClientRect().top;
-        if (top <= 140) {
-          currentId = heading.id || heading.textContent || '';
+      // Find all h2 and h3 in markdown
+      const headings = Array.from(document.querySelectorAll('.markdown-body h2, .markdown-body h3')) as HTMLElement[];
+      if (!headings.length || !subtopicsList.length) return;
+
+      const scrollPos = window.scrollY + 160;
+
+      // Match against subtopics list
+      let bestIdx = 0;
+      for (let s = 0; s < subtopicsList.length; s++) {
+        const sub = subtopicsList[s];
+        const cleanSub = sub.title.replace(/^\d+[\.\-\s]+/, '').trim().toLowerCase();
+
+        // Find heading in document matching this subtopic
+        const hMatch = headings.find((h) => {
+          const hText = (h.textContent || '').replace(/^\d+[\.\-\s]+/, '').trim().toLowerCase();
+          return hText === cleanSub || hText.includes(cleanSub) || cleanSub.includes(hText);
+        });
+
+        if (hMatch) {
+          const top = hMatch.getBoundingClientRect().top + window.scrollY;
+          if (top <= scrollPos) {
+            bestIdx = s;
+          }
         }
-      });
-      if (currentId) {
-        setActiveHeadingId(currentId);
       }
+
+      setActiveSubtopicIndex(bestIdx);
     };
 
     window.addEventListener('scroll', handleScroll, { passive: true });
+    handleScroll();
     return () => window.removeEventListener('scroll', handleScroll);
-  }, [lesson]);
+  }, [lesson, subtopicsList]);
 
   const toggleSection = (slug: string) => {
     setOpenSections((prev) => ({
@@ -139,21 +196,32 @@ export default function LessonPage({ params }: PageProps) {
     setTimeout(() => setIsCopied(false), 2000);
   };
 
-  const scrollToSection = (title: string) => {
-    // Look for heading matching title
-    const headings = Array.from(document.querySelectorAll('.markdown-body h2, .markdown-body h3'));
+  const scrollToSection = (title: string, index?: number) => {
+    const headings = Array.from(document.querySelectorAll('.markdown-body h2, .markdown-body h3')) as HTMLElement[];
     const cleanTitle = title.replace(/^\d+[\.\-\s]+/, '').trim().toLowerCase();
-    const target = headings.find((h) => {
+    
+    // 1. Try finding heading matching clean title
+    let target = headings.find((h) => {
       const hText = (h.textContent || '').replace(/^\d+[\.\-\s]+/, '').trim().toLowerCase();
-      return hText === cleanTitle || (h.textContent || '').toLowerCase().includes(cleanTitle);
+      return hText === cleanTitle || hText.startsWith(cleanTitle) || cleanTitle.startsWith(hText);
     });
 
+    // 2. Fallback: match by index if provided
+    if (!target && index !== undefined) {
+      const h2s = Array.from(document.querySelectorAll('.markdown-body h2')) as HTMLElement[];
+      if (h2s[index]) {
+        target = h2s[index];
+      }
+    }
+
     if (target) {
-      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const navOffset = 90;
+      const targetPos = target.getBoundingClientRect().top + window.scrollY - navOffset;
+      window.scrollTo({ top: targetPos, behavior: 'smooth' });
     }
   };
 
-  if (loading) {
+  if (initialLoading) {
     return (
       <div className="flex h-[80vh] items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-indigo-500 border-t-transparent" />
@@ -171,8 +239,6 @@ export default function LessonPage({ params }: PageProps) {
       </div>
     );
   }
-
-  const subtopicsList = lesson.subtopics || [];
 
   return (
     <div className="flex min-h-[calc(100vh-4rem)] bg-[#0d1117]">
@@ -245,7 +311,7 @@ export default function LessonPage({ params }: PageProps) {
                 {isOpen && (
                   <div className="bg-[#0d1117] py-2 border-t border-[#30363d]/60">
                     {mod.lessons?.map((l, lIdx) => {
-                      const isCurrent = l.slug === lesson.slug;
+                      const isCurrent = l.slug === activeLessonSlug;
                       const isDone = isCurrent ? completed : !!completedItems[l.slug];
 
                       return (
@@ -253,7 +319,7 @@ export default function LessonPage({ params }: PageProps) {
                           key={l.id}
                           onClick={() => {
                             if (!isCurrent) {
-                              router.push(`/courses/${course.slug}/${l.slug}`);
+                              handleSwitchTopic(l.slug);
                             }
                           }}
                           className={`flex items-start gap-3 px-4 py-3 cursor-pointer transition-colors ${
@@ -353,28 +419,28 @@ export default function LessonPage({ params }: PageProps) {
         </div>
 
         {/* Clean, Full-Stream Markdown Document (Normal Continuous Reading) */}
-        <div className="py-6">
+        <div className={`py-6 transition-opacity duration-150 ${isLessonSwitching ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
           <MarkdownViewer content={lesson.markdownContent} />
         </div>
 
         {/* Prev / Next Footer Navigation */}
         <div className="mt-12 flex items-center justify-between border-t border-[#30363d] pt-6 pb-12">
           {lesson.prevLessonSlug ? (
-            <Link
-              href={`/courses/${course.slug}/${lesson.prevLessonSlug}`}
-              className="flex items-center gap-2 rounded-lg border border-[#30363d] bg-[#21262d] px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-[#30363d] hover:text-white"
+            <button
+              onClick={() => handleSwitchTopic(lesson.prevLessonSlug!)}
+              className="flex items-center gap-2 rounded-lg border border-[#30363d] bg-[#21262d] px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-[#30363d] hover:text-white transition-colors"
             >
               <span>‹ Previous Topic</span>
-            </Link>
+            </button>
           ) : <div />}
 
           {lesson.nextLessonSlug && (
-            <Link
-              href={`/courses/${course.slug}/${lesson.nextLessonSlug}`}
-              className="flex items-center gap-2 rounded-lg bg-[#7c3aed] px-5 py-2 text-xs font-semibold text-white shadow-md hover:bg-[#6d28d9]"
+            <button
+              onClick={() => handleSwitchTopic(lesson.nextLessonSlug!)}
+              className="flex items-center gap-2 rounded-lg bg-[#7c3aed] px-5 py-2 text-xs font-semibold text-white shadow-md hover:bg-[#6d28d9] transition-colors"
             >
               <span>Next Topic ›</span>
-            </Link>
+            </button>
           )}
         </div>
       </main>
@@ -397,35 +463,41 @@ export default function LessonPage({ params }: PageProps) {
           <div className="absolute left-[17px] top-2 bottom-2 w-0.5 bg-[#30363d]" />
 
           {subtopicsList.map((sub, sIdx) => {
-            const isCurrent = activeHeadingId.toLowerCase().includes(sub.title.toLowerCase()) || 
-                              sub.title.toLowerCase().includes(activeHeadingId.toLowerCase());
+            const isCurrent = sIdx === activeSubtopicIndex;
+            const isPassed = sIdx < activeSubtopicIndex;
 
             return (
               <div
                 key={sub.id}
-                onClick={() => scrollToSection(sub.title)}
-                className="group relative flex items-start gap-3 cursor-pointer"
+                onClick={() => scrollToSection(sub.title, sIdx)}
+                className="group relative flex items-start gap-3 cursor-pointer select-none"
               >
                 {/* Timeline node bullet */}
                 <div
-                  className={`mt-1 h-3 w-3 rounded-full border-2 transition-all shrink-0 z-10 ${
+                  className={`mt-1 h-3.5 w-3.5 rounded-full border-2 transition-all duration-200 shrink-0 z-10 ${
                     isCurrent
-                      ? 'bg-[#7c3aed] border-white ring-4 ring-[#7c3aed]/30'
-                      : 'bg-[#161b22] border-slate-500 group-hover:border-[#7c3aed]'
+                      ? 'bg-[#7c3aed] border-white ring-4 ring-[#7c3aed]/40 scale-110 shadow-lg shadow-[#7c3aed]/50'
+                      : isPassed
+                      ? 'bg-[#7c3aed] border-[#7c3aed]'
+                      : 'bg-[#161b22] border-slate-600 group-hover:border-[#7c3aed]'
                   }`}
                 />
 
                 <div className="flex-1">
                   <div
-                    className={`text-xs leading-snug transition-colors line-clamp-2 ${
+                    className={`text-xs leading-snug transition-all duration-200 line-clamp-2 ${
                       isCurrent
-                        ? 'font-bold text-[#a78bfa]'
-                        : 'text-slate-400 group-hover:text-slate-200'
+                        ? 'font-bold text-[#c4b5fd] translate-x-0.5'
+                        : isPassed
+                        ? 'text-slate-300 font-medium'
+                        : 'text-slate-500 group-hover:text-slate-300'
                     }`}
                   >
                     {sub.title}
                   </div>
-                  <div className="text-[10px] font-mono text-slate-500 mt-0.5">
+                  <div className={`text-[10px] font-mono mt-0.5 transition-colors ${
+                    isCurrent ? 'text-indigo-400 font-semibold' : 'text-slate-600'
+                  }`}>
                     Step {sIdx + 1}
                   </div>
                 </div>
