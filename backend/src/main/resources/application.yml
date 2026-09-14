@@ -1,13 +1,13 @@
 server:
-  port: 8080
+  port: ${PORT:8080}
 
 spring:
   application:
     name: SkillVaultBackend
   datasource:
-    url: jdbc:postgresql://localhost:5432/Skill-Vault
-    username: postgres
-    password: "0000"
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/Skill-Vault}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:0000}
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
@@ -20,4 +20,4 @@ spring:
 
 skillvault:
   content:
-    path: "../content"
+    path: ${CONTENT_PATH:../content}
