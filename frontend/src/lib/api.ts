@@ -1,7 +1,9 @@
+const RENDER_API = 'https://skillvault-website-backend.onrender.com/api';
+
 const API_BASE = 
   typeof window !== 'undefined' 
     ? '/api' 
-    : (process.env.BACKEND_URL ? `${process.env.BACKEND_URL.replace(/\/api\/?$/, '')}/api` : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api'));
+    : (process.env.BACKEND_URL ? `${process.env.BACKEND_URL.replace(/\/api\/?$/, '')}/api` : (process.env.NEXT_PUBLIC_API_URL || RENDER_API));
 
 export interface SubtopicSection {
   id: string;
