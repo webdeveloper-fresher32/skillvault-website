@@ -8,7 +8,15 @@ import SearchModal from './SearchModal';
 
 export default function Navbar() {
   const pathname = usePathname();
+  const [optimisticPath, setOptimisticPath] = useState<string | null>(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+
+  // Sync back whenever the real router transition commits
+  useEffect(() => {
+    setOptimisticPath(null);
+  }, [pathname]);
+
+  const currentPath = optimisticPath ?? pathname;
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -29,12 +37,25 @@ export default function Navbar() {
     { label: 'Roadmaps', href: '/roadmaps', icon: Layers },
   ];
 
+  const isNavActive = (href: string) => {
+    if (href === '/') {
+      return currentPath === '/';
+    }
+    return currentPath === href || currentPath.startsWith(href + '/') || currentPath.startsWith(href + '?');
+  };
+
   return (
     <>
       <header className="sticky top-0 z-40 w-full border-b border-slate-800 bg-[#090d16]/90 backdrop-blur-md">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+        <div className="flex h-16 w-full items-center justify-between px-4 sm:px-6 lg:px-8">
           <div className="flex items-center gap-8">
-            <Link href="/" className="flex items-center gap-3 group">
+            <Link
+              href="/"
+              prefetch={true}
+              onClick={() => setOptimisticPath('/')}
+              onMouseDown={() => setOptimisticPath('/')}
+              className="flex items-center gap-3 group focus:outline-none"
+            >
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 via-indigo-600 to-cyan-500 shadow-lg shadow-blue-500/20 group-hover:scale-105 transition-transform">
                 <Terminal className="h-5 w-5 text-white" />
               </div>
@@ -51,18 +72,21 @@ export default function Navbar() {
             <nav className="hidden md:flex items-center gap-1">
               {navItems.map((item) => {
                 const Icon = item.icon;
-                const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
+                const isActive = isNavActive(item.href);
                 return (
                   <Link
                     key={item.href}
                     href={item.href}
-                    className={`flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition-all ${
+                    prefetch={true}
+                    onClick={() => setOptimisticPath(item.href)}
+                    onMouseDown={() => setOptimisticPath(item.href)}
+                    className={`flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium border focus:outline-none transition-colors duration-75 select-none ${
                       isActive
-                        ? 'bg-blue-600/15 text-blue-400 border border-blue-500/20'
-                        : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-200'
+                        ? 'bg-blue-600/15 text-blue-400 border-blue-500/20 shadow-sm'
+                        : 'border-transparent text-slate-400 hover:bg-slate-800/60 hover:text-slate-200'
                     }`}
                   >
-                    <Icon className="h-4 w-4" />
+                    <Icon className={`h-4 w-4 transition-colors duration-75 ${isActive ? 'text-blue-400' : 'text-slate-400'}`} />
                     {item.label}
                   </Link>
                 );
@@ -74,7 +98,7 @@ export default function Navbar() {
             {/* Quick Search Bar */}
             <button
               onClick={() => setIsSearchOpen(true)}
-              className="flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-900/80 px-3.5 py-1.5 text-xs text-slate-400 hover:border-slate-700 hover:text-slate-300 transition-colors shadow-inner"
+              className="flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-900/80 px-3.5 py-1.5 text-xs text-slate-400 hover:border-slate-700 hover:text-slate-300 transition-colors shadow-inner focus:outline-none"
             >
               <Search className="h-3.5 w-3.5" />
               <span className="hidden sm:inline">Search courses, lessons, code...</span>

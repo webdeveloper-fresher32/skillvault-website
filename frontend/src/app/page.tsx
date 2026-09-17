@@ -1,4 +1,6 @@
-import React from 'react';
+'use client';
+
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { 
   ArrowRight, 
@@ -16,38 +18,54 @@ import {
   Database,
   BrainCircuit
 } from 'lucide-react';
-import { fetchDashboardStats, fetchCourses } from '@/lib/api';
+import { fetchDashboardStats, fetchCourses, DEFAULT_STATS, DashboardStats, Course } from '@/lib/api';
 
-export const dynamic = 'force-dynamic';
+const categoryHighlights = [
+  { title: 'Backend & Frameworks', count: '8 Courses', icon: Cpu, desc: 'Spring Boot, Java, NestJS, Node.js, Microservices' },
+  { title: 'Cloud & DevOps', count: '6 Courses', icon: Cloud, desc: 'AWS Solutions Architect, Docker, Kubernetes, Terraform' },
+  { title: 'System Design & DSA', count: '4 Courses', icon: Layers, desc: 'High-Level Design, Low-Level Design, Algorithms' },
+  { title: 'AI & Large Language Models', count: '4 Courses', icon: BrainCircuit, desc: 'RAG Architecture, LangChain, LangGraph, Vector DBs' },
+];
 
-export default async function HomePage() {
-  let stats;
-  let courses = [];
-  try {
-    stats = await fetchDashboardStats();
-    courses = await fetchCourses();
-  } catch (err) {
-    // Fallback if backend is warming up
-    stats = {
-      totalCourses: 31,
-      totalLessons: 1249,
-      completedLessons: 42,
-      streakDays: 7,
-      studyHours: 28,
-      inProgressCourses: [
-        { courseSlug: 'springboot', title: 'Spring Boot 3 & 4 Backend', category: 'Backend', icon: 'leaf', percentage: 64, totalLessons: 58 },
-        { courseSlug: 'aws', title: 'Amazon Web Services (AWS)', category: 'Cloud & DevOps', icon: 'cloud', percentage: 48, totalLessons: 61 },
-        { courseSlug: 'hld', title: 'High-Level Design (HLD)', category: 'System Design', icon: 'layers', percentage: 32, totalLessons: 45 },
-      ]
+const featuredTracks = [
+  { slug: 'springboot', title: 'Spring Boot 3 & 4 Backend', tag: 'Backend', hours: '45h', desc: 'IoC, Auto-configuration, JPA, Spring Security JWT, Microservices, Testing.' },
+  { slug: 'aws', title: 'AWS Cloud Architecture', tag: 'Cloud', hours: '50h', desc: 'Solutions Architect path, VPC, IAM, ECS/EKS, Lambda, S3, RDS, CloudFront.' },
+  { slug: 'hld', title: 'High-Level Design (HLD)', tag: 'System Design', hours: '40h', desc: 'Scalable distributed systems, load balancers, caching, Kafka, payment idempotency.' },
+  { slug: 'kubernetes', title: 'Kubernetes Container Orchestration', tag: 'DevOps', hours: '35h', desc: 'Pods, Deployments, Services, Ingress, RBAC, Helm charts, Production clusters.' },
+  { slug: 'rag', title: 'Retrieval-Augmented Generation (RAG)', tag: 'AI Engineering', hours: '30h', desc: 'Vector embeddings, chunking strategies, hybrid search, rerankers, evaluation.' },
+  { slug: 'dsa', title: 'Data Structures & Algorithms', tag: 'Interview Prep', hours: '60h', desc: 'Arrays, Trees, Graphs, Dynamic Programming, System Design interview frameworks.' },
+];
+
+export default function HomePage() {
+  const [stats, setStats] = useState<DashboardStats>(DEFAULT_STATS);
+  const [courses, setCourses] = useState<Course[]>([]);
+
+  useEffect(() => {
+    let isMounted = true;
+    try {
+      const cached = sessionStorage.getItem('skillvault_stats');
+      if (cached) {
+        setStats(JSON.parse(cached));
+      }
+    } catch (_) {}
+
+    Promise.allSettled([fetchDashboardStats(), fetchCourses()]).then(([statsRes, coursesRes]) => {
+      if (!isMounted) return;
+      if (statsRes.status === 'fulfilled' && statsRes.value) {
+        setStats(statsRes.value);
+        try {
+          sessionStorage.setItem('skillvault_stats', JSON.stringify(statsRes.value));
+        } catch (_) {}
+      }
+      if (coursesRes.status === 'fulfilled' && coursesRes.value) {
+        setCourses(coursesRes.value);
+      }
+    });
+
+    return () => {
+      isMounted = false;
     };
-  }
-
-  const categoryHighlights = [
-    { title: 'Backend & Frameworks', count: '8 Courses', icon: Cpu, desc: 'Spring Boot, Java, NestJS, Node.js, Microservices' },
-    { title: 'Cloud & DevOps', count: '6 Courses', icon: Cloud, desc: 'AWS Solutions Architect, Docker, Kubernetes, Terraform' },
-    { title: 'System Design & DSA', count: '4 Courses', icon: Layers, desc: 'High-Level Design, Low-Level Design, Algorithms' },
-    { title: 'AI & Large Language Models', count: '4 Courses', icon: BrainCircuit, desc: 'RAG Architecture, LangChain, LangGraph, Vector DBs' },
-  ];
+  }, []);
 
   return (
     <div className="min-h-screen pb-20">
@@ -77,6 +95,7 @@ export default async function HomePage() {
               <div className="mt-8 flex flex-wrap items-center justify-center lg:justify-start gap-4">
                 <Link
                   href="/courses"
+                  prefetch={true}
                   className="flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-3.5 text-sm font-semibold text-white shadow-lg shadow-blue-500/25 hover:bg-blue-500 transition-all hover:scale-[1.02]"
                 >
                   <BookOpen className="h-4 w-4" />
@@ -85,6 +104,7 @@ export default async function HomePage() {
                 </Link>
                 <Link
                   href="/practice"
+                  prefetch={true}
                   className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900/60 px-6 py-3.5 text-sm font-semibold text-slate-200 hover:bg-slate-800 hover:text-white transition-all"
                 >
                   <Code2 className="h-4 w-4 text-emerald-400" />
@@ -147,7 +167,7 @@ export default async function HomePage() {
               <h2 className="text-2xl font-bold text-white tracking-tight">Continue Learning</h2>
               <p className="text-xs text-slate-400 mt-1">Pick up right where you left off</p>
             </div>
-            <Link href="/courses" className="text-xs font-semibold text-blue-400 hover:text-blue-300 flex items-center gap-1">
+            <Link href="/courses" prefetch={true} className="text-xs font-semibold text-blue-400 hover:text-blue-300 flex items-center gap-1">
               View All Tracks <ArrowRight className="h-3.5 w-3.5" />
             </Link>
           </div>
@@ -188,6 +208,7 @@ export default async function HomePage() {
                 <div className="mt-5 pt-4 border-t border-slate-800/80 flex items-center justify-between">
                   <Link
                     href={`/courses/${item.courseSlug}`}
+                    prefetch={true}
                     className="flex items-center gap-1.5 text-xs font-semibold text-white group-hover:text-blue-400 transition-colors"
                   >
                     Resume Course
@@ -240,17 +261,11 @@ export default async function HomePage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[
-              { slug: 'springboot', title: 'Spring Boot 3 & 4 Backend', tag: 'Backend', hours: '45h', desc: 'IoC, Auto-configuration, JPA, Spring Security JWT, Microservices, Testing.' },
-              { slug: 'aws', title: 'AWS Cloud Architecture', tag: 'Cloud', hours: '50h', desc: 'Solutions Architect path, VPC, IAM, ECS/EKS, Lambda, S3, RDS, CloudFront.' },
-              { slug: 'hld', title: 'High-Level Design (HLD)', tag: 'System Design', hours: '40h', desc: 'Scalable distributed systems, load balancers, caching, Kafka, payment idempotency.' },
-              { slug: 'kubernetes', title: 'Kubernetes Container Orchestration', tag: 'DevOps', hours: '35h', desc: 'Pods, Deployments, Services, Ingress, RBAC, Helm charts, Production clusters.' },
-              { slug: 'rag', title: 'Retrieval-Augmented Generation (RAG)', tag: 'AI Engineering', hours: '30h', desc: 'Vector embeddings, chunking strategies, hybrid search, rerankers, evaluation.' },
-              { slug: 'dsa', title: 'Data Structures & Algorithms', tag: 'Interview Prep', hours: '60h', desc: 'Arrays, Trees, Graphs, Dynamic Programming, System Design interview frameworks.' },
-            ].map((c) => (
+            {featuredTracks.map((c) => (
               <Link
                 key={c.slug}
                 href={`/courses/${c.slug}`}
+                prefetch={true}
                 className="group rounded-2xl border border-slate-800 bg-[#0f172a]/70 p-6 hover:border-blue-500/50 hover:bg-slate-900 transition-all flex flex-col justify-between"
               >
                 <div>

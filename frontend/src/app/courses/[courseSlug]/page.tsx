@@ -1,6 +1,8 @@
-import React from 'react';
+'use client';
+
+import React, { useState, useEffect, use } from 'react';
 import Link from 'next/link';
-import { notFound } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { 
   BookOpen, 
   Clock, 
@@ -11,26 +13,42 @@ import {
   FileText, 
   Sparkles 
 } from 'lucide-react';
-import { fetchCourseBySlug } from '@/lib/api';
-
-export const dynamic = 'force-dynamic';
+import { fetchCourseBySlug, Course } from '@/lib/api';
 
 interface PageProps {
   params: Promise<{ courseSlug: string }>;
 }
 
-export default async function CourseDetailPage({ params }: PageProps) {
-  const { courseSlug } = await params;
-  let course;
-  try {
-    course = await fetchCourseBySlug(courseSlug);
-  } catch (err) {
-    notFound();
-  }
+export default function CourseDetailPage({ params }: PageProps) {
+  const router = useRouter();
+  const { courseSlug } = use(params);
+  const [course, setCourse] = useState<Course | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function load() {
+      try {
+        const data = await fetchCourseBySlug(courseSlug);
+        if (isMounted) {
+          setCourse(data);
+          setLoading(false);
+        }
+      } catch (err) {
+        if (isMounted) {
+          router.push('/courses');
+        }
+      }
+    }
+    load();
+    return () => {
+      isMounted = false;
+    };
+  }, [courseSlug, router]);
 
   // Find the first lesson to link "Start Learning"
   let firstLessonUrl = '#';
-  if (course.modules && course.modules.length > 0) {
+  if (course && course.modules && course.modules.length > 0) {
     for (const m of course.modules) {
       if (m.lessons && m.lessons.length > 0) {
         firstLessonUrl = `/courses/${course.slug}/${m.lessons[0].slug}`;
@@ -39,13 +57,36 @@ export default async function CourseDetailPage({ params }: PageProps) {
     }
   }
 
+  if (loading || !course) {
+    return (
+      <div className="min-h-screen pb-20">
+        <div className="border-b border-slate-800 bg-gradient-to-b from-blue-950/20 via-transparent to-transparent py-12">
+          <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
+            <div className="h-4 w-32 rounded bg-slate-800 animate-pulse mb-4" />
+            <div className="h-10 w-3/4 rounded-lg bg-slate-800 animate-pulse mb-3" />
+            <div className="h-5 w-1/2 rounded bg-slate-800/60 animate-pulse mb-8" />
+            <div className="flex gap-6 pt-6 border-t border-slate-800/80">
+              <div className="h-4 w-24 rounded bg-slate-800 animate-pulse" />
+              <div className="h-4 w-24 rounded bg-slate-800 animate-pulse" />
+            </div>
+          </div>
+        </div>
+        <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 mt-10 space-y-4">
+          {[...Array(3)].map((_, i) => (
+            <div key={i} className="h-28 rounded-xl border border-slate-800 bg-slate-900/40 animate-pulse" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen pb-20">
       {/* Course Hero Header */}
       <div className="border-b border-slate-800 bg-gradient-to-b from-blue-950/20 via-transparent to-transparent py-12">
         <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
           <div className="flex items-center gap-2 text-xs text-slate-400 mb-4">
-            <Link href="/courses" className="hover:text-blue-400">Courses</Link>
+            <Link href="/courses" prefetch={true} className="hover:text-blue-400">Courses</Link>
             <ChevronRight className="h-3.5 w-3.5 text-slate-600" />
             <span className="text-slate-200">{course.category}</span>
           </div>
@@ -66,6 +107,7 @@ export default async function CourseDetailPage({ params }: PageProps) {
             <div className="flex flex-col gap-3 sm:flex-row md:flex-col shrink-0">
               <Link
                 href={firstLessonUrl}
+                prefetch={true}
                 className="flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-500/25 hover:bg-blue-500 transition-all hover:scale-[1.02]"
               >
                 Start Learning
@@ -126,6 +168,7 @@ export default async function CourseDetailPage({ params }: PageProps) {
                   <Link
                     key={lesson.id}
                     href={`/courses/${course.slug}/${lesson.slug}`}
+                    prefetch={true}
                     className="flex items-center justify-between px-5 py-3 hover:bg-slate-800/40 text-slate-300 transition-colors group"
                   >
                     <div className="flex items-center gap-3">
