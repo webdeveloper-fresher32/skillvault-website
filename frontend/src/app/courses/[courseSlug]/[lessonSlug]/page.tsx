@@ -23,6 +23,7 @@ import {
   Course 
 } from '@/lib/api';
 import MarkdownViewer from '@/components/MarkdownViewer';
+import TopScrollProgress from '@/components/interactive/TopScrollProgress';
 
 interface PageProps {
   params: Promise<{ courseSlug: string; lessonSlug: string }>;
@@ -241,7 +242,9 @@ export default function LessonPage({ params }: PageProps) {
   }
 
   return (
-    <div className="flex min-h-[calc(100vh-4rem)] bg-[#0d1117]">
+    <>
+      <TopScrollProgress />
+      <div className="flex min-h-[calc(100vh-4rem)] bg-[#0d1117]">
       {/* Mobile Toggle Button */}
       <button
         onClick={() => setIsSidebarOpen(!isSidebarOpen)}
@@ -420,7 +423,11 @@ export default function LessonPage({ params }: PageProps) {
 
         {/* Clean, Full-Stream Markdown Document (Normal Continuous Reading) */}
         <div className={`py-6 transition-opacity duration-150 ${isLessonSwitching ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
-          <MarkdownViewer content={lesson.markdownContent} />
+          <MarkdownViewer
+            content={lesson.markdownContent}
+            courseSlug={courseSlug}
+            lessonSlug={activeLessonSlug}
+          />
         </div>
 
         {/* Prev / Next Footer Navigation */}
@@ -507,5 +514,6 @@ export default function LessonPage({ params }: PageProps) {
         </div>
       </aside>
     </div>
+    </>
   );
 }
