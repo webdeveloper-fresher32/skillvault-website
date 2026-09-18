@@ -377,7 +377,7 @@ DevOps engineers, platform engineers, and SREs responsible for automating and op
 
 ### Machine Learning Specialty (MLS-C01)
 
-**Who:** ML engineers, data scientists using AWS AI/ML services.
+**Who:** ML engineers, data scientists using AWS 05-AI/ML services.
 
 **Key Topics:**
 - SageMaker end-to-end: data prep, training, tuning, deployment

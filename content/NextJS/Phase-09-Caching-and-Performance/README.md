@@ -24,4 +24,4 @@ How Next.js caches at four distinct layers simultaneously, how to trigger immedi
 
 ## Next Phase
 
-→ [Phase 10: Metadata, SEO, and Error Handling](../Phase-10-Metadata-SEO-and-Error-Handling/README.md)
+→ [Phase 10: Metadata, SEO, and Error Handling](../../../../04-SYSTEMS-INFRASTRUCTURE/04-Developer-Tools/Git/Phase-01-Git-Core-Architecture-and-Plumbing/README.md)

@@ -68,14 +68,25 @@ public class ContentIndexingService {
 
         Arrays.sort(courseDirs, Comparator.comparing(File::getName));
 
+        Set<String> activeSlugs = new HashSet<>();
         for (File courseDir : courseDirs) {
             String dirName = courseDir.getName();
-            if (dirName.startsWith(".") || dirName.equalsIgnoreCase("docs")) continue;
+            if (dirName.startsWith(".") || dirName.equalsIgnoreCase("docs") || dirName.equalsIgnoreCase("CareerPaths") || dirName.equalsIgnoreCase("ProjectsCatalog")) continue;
+            activeSlugs.add(courseDir.getName().toLowerCase());
 
             try {
                 indexSingleCourse(courseDir);
             } catch (Exception e) {
                 log.error("Failed indexing course: " + dirName, e);
+            }
+        }
+
+        // Clean up stale or deleted courses from database
+        List<Course> allInDb = courseRepository.findAll();
+        for (Course c : allInDb) {
+            if (!activeSlugs.contains(c.getSlug()) || c.getTotalLessons() == 0) {
+                log.info("Removing obsolete or empty course from DB: {}", c.getSlug());
+                courseRepository.delete(c);
             }
         }
 
@@ -219,6 +230,25 @@ public class ContentIndexingService {
         if ("NextJS".equalsIgnoreCase(name)) return "Next.js Full Stack";
         if ("NodeJS".equalsIgnoreCase(name)) return "Node.js Architecture";
         if ("NestJS".equalsIgnoreCase(name)) return "NestJS Enterprise Microservices";
+        if ("MachineLearning".equalsIgnoreCase(name)) return "Machine Learning & Deep Learning";
+        if ("GenAI".equalsIgnoreCase(name)) return "Generative AI & LLM Systems";
+        if ("DatabasesFundamentals".equalsIgnoreCase(name)) return "Database Systems & Internals";
+        if ("MongoDB".equalsIgnoreCase(name)) return "MongoDB Architecture & Modeling";
+        if ("MySQL".equalsIgnoreCase(name)) return "MySQL & Relational Design";
+        if ("Redis".equalsIgnoreCase(name)) return "Redis In-Memory & Caching";
+        if ("JavaScript".equalsIgnoreCase(name)) return "Modern JavaScript Full Stack";
+        if ("Java".equalsIgnoreCase(name)) return "Java Core & Concurrency Masterclass";
+        if ("Git".equalsIgnoreCase(name)) return "Git Architecture & Enterprise Workflows";
+        if ("GithubActions".equalsIgnoreCase(name)) return "GitHub Actions CI/CD";
+        if ("ShellScripting".equalsIgnoreCase(name)) return "Linux Shell Scripting & Automation";
+        if ("ComputerFundamentals".equalsIgnoreCase(name)) return "Computer Science Fundamentals";
+        if ("OperatingSystems".equalsIgnoreCase(name)) return "Operating Systems & Architecture";
+        if ("Networking".equalsIgnoreCase(name)) return "Computer Networking & Protocols";
+        if ("Microservices-and-Cloud".equalsIgnoreCase(name)) return "Microservices & Cloud Patterns";
+        if ("PaymentGateways".equalsIgnoreCase(name)) return "Payment Gateways & Subscriptions";
+        if ("Aptitude".equalsIgnoreCase(name)) return "Quantitative & Logical Aptitude";
+        if ("LangChain".equalsIgnoreCase(name)) return "LangChain Orchestration";
+        if ("LangGraph".equalsIgnoreCase(name)) return "LangGraph Multi-Agent Workflows";
         return name.replaceAll("([a-z])([A-Z])", "$1 $2");
     }
 
@@ -236,15 +266,42 @@ public class ContentIndexingService {
 
     private String categorizeCourse(String name) {
         String n = name.toLowerCase();
-        if (n.contains("aws") || n.contains("cloud") || n.contains("terraform")) return "Cloud & DevOps";
-        if (n.contains("docker") || n.contains("kubernetes") || n.contains("git") || n.contains("action")) return "DevOps";
-        if (n.contains("spring") || n.contains("nest") || n.contains("node") || n.contains("java") || n.contains("microservice")) return "Backend";
-        if (n.contains("react") || n.contains("angular") || n.contains("next") || n.contains("javascript") || n.contains("typescript")) return "Frontend";
-        if (n.contains("database") || n.contains("sql") || n.contains("redis")) return "Databases";
-        if (n.contains("hld") || n.contains("lld") || n.contains("system")) return "System Design";
-        if (n.contains("rag") || n.contains("langchain") || n.contains("langgraph")) return "AI & LLMs";
-        if (n.contains("os") || n.contains("operating") || n.contains("network") || n.contains("fundamental")) return "Computer Science";
-        if (n.contains("dsa") || n.contains("aptitude")) return "Interview Prep";
+        // Frontend
+        if (n.equals("javascript") || n.equals("react") || n.equals("nextjs") || n.equals("angular") || n.equals("typescript")) {
+            return "Frontend";
+        }
+        // Backend
+        if (n.equals("java") || n.equals("springboot") || n.equals("nodejs") || n.equals("nestjs") || n.equals("paymentgateways")) {
+            return "Backend";
+        }
+        // Databases
+        if (n.contains("database") || n.contains("sql") || n.contains("redis") || n.contains("mongo") || n.contains("postgres")) {
+            return "Databases";
+        }
+        // AI & LLMs
+        if (n.contains("genai") || n.contains("machinelearning") || n.contains("rag") || n.contains("langchain") || n.contains("langgraph")) {
+            return "AI & LLMs";
+        }
+        // Cloud & DevOps
+        if (n.contains("aws") || n.contains("cloud") || n.contains("terraform") || n.contains("microservices")) {
+            return "Cloud & DevOps";
+        }
+        // DevOps
+        if (n.equals("docker") || n.equals("kubernetes") || n.equals("git") || n.equals("githubactions")) {
+            return "DevOps";
+        }
+        // System Design
+        if (n.equals("hld") || n.equals("lld")) {
+            return "System Design";
+        }
+        // Computer Science
+        if (n.contains("operating") || n.contains("network") || n.contains("fundamental") || n.contains("shell")) {
+            return "Computer Science";
+        }
+        // Interview Prep
+        if (n.equals("dsa") || n.equals("aptitude")) {
+            return "Interview Prep";
+        }
         return "Software Engineering";
     }
 

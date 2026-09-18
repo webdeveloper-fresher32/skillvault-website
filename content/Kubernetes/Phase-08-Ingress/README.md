@@ -27,4 +27,4 @@ This phase covers Kubernetes Ingress — the mechanism for routing external HTTP
 → [Phase 7: Configuration & Secrets](../Phase-07-Config-Secrets/README.md)
 
 ## Next Phase
-→ [Phase 9: RBAC & Security](../Phase-09-RBAC/README.md)
+→ [Phase 9: RBAC & Security](../Phase-09-RBAC-Security/README.md)

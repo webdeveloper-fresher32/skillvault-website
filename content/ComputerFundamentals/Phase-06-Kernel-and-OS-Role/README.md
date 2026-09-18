@@ -31,7 +31,7 @@ This is a deliberately **short, high-level** phase. It exists to give a full-sta
 
 ## Cross-Reference
 
-- This phase is intentionally brief. For the **full, in-depth Operating Systems curriculum** — process/thread management, CPU scheduling, synchronization, deadlocks, memory management, virtual memory, file systems, I/O, and a dedicated Linux internals phase — see the sibling **[../../OperatingSystems/](../../OperatingSystems/)** course, in particular [Phase-11-Linux-OS-Internals](../../OperatingSystems/Phase-11-Linux-OS-Internals/) for kernel/syscall internals on a real Linux system.
+- This phase is intentionally brief. For the **full, in-depth Operating Systems curriculum** — process/thread management, CPU scheduling, synchronization, deadlocks, memory management, virtual memory, file systems, I/O, and a dedicated Linux internals phase — see the sibling **[../../OperatingSystems/](../../03-OS)** course, in particular [Phase-11-Linux-OS-Internals](../../03-OS/Phase-11-Linux-OS-Internals) for kernel/syscall internals on a real Linux system.
 
 ## Next Phase
 

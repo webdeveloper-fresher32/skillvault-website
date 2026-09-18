@@ -32,7 +32,7 @@ This is a **foundational, conceptual** treatment aimed at a full-stack engineer,
 
 ## Cross-Reference
 
-- This phase intentionally stays at the "what happens and why" level for a generalist interview. For a **deep, Linux-specific** treatment of the boot process — including GRUB stages, initramfs, and the handoff to `systemd`/`init` — see **[../../OperatingSystems/Phase-11-Linux-OS-Internals/](../../OperatingSystems/Phase-11-Linux-OS-Internals/)**, specifically `01-The-Linux-Boot-Process.md`.
+- This phase intentionally stays at the "what happens and why" level for a generalist interview. For a **deep, Linux-specific** treatment of the boot process — including GRUB stages, initramfs, and the handoff to `systemd`/`init` — see **[../../OperatingSystems/Phase-11-Linux-OS-Internals/](../../03-OS/Phase-11-Linux-OS-Internals)**, specifically `01-The-Linux-Boot-Process.md`.
 
 ## Next Phase
 

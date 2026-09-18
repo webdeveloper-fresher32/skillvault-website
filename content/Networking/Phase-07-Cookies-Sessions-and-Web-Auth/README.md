@@ -6,7 +6,7 @@ HTTP is stateless — every request is handled by the server as if it has never 
 
 This phase deliberately stays at the **protocol level** — the raw `Set-Cookie` / `Cookie` headers, the wire format, the sequence of requests and responses. It does **not** re-teach how to implement login systems in code.
 
-> **For applied implementation** (bcrypt password hashing, JWT signing/verification, `express-session` setup, RBAC middleware, OWASP checklist) — see [`../../NodeJS/Phase-07-Auth-and-Security/`](../../NodeJS/Phase-07-Auth-and-Security/). That phase covers the Express.js code; this phase covers the HTTP mechanics underneath it.
+> **For applied implementation** (bcrypt password hashing, JWT signing/verification, `express-session` setup, RBAC middleware, OWASP checklist) — see [`../../NodeJS/Phase-07-Auth-and-Security/`](../../../03-APPLICATION-DEVELOPMENT/02-Backend/NodeJS/Phase-07-Auth-and-Security). That phase covers the Express.js code; this phase covers the HTTP mechanics underneath it.
 
 ## What You'll Learn
 

@@ -17,7 +17,7 @@
 
 Lessons 01–03 gave you the mental model — boot, kernel/syscalls, processes/signals. This lesson is the muscle memory: when something is broken in production at 2am, which command do you reach for first? This is asked constantly in interviews as scenario questions ("the app is unresponsive, walk me through what you'd check") because it reveals whether you've actually operated a Linux box, not just read about one.
 
-> For deeper Bash scripting around these commands (piping, parsing output with `awk`/`grep`, writing monitoring scripts), see **[ShellScripting Phase 08: Text Processing](../../ShellScripting/Phase-08-Text-Processing/)**. This lesson focuses on *which command answers which question*, not scripting them together.
+> For deeper Bash scripting around these commands (piping, parsing output with `awk`/`grep`, writing monitoring scripts), see **[ShellScripting Phase 08: Text Processing](../ShellScripting/Phase-08-Text-Processing/)**. This lesson focuses on *which command answers which question*, not scripting them together.
 
 ---
 

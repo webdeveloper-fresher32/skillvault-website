@@ -12,7 +12,7 @@
 4. [Distributions](#4-distributions)
 5. [Origins](#5-origins)
 6. [Cache Behaviors](#6-cache-behaviors)
-7. [CloudFront + S3 (OAI/OAC)](#7-cloudfront--s3-oaioac)
+7. [CloudFront + S3 (O05-AI/OAC)](#7-cloudfront--s3-oaioac)
 8. [Viewer Protocol Policy](#8-viewer-protocol-policy)
 9. [Geo Restriction](#9-geo-restriction)
 10. [Lambda@Edge and CloudFront Functions](#10-lambdaedge-and-cloudfront-functions)
@@ -394,7 +394,7 @@ Cookies:
 
 ---
 
-## 7. CloudFront + S3 (OAI/OAC)
+## 7. CloudFront + S3 (O05-AI/OAC)
 
 When using S3 as a CloudFront origin, you want to:
 - Serve content through CloudFront only (not direct S3 URL)

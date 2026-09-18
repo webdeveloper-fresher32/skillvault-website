@@ -95,7 +95,7 @@ Software like nginx or hardware/cloud load balancers sit in front of your applic
 
 ### 3.5 Application Cache
 
-Inside your own application, you can cache expensive computed results — most commonly database query results — in an in-memory store like Redis. This is the layer covered by [`../../NodeJS/Phase-10-Advanced-Node/03-Caching-with-Redis.md`](../../NodeJS/Phase-10-Advanced-Node/03-Caching-with-Redis.md). This phase deliberately does **not** re-cover that ground.
+Inside your own application, you can cache expensive computed results — most commonly database query results — in an in-memory store like Redis. This is the layer covered by [`../../NodeJS/Phase-10-Advanced-Node/03-Caching-with-Redis.md`](../../../03-APPLICATION-DEVELOPMENT/02-Backend/NodeJS/Phase-10-Advanced-Node/03-Caching-with-Redis.md). This phase deliberately does **not** re-cover that ground.
 
 ### 3.6 Database
 

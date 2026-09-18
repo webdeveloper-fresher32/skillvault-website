@@ -21,7 +21,7 @@ Every production system you'll work on as a full-stack engineer sits behind some
 
 ## How This Connects to Other Courses
 
-Kubernetes Services and Ingress controllers are real, running examples of the concepts in this phase — a `ClusterIP`/`NodePort` Service is essentially an L4 load balancer, and an Ingress controller is an L7 reverse proxy with routing rules. See the [Kubernetes course](../../Kubernetes/) for the hands-on side of this, especially its networking phases.
+Kubernetes Services and Ingress controllers are real, running examples of the concepts in this phase — a `ClusterIP`/`NodePort` Service is essentially an L4 load balancer, and an Ingress controller is an L7 reverse proxy with routing rules. See the [Kubernetes course](../../../04-SYSTEMS-INFRASTRUCTURE/03-DevOps/Kubernetes) for the hands-on side of this, especially its networking phases.
 
 ## Time Estimate
 

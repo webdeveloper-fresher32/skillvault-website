@@ -1,6 +1,6 @@
 # Stage 9: Containerizing with Docker
 
-**Pairs with:** [`Docker/`](../../Docker/) course in this repo for full Docker fundamentals, and [`Phase-04-Load-Balancers/03-Nginx-HAProxy-ALB-in-Practice.md`](../Phase-04-Load-Balancers/03-Nginx-HAProxy-ALB-in-Practice.md) for the Nginx piece being containerized here.
+**Pairs with:** [`Docker/`](../../../03-DevOps/Docker) course in this repo for full Docker fundamentals, and [`Phase-04-Load-Balancers/03-Nginx-HAProxy-ALB-in-Practice.md`](../Phase-04-Load-Balancers/03-Nginx-HAProxy-ALB-in-Practice.md) for the Nginx piece being containerized here.
 
 ## Where We Left Off
 

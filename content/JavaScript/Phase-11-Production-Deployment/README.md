@@ -39,4 +39,4 @@ This is the final phase of the JavaScript course. From here:
 
 → [Projects](../Projects/README.md) — apply everything you've learned in progressively larger hands-on builds
 
-→ [Quick-Reference](../Quick-Reference/README.md) — cheatsheet and interview Q&A for review before interviews
+→ [Quick-Reference](../../../../04-SYSTEMS-INFRASTRUCTURE/04-Developer-Tools/Git/Phase-01-Git-Core-Architecture-and-Plumbing/README.md) — cheatsheet and interview Q&A for review before interviews

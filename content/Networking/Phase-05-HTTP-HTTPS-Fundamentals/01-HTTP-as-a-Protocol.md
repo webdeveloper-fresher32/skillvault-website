@@ -23,7 +23,7 @@ Underneath every fetch call, every Express route, every `res.json()` — HTTP is
 └────────────┘        "HTTP/1.1 200 OK\r\n..."                └────────────┘
 ```
 
-You never need a browser to speak HTTP — you can type it by hand into a raw TCP socket (see the exercises below) and a web server will happily respond. This is the level this lesson operates at. For what a `GET` vs `POST` vs `PATCH` *means* semantically, and what status codes to return for which situation, see [`../../NodeJS/Phase-05-REST-API-Design/01-REST-Principles-and-HTTP-Semantics.md`](../../NodeJS/Phase-05-REST-API-Design/01-REST-Principles-and-HTTP-Semantics.md).
+You never need a browser to speak HTTP — you can type it by hand into a raw TCP socket (see the exercises below) and a web server will happily respond. This is the level this lesson operates at. For what a `GET` vs `POST` vs `PATCH` *means* semantically, and what status codes to return for which situation, see [`../../NodeJS/Phase-05-REST-API-Design/01-REST-Principles-and-HTTP-Semantics.md`](../../../03-APPLICATION-DEVELOPMENT/02-Backend/NodeJS/Phase-05-REST-API-Design/01-REST-Principles-and-HTTP-Semantics.md).
 
 ---
 
@@ -97,7 +97,7 @@ HTTP/1.1 201 Created
    └───────────── HTTP version the server is responding with
 ```
 
-The status code taxonomy (`1xx`/`2xx`/`3xx`/`4xx`/`5xx`) and which specific code to use for which REST scenario is covered thoroughly in [`../../NodeJS/Phase-05-REST-API-Design/`](../../NodeJS/Phase-05-REST-API-Design/) — this lesson only cares that the status line is a fixed, parseable format.
+The status code taxonomy (`1xx`/`2xx`/`3xx`/`4xx`/`5xx`) and which specific code to use for which REST scenario is covered thoroughly in [`../../NodeJS/Phase-05-REST-API-Design/`](../../../03-APPLICATION-DEVELOPMENT/02-Backend/NodeJS/Phase-05-REST-API-Design) — this lesson only cares that the status line is a fixed, parseable format.
 
 ### A Response With No Body
 

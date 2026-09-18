@@ -160,7 +160,7 @@ Putting it together, a properly hardened session cookie for a typical web app lo
 Set-Cookie: session_id=abc123xyz; Domain=example.com; Path=/; Max-Age=3600; Secure; HttpOnly; SameSite=Lax
 ```
 
-This is exactly the shape of cookie configuration you'll see implemented in code (via `express-session`'s `cookie` options) in [`../../NodeJS/Phase-07-Auth-and-Security/03-Session-Based-Authentication.md`](../../NodeJS/Phase-07-Auth-and-Security/03-Session-Based-Authentication.md) — that lesson shows the `httpOnly`, `secure`, `sameSite`, and `maxAge` options passed to `express-session`, which compile down to exactly this header.
+This is exactly the shape of cookie configuration you'll see implemented in code (via `express-session`'s `cookie` options) in [`../../NodeJS/Phase-07-Auth-and-Security/03-Session-Based-Authentication.md`](../../../03-APPLICATION-DEVELOPMENT/02-Backend/NodeJS/Phase-07-Auth-and-Security/03-Session-Based-Authentication.md) — that lesson shows the `httpOnly`, `secure`, `sameSite`, and `maxAge` options passed to `express-session`, which compile down to exactly this header.
 
 ---
 

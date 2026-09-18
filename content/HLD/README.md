@@ -1,6 +1,6 @@
 # HLD (High-Level Design) — Complete Interview Prep Course
 
-A self-contained, Python-first High-Level Design course built for interview prep at the **~3 years experience** level (Full Stack — Python + React + Node roles). It is the natural companion to the [`LLD/`](../LLD/README.md) course in this repo: where LLD teaches OOP, SOLID, patterns, and whiteboard-coding a handful of classic systems, HLD teaches the distributed-systems building blocks — load balancers, caching, sharding, queues, CAP theorem — and how to combine them under interview time pressure to design real systems at scale (Instagram, WhatsApp, Uber, URL Shorteners, and more). Every lesson follows the same spoon-fed style as LLD: a plain-English "what happens when..." walkthrough with an ASCII diagram and a short Python snippet (FastAPI, SQLAlchemy, Redis, Celery, JWT) before the formal definition, followed by interview Q&A.
+A self-contained, Python-first High-Level Design course built for interview prep at the **~3 years experience** level (Full Stack — Python + React + Node roles). It is the natural companion to the [`LLD/`](../../../02-SOFTWARE-ENGINEERING/01-LLD/README.md) course in this repo: where LLD teaches OOP, SOLID, patterns, and whiteboard-coding a handful of classic systems, HLD teaches the distributed-systems building blocks — load balancers, caching, sharding, queues, CAP theorem — and how to combine them under interview time pressure to design real systems at scale (Instagram, WhatsApp, Uber, URL Shorteners, and more). Every lesson follows the same spoon-fed style as LLD: a plain-English "what happens when..." walkthrough with an ASCII diagram and a short Python snippet (FastAPI, SQLAlchemy, Redis, Celery, JWT) before the formal definition, followed by interview Q&A.
 
 ---
 
@@ -113,4 +113,4 @@ Phases 01-09 teach the building blocks — one distributed-systems concept per p
 
 - Comfortable writing basic Python (functions, classes, imports) — you don't need to know FastAPI, SQLAlchemy, Redis, or Celery beforehand; each is introduced from scratch in the phase that first needs it.
 - No prior distributed-systems, networking, or system-design knowledge assumed — Phase 01 starts from "what is a client and what is a server."
-- Helpful but not required: having worked through [`LLD/`](../LLD/README.md) first, since HLD assumes you're comfortable reasoning about a backend's code structure (routes, services, models) when it gets to Phase 02's monolith/microservices split.
+- Helpful but not required: having worked through [`LLD/`](../../../02-SOFTWARE-ENGINEERING/01-LLD/README.md) first, since HLD assumes you're comfortable reasoning about a backend's code structure (routes, services, models) when it gets to Phase 02's monolith/microservices split.

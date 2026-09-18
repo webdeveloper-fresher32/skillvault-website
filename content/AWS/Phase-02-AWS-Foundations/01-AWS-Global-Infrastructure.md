@@ -111,7 +111,7 @@ Key characteristics of a Region:
 | us-east-1 | N. Virginia, USA | Oldest, largest, most services, cheapest |
 | us-east-2 | Ohio, USA | Secondary US East |
 | us-west-1 | N. California, USA | US West Coast |
-| us-west-2 | Oregon, USA | Popular US West, AI/ML hub |
+| us-west-2 | Oregon, USA | Popular US West, 05-AI/ML hub |
 | ca-central-1 | Montreal, Canada | Canadian data residency |
 | ca-west-1 | Calgary, Canada | New, western Canada |
 | sa-east-1 | Sao Paulo, Brazil | South America |

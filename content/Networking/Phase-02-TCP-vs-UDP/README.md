@@ -13,7 +13,7 @@ This is one of the most heavily tested topics in backend and full-stack intervie
 | 01 | [TCP Explained](01-TCP-Explained.md) | Connection-oriented delivery, the 3-way handshake, flow control, congestion control, 4-way termination |
 | 02 | [UDP Explained](02-UDP-Explained.md) | Connectionless delivery, why UDP is faster, real use cases (DNS, streaming, gaming, VoIP) |
 | 03 | [TCP vs UDP Comparison](03-TCP-vs-UDP-Comparison.md) | Head-to-head comparison table, worked "which protocol would you pick" scenarios |
-| 04 | [Sockets Programming Basics](04-Sockets-Programming-Basics.md) | What a socket is, IP+port addressing, complete runnable TCP and UDP client-server code in Python |
+| 04 | [Ports & Sockets Recap](../Phase-03-IP-Addressing-and-Subnetting/04-Ports-and-Sockets-Recap.md) | What a socket is, IP+port addressing, socket programming foundations |
 
 ## Time Estimate
 

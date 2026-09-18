@@ -6,7 +6,7 @@ Caching is the single highest-leverage technique for making systems feel fast an
 
 This is distinct from **application-level caching** (e.g. caching a database query result in Redis inside your Node.js server). That topic is already covered in depth elsewhere in this repo:
 
-> **See also:** [`../../NodeJS/Phase-10-Advanced-Node/03-Caching-with-Redis.md`](../../NodeJS/Phase-10-Advanced-Node/03-Caching-with-Redis.md) for the cache-aside pattern, TTLs, and application-layer cache invalidation with Redis.
+> **See also:** [`../../NodeJS/Phase-10-Advanced-Node/03-Caching-with-Redis.md`](../../../03-APPLICATION-DEVELOPMENT/02-Backend/NodeJS/Phase-10-Advanced-Node/03-Caching-with-Redis.md) for the cache-aside pattern, TTLs, and application-layer cache invalidation with Redis.
 
 Here, we focus on the HTTP contract between client and server: how a browser decides whether to reuse a response it already has, how CDNs and proxies cache responses on behalf of many users, and how you invalidate all of that safely when content changes.
 

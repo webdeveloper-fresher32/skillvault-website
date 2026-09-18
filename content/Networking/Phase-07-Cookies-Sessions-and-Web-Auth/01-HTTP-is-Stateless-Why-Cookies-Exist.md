@@ -143,7 +143,7 @@ Cookies are the dominant mechanism because browsers handle them natively, but th
 | **Authorization header (Bearer tokens / JWT)** | Client manually attaches `Authorization: Bearer <token>` on each request | No — app code must do it |
 | **URL parameters** (`?sessionid=abc123`) | Session ID embedded in the URL itself | No, and leaks into logs/history — avoid |
 
-This phase focuses on cookies because that's what "session-based auth" (lesson 03) relies on. Token-based auth (JWT) sidesteps cookies entirely by putting the token in an `Authorization` header — the implementation of that is covered in depth in [`../../NodeJS/Phase-07-Auth-and-Security/02-JWT-Authentication.md`](../../NodeJS/Phase-07-Auth-and-Security/02-JWT-Authentication.md).
+This phase focuses on cookies because that's what "session-based auth" (lesson 03) relies on. Token-based auth (JWT) sidesteps cookies entirely by putting the token in an `Authorization` header — the implementation of that is covered in depth in [`../../NodeJS/Phase-07-Auth-and-Security/02-JWT-Authentication.md`](../../../03-APPLICATION-DEVELOPMENT/02-Backend/NodeJS/Phase-07-Auth-and-Security/02-JWT-Authentication.md).
 
 ---
 

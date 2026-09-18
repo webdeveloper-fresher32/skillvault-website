@@ -16,7 +16,7 @@
 
 The **kernel** is the core piece of software that manages a computer's hardware resources — CPU, memory, storage, devices — and safely shares them among all the programs (processes) that want to use them.
 
-> This lesson is deliberately brief. For deep coverage of process management, scheduling, memory management, virtual memory, and file systems, see the sibling **[OperatingSystems course](../../OperatingSystems/)**, particularly Phases 02, 03, 06, 07, and 08.
+> This lesson is deliberately brief. For deep coverage of process management, scheduling, memory management, virtual memory, and file systems, see the sibling **[OperatingSystems course](../../03-OS)**, particularly Phases 02, 03, 06, 07, and 08.
 
 ---
 
@@ -54,7 +54,7 @@ The kernel's process management job includes:
 - Handling communication and synchronization between processes
 - Cleaning up resources when a process exits
 
-*(Full depth: [OperatingSystems Phase 02 — Processes and Threads](../../OperatingSystems/Phase-02-Processes-and-Threads/) and [Phase 03 — CPU Scheduling](../../OperatingSystems/Phase-03-CPU-Scheduling/).)*
+*(Full depth: [OperatingSystems Phase 02 — Processes and Threads](../../03-OS/Phase-02-Processes-and-Threads) and [Phase 03 — CPU Scheduling](../../03-OS/Phase-03-CPU-Scheduling).)*
 
 ---
 
@@ -62,7 +62,7 @@ The kernel's process management job includes:
 
 The kernel tracks which parts of RAM are in use, by whom, and hands out memory to processes on request — while making sure no process can read or corrupt another process's memory. It also handles **virtual memory**, giving each process the illusion of having its own large, private address space, even though physical RAM is shared and finite.
 
-*(Full depth: [OperatingSystems Phase 06 — Memory Management](../../OperatingSystems/Phase-06-Memory-Management/) and [Phase 07 — Virtual Memory](../../OperatingSystems/Phase-07-Virtual-Memory/).)*
+*(Full depth: [OperatingSystems Phase 06 — Memory Management](../../03-OS/Phase-06-Memory-Management) and [Phase 07 — Virtual Memory](../../03-OS/Phase-07-Virtual-Memory).)*
 
 ---
 
@@ -82,7 +82,7 @@ The kernel implements (or interfaces with) file systems — the logic that turns
 - Metadata (size, timestamps, ownership)
 - Caching frequently-accessed file data in RAM for speed
 
-*(Full depth: [OperatingSystems Phase 08 — File Systems and Storage](../../OperatingSystems/Phase-08-File-Systems-and-Storage/).)*
+*(Full depth: [OperatingSystems Phase 08 — File Systems and Storage](../../03-OS/Phase-08-File-Systems-and-Storage).)*
 
 ---
 

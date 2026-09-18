@@ -33,4 +33,4 @@ Each lesson follows the same structure:
 
 ---
 
-Next: [Phase 03 — Design Patterns](../Phase-03-Design-Patterns/README.md)
+Next: [Phase 03 — Design Patterns](../../../04-SYSTEMS-INFRASTRUCTURE/04-Developer-Tools/Git/Phase-01-Git-Core-Architecture-and-Plumbing/README.md)

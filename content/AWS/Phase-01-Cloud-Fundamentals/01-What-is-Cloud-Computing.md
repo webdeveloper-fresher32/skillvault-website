@@ -307,7 +307,7 @@ Microsoft Azure
 
 Google Cloud Platform (GCP)
   - Third (~10%)
-  - Best in AI/ML
+  - Best in 05-AI/ML
   - Kubernetes (invented by Google)
   - Strong data analytics
   - Started 2008

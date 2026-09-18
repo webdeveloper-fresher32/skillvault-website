@@ -4,7 +4,7 @@
 
 Every full-stack engineer uses HTTP daily through frameworks like Express — but interviews probe the layer *underneath* the framework: what actually travels over the wire. This phase treats HTTP as a **network protocol**, not an application API. You'll learn the raw message format, how versions evolved to fix real performance problems, why HTTPS exists, and how connection reuse and multiplexing affect page-load speed.
 
-> **Scope note:** This phase does **not** cover REST design principles, resource modeling, or the full HTTP status code catalog — that's already covered in depth at [`../../NodeJS/Phase-05-REST-API-Design/`](../../NodeJS/Phase-05-REST-API-Design/). If you want the applied, Express-flavored view of REST and status codes, go there. This phase is the protocol-level view: bytes on the wire, TCP/TLS interaction, and version history.
+> **Scope note:** This phase does **not** cover REST design principles, resource modeling, or the full HTTP status code catalog — that's already covered in depth at [`../../NodeJS/Phase-05-REST-API-Design/`](../../../03-APPLICATION-DEVELOPMENT/02-Backend/NodeJS/Phase-05-REST-API-Design). If you want the applied, Express-flavored view of REST and status codes, go there. This phase is the protocol-level view: bytes on the wire, TCP/TLS interaction, and version history.
 
 ## Where This Fits
 
@@ -34,7 +34,7 @@ By the time a browser sends an HTTP request, DNS has already resolved the domain
 
 ## Cross-References
 
-- REST principles, HTTP verbs as applied semantics, and the full status code catalog: [`../../NodeJS/Phase-05-REST-API-Design/01-REST-Principles-and-HTTP-Semantics.md`](../../NodeJS/Phase-05-REST-API-Design/01-REST-Principles-and-HTTP-Semantics.md)
+- REST principles, HTTP verbs as applied semantics, and the full status code catalog: [`../../NodeJS/Phase-05-REST-API-Design/01-REST-Principles-and-HTTP-Semantics.md`](../../../03-APPLICATION-DEVELOPMENT/02-Backend/NodeJS/Phase-05-REST-API-Design/01-REST-Principles-and-HTTP-Semantics.md)
 - TLS handshake internals (certificates, key exchange, cipher suites): [`../Phase-06-TLS-SSL-and-Handshake/`](../Phase-06-TLS-SSL-and-Handshake/)
 - Cookies and session state on top of stateless HTTP: [`../Phase-07-Cookies-Sessions-and-Web-Auth/`](../Phase-07-Cookies-Sessions-and-Web-Auth/)
 

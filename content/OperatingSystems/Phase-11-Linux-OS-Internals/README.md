@@ -4,7 +4,7 @@
 
 Take the OS theory from Phases 01–10 (processes, scheduling, memory, file systems) and ground it in a real, running Linux system. This phase answers the "how does this actually work on my machine" questions that interviewers love to ask a full-stack engineer: how does Linux boot, what happens when your code calls `read()`, how do signals really work, and — critically — how do you *diagnose* a misbehaving process or server in production.
 
-> **Note:** This phase is about Linux **concepts and internals** — the kernel, syscalls, boot sequence, process/signal semantics. If you want to get better at writing Bash scripts or using command-line tools day-to-day, see the dedicated **[ShellScripting](../../ShellScripting/)** course. The two are complementary: this phase explains *why* commands like `kill`, `ps`, and `lsof` behave the way they do; ShellScripting teaches you to script with them fluently.
+> **Note:** This phase is about Linux **concepts and internals** — the kernel, syscalls, boot sequence, process/signal semantics. If you want to get better at writing Bash scripts or using command-line tools day-to-day, see the dedicated **[ShellScripting](../ShellScripting/)** course. The two are complementary: this phase explains *why* commands like `kill`, `ps`, and `lsof` behave the way they do; ShellScripting teaches you to script with them fluently.
 
 ## Learning Objectives
 
@@ -34,7 +34,7 @@ Take the OS theory from Phases 01–10 (processes, scheduling, memory, file syst
 
 ## Cross-Reference
 
-- Command-line fluency, Bash scripting, `grep`/`sed`/`awk`, automation → **[ShellScripting course](../../ShellScripting/)**
+- Command-line fluency, Bash scripting, `grep`/`sed`/`awk`, automation → **[ShellScripting course](../ShellScripting/)**
 - File system concepts referenced here (inodes, mounts) → [Phase 08: File Systems and Storage](../Phase-08-File-Systems-and-Storage/)
 
 ## Next Phase
