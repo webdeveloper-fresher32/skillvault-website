@@ -5,7 +5,7 @@ spring:
   application:
     name: SkillVaultBackend
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/Skill-Vault}
+    url: ${DATABASE_URL:${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/Skill-Vault}}
     username: ${SPRING_DATASOURCE_USERNAME:postgres}
     password: ${SPRING_DATASOURCE_PASSWORD:0000}
     driver-class-name: org.postgresql.Driver
