@@ -2,8 +2,8 @@
 
 ## Overview
 
-This phase applies everything from Phases 01–09 (OOP, SOLID, UML, design patterns, Python
-idioms) to a set of classic "platform" Low-Level Design interview problems — the kind
+This phase applies everything from Phases 01–09 (OOP, SOLID, UML, design patterns, Java
+idioms and concurrency) to a set of classic "platform" Low-Level Design interview problems — the kind
 where an interviewer says "design a food delivery app" and gives you 45 minutes on a
 whiteboard.
 

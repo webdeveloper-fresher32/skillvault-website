@@ -14,9 +14,17 @@ import java.util.List;
 public class CourseController {
 
     private final CourseService courseService;
+    private final com.skillvault.service.ContentIndexingService contentIndexingService;
 
-    public CourseController(CourseService courseService) {
+    public CourseController(CourseService courseService, com.skillvault.service.ContentIndexingService contentIndexingService) {
         this.courseService = courseService;
+        this.contentIndexingService = contentIndexingService;
+    }
+
+    @PostMapping("/reindex")
+    public ResponseEntity<String> reindex() {
+        contentIndexingService.indexContent();
+        return ResponseEntity.ok("Reindexing completed successfully");
     }
 
     @GetMapping

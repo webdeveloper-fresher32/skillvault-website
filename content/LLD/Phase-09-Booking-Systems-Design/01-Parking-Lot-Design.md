@@ -170,204 +170,265 @@ ParkingLot   1 ────── 1 PricingStrategy         (dependency, injecte
 
 ---
 
-## 9. Python Skeleton
+## 9. Java Skeleton
 
-```python
-from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from datetime import datetime
-from enum import Enum, auto
-from threading import Lock
-from typing import List, Optional
-import uuid
+```java
+import java.time.Duration;
+import java.time.Instant;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantLock;
 
+public enum VehicleType {
+    MOTORCYCLE, CAR, TRUCK
+}
 
-class VehicleType(Enum):
-    MOTORCYCLE = auto()
-    CAR = auto()
-    TRUCK = auto()
+public abstract class Vehicle {
+    private final String licensePlate;
 
+    public Vehicle(String licensePlate) {
+        this.licensePlate = Objects.requireNonNull(licensePlate);
+    }
 
-class Vehicle(ABC):
-    def __init__(self, license_plate: str):
-        self.license_plate = license_plate
+    public String getLicensePlate() { return licensePlate; }
+    public abstract VehicleType getVehicleType();
+}
 
-    @property
-    @abstractmethod
-    def vehicle_type(self) -> VehicleType: ...
+public class Motorcycle extends Vehicle {
+    public Motorcycle(String licensePlate) { super(licensePlate); }
+    @Override public VehicleType getVehicleType() { return VehicleType.MOTORCYCLE; }
+}
 
+public class Car extends Vehicle {
+    public Car(String licensePlate) { super(licensePlate); }
+    @Override public VehicleType getVehicleType() { return VehicleType.CAR; }
+}
 
-class Motorcycle(Vehicle):
-    vehicle_type = VehicleType.MOTORCYCLE
+public class Truck extends Vehicle {
+    public Truck(String licensePlate) { super(licensePlate); }
+    @Override public VehicleType getVehicleType() { return VehicleType.TRUCK; }
+}
 
+public abstract class ParkingSpot {
+    private final String spotId;
+    private boolean isFree = true;
+    private final ReentrantLock spotLock = new ReentrantLock();
 
-class Car(Vehicle):
-    vehicle_type = VehicleType.CAR
+    public ParkingSpot(String spotId) {
+        this.spotId = spotId;
+    }
 
+    public abstract boolean canFit(Vehicle vehicle);
 
-class Truck(Vehicle):
-    vehicle_type = VehicleType.TRUCK
+    public boolean occupy() {
+        spotLock.lock();
+        try {
+            if (!isFree) return false;
+            this.isFree = false;
+            return true;
+        } finally {
+            spotLock.unlock();
+        }
+    }
 
+    public void vacate() {
+        spotLock.lock();
+        try {
+            this.isFree = true;
+        } finally {
+            spotLock.unlock();
+        }
+    }
 
-class ParkingSpot(ABC):
-    def __init__(self, spot_id: str):
-        self.spot_id = spot_id
-        self.is_free = True
-        self._lock = Lock()
+    public String getSpotId() { return spotId; }
+    public boolean isFree() { return isFree; }
+}
 
-    @abstractmethod
-    def can_fit(self, vehicle: Vehicle) -> bool: ...
+public class MotorcycleSpot extends ParkingSpot {
+    public MotorcycleSpot(String spotId) { super(spotId); }
+    @Override public boolean canFit(Vehicle vehicle) {
+        return vehicle.getVehicleType() == VehicleType.MOTORCYCLE;
+    }
+}
 
-    def occupy(self) -> bool:
-        """Atomically claim this spot. Returns False if already taken."""
-        with self._lock:
-            if not self.is_free:
-                return False
-            self.is_free = False
-            return True
+public class CompactSpot extends ParkingSpot {
+    public CompactSpot(String spotId) { super(spotId); }
+    @Override public boolean canFit(Vehicle vehicle) {
+        return vehicle.getVehicleType() == VehicleType.MOTORCYCLE || vehicle.getVehicleType() == VehicleType.CAR;
+    }
+}
 
-    def vacate(self) -> None:
-        with self._lock:
-            self.is_free = True
+public class LargeSpot extends ParkingSpot {
+    public LargeSpot(String spotId) { super(spotId); }
+    @Override public boolean canFit(Vehicle vehicle) {
+        return true; // Large fits Motorcycle, Car, or Truck
+    }
+}
 
+public class ElectricSpot extends CompactSpot {
+    public ElectricSpot(String spotId) { super(spotId); }
+    public void startCharging() { System.out.println("EV charging started on spot " + getSpotId()); }
+    public void stopCharging() { System.out.println("EV charging stopped on spot " + getSpotId()); }
+}
 
-class MotorcycleSpot(ParkingSpot):
-    def can_fit(self, vehicle: Vehicle) -> bool:
-        return vehicle.vehicle_type == VehicleType.MOTORCYCLE
+public class Floor {
+    private final int level;
+    private final List<ParkingSpot> spots;
 
+    public Floor(int level, List<ParkingSpot> spots) {
+        this.level = level;
+        this.spots = new ArrayList<>(spots);
+    }
 
-class CompactSpot(ParkingSpot):
-    def can_fit(self, vehicle: Vehicle) -> bool:
-        return vehicle.vehicle_type in (VehicleType.MOTORCYCLE, VehicleType.CAR)
+    public List<ParkingSpot> freeSpotsFor(Vehicle vehicle) {
+        return spots.stream().filter(s -> s.isFree() && s.canFit(vehicle)).toList();
+    }
 
+    public int getLevel() { return level; }
+    public List<ParkingSpot> getSpots() { return Collections.unmodifiableList(spots); }
+}
 
-class LargeSpot(ParkingSpot):
-    def can_fit(self, vehicle: Vehicle) -> bool:
-        return True  # a large spot fits anything
+// --- Strategy: Allocation ---
 
+public interface SpotAllocationStrategy {
+    Optional<ParkingSpot> findSpot(List<Floor> floors, Vehicle vehicle);
+}
 
-class ElectricSpot(CompactSpot):
-    def start_charging(self) -> None: ...
-    def stop_charging(self) -> None: ...
+public class NearestSpotStrategy implements SpotAllocationStrategy {
+    @Override
+    public Optional<ParkingSpot> findSpot(List<Floor> floors, Vehicle vehicle) {
+        for (Floor floor : floors) {
+            List<ParkingSpot> candidates = floor.freeSpotsFor(vehicle);
+            if (!candidates.isEmpty()) {
+                return Optional.of(candidates.get(0));
+            }
+        }
+        return Optional.empty();
+    }
+}
 
+public class BestFitStrategy implements SpotAllocationStrategy {
+    @Override
+    public Optional<ParkingSpot> findSpot(List<Floor> floors, Vehicle vehicle) {
+        return floors.stream()
+            .flatMap(f -> f.freeSpotsFor(vehicle).stream())
+            .min(Comparator.comparingInt(this::getSpotRank));
+    }
 
-class Floor:
-    def __init__(self, level: int, spots: List[ParkingSpot]):
-        self.level = level
-        self.spots = spots
+    private int getSpotRank(ParkingSpot spot) {
+        if (spot instanceof MotorcycleSpot) return 0;
+        if (spot instanceof CompactSpot) return 1;
+        return 2; // LargeSpot
+    }
+}
 
-    def free_spots_for(self, vehicle: Vehicle) -> List[ParkingSpot]:
-        return [s for s in self.spots if s.is_free and s.can_fit(vehicle)]
+// --- Strategy: Pricing ---
 
+public interface PricingStrategy {
+    double calculateFee(VehicleType type, double durationHours);
+}
 
-# --- Strategy: allocation ---
-class SpotAllocationStrategy(ABC):
-    @abstractmethod
-    def find_spot(self, floors: List[Floor], vehicle: Vehicle) -> Optional[ParkingSpot]: ...
+public class HourlyPricingStrategy implements PricingStrategy {
+    private final Map<VehicleType, Double> rates = Map.of(
+        VehicleType.MOTORCYCLE, 10.0,
+        VehicleType.CAR, 20.0,
+        VehicleType.TRUCK, 30.0
+    );
 
+    @Override
+    public double calculateFee(VehicleType type, double durationHours) {
+        long hours = (long) Math.ceil(durationHours);
+        return rates.getOrDefault(type, 20.0) * Math.max(1, hours);
+    }
+}
 
-class NearestSpotStrategy(SpotAllocationStrategy):
-    """Picks the first free, fitting spot scanning floors in order (closest to entry)."""
-    def find_spot(self, floors: List[Floor], vehicle: Vehicle) -> Optional[ParkingSpot]:
-        for floor in floors:
-            candidates = floor.free_spots_for(vehicle)
-            if candidates:
-                return candidates[0]
-        return None
+public record Payment(double amount, String method, String status) {}
 
+public class Ticket {
+    private final String ticketId;
+    private final Vehicle vehicle;
+    private final ParkingSpot spot;
+    private final Instant entryTime;
+    private Payment payment;
 
-class BestFitStrategy(SpotAllocationStrategy):
-    """Picks the smallest spot that still fits the vehicle, to conserve large spots."""
-    SIZE_RANK = {MotorcycleSpot: 0, CompactSpot: 1, ElectricSpot: 1, LargeSpot: 2}
+    public Ticket(Vehicle vehicle, ParkingSpot spot) {
+        this.ticketId = UUID.randomUUID().toString();
+        this.vehicle = vehicle;
+        this.spot = spot;
+        this.entryTime = Instant.now();
+    }
 
-    def find_spot(self, floors: List[Floor], vehicle: Vehicle) -> Optional[ParkingSpot]:
-        all_candidates = [s for f in floors for s in f.free_spots_for(vehicle)]
-        if not all_candidates:
-            return None
-        return min(all_candidates, key=lambda s: self.SIZE_RANK.get(type(s), 99))
+    public double durationHours(Instant exitTime) {
+        long seconds = Duration.between(entryTime, exitTime).getSeconds();
+        return Math.max(0.1, seconds / 3600.0);
+    }
 
+    public String getTicketId() { return ticketId; }
+    public Vehicle getVehicle() { return vehicle; }
+    public ParkingSpot getSpot() { return spot; }
+    public void setPayment(Payment payment) { this.payment = payment; }
+    public Payment getPayment() { return payment; }
+}
 
-# --- Strategy: pricing ---
-class PricingStrategy(ABC):
-    @abstractmethod
-    def calculate_fee(self, vehicle_type: VehicleType, duration_hours: float) -> float: ...
+public class ParkingLot {
+    private final List<Floor> floors;
+    private final SpotAllocationStrategy allocationStrategy;
+    private final PricingStrategy pricingStrategy;
+    private final Map<String, Ticket> activeTickets = new ConcurrentHashMap<>();
+    private final ReentrantLock lotLock = new ReentrantLock();
 
+    public ParkingLot(List<Floor> floors, SpotAllocationStrategy allocation, PricingStrategy pricing) {
+        this.floors = new ArrayList<>(floors);
+        this.allocationStrategy = allocation;
+        this.pricingStrategy = pricing;
+    }
 
-class HourlyPricingStrategy(PricingStrategy):
-    RATES = {VehicleType.MOTORCYCLE: 10, VehicleType.CAR: 20, VehicleType.TRUCK: 30}
+    public Ticket parkVehicle(Vehicle vehicle) {
+        lotLock.lock();
+        try {
+            ParkingSpot spot = allocationStrategy.findSpot(floors, vehicle)
+                .orElseThrow(() -> new IllegalStateException("Parking lot full for vehicle type: " + vehicle.getVehicleType()));
 
-    def calculate_fee(self, vehicle_type: VehicleType, duration_hours: float) -> float:
-        import math
-        return self.RATES[vehicle_type] * math.ceil(duration_hours)
+            if (!spot.occupy()) {
+                throw new IllegalStateException("Failed to occupy spot");
+            }
 
+            Ticket ticket = new Ticket(vehicle, spot);
+            activeTickets.put(ticket.getTicketId(), ticket);
+            return ticket;
+        } finally {
+            lotLock.unlock();
+        }
+    }
 
-@dataclass
-class Payment:
-    amount: float
-    method: str
-    status: str = "PENDING"
+    public Payment unparkVehicle(String ticketId, String paymentMethod) {
+        Ticket ticket = activeTickets.remove(ticketId);
+        if (ticket == null) {
+            throw new IllegalArgumentException("Invalid ticket ID");
+        }
 
+        double duration = ticket.durationHours(Instant.now());
+        double fee = pricingStrategy.calculateFee(ticket.getVehicle().getVehicleType(), duration);
+        Payment payment = new Payment(fee, paymentMethod, "PAID");
+        ticket.setPayment(payment);
+        ticket.getSpot().vacate();
+        return payment;
+    }
+}
 
-@dataclass
-class Ticket:
-    ticket_id: str
-    vehicle: Vehicle
-    spot: ParkingSpot
-    entry_time: datetime
-    payment: Optional[Payment] = None
+public class EntryPanel {
+    private final ParkingLot lot;
+    public EntryPanel(ParkingLot lot) { this.lot = lot; }
+    public Ticket issueTicket(Vehicle vehicle) { return lot.parkVehicle(vehicle); }
+}
 
-    def duration_hours(self, exit_time: datetime) -> float:
-        return (exit_time - self.entry_time).total_seconds() / 3600
-
-
-class ParkingLot:
-    def __init__(self, floors: List[Floor],
-                 allocation_strategy: SpotAllocationStrategy,
-                 pricing_strategy: PricingStrategy):
-        self.floors = floors
-        self.allocation_strategy = allocation_strategy
-        self.pricing_strategy = pricing_strategy
-        self._active_tickets = {}
-        self._lock = Lock()
-
-    def park_vehicle(self, vehicle: Vehicle) -> Ticket:
-        with self._lock:
-            spot = self.allocation_strategy.find_spot(self.floors, vehicle)
-            if spot is None or not spot.occupy():
-                raise RuntimeError("Parking lot full for this vehicle type")
-            ticket = Ticket(
-                ticket_id=str(uuid.uuid4()),
-                vehicle=vehicle,
-                spot=spot,
-                entry_time=datetime.now(),
-            )
-            self._active_tickets[ticket.ticket_id] = ticket
-            return ticket
-
-    def unpark_vehicle(self, ticket_id: str, payment_method: str) -> Payment:
-        ticket = self._active_tickets.pop(ticket_id)
-        duration = ticket.duration_hours(datetime.now())
-        fee = self.pricing_strategy.calculate_fee(ticket.vehicle.vehicle_type, duration)
-        payment = Payment(amount=fee, method=payment_method, status="PAID")
-        ticket.payment = payment
-        ticket.spot.vacate()
-        return payment
-
-
-class EntryPanel:
-    def __init__(self, lot: ParkingLot):
-        self.lot = lot
-
-    def issue_ticket(self, vehicle: Vehicle) -> Ticket:
-        return self.lot.park_vehicle(vehicle)
-
-
-class ExitPanel:
-    def __init__(self, lot: ParkingLot):
-        self.lot = lot
-
-    def process_exit(self, ticket_id: str, payment_method: str) -> Payment:
-        return self.lot.unpark_vehicle(ticket_id, payment_method)
+public class ExitPanel {
+    private final ParkingLot lot;
+    public ExitPanel(ParkingLot lot) { this.lot = lot; }
+    public Payment processExit(String ticketId, String paymentMethod) {
+        return lot.unparkVehicle(ticketId, paymentMethod);
+    }
+}
 ```
 
 ---

@@ -180,169 +180,264 @@ This is exactly the same pattern used for stock-price tickers or event buses —
 
 ---
 
-## 8. Python Implementation
+## 8. Java Implementation
 
-```python
-from abc import ABC, abstractmethod
-from enum import Enum, auto
-from datetime import datetime
-from typing import Dict, List, Optional
-import uuid
+```java
+import java.time.Instant;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.stream.Collectors;
 
+public enum MessageStatus {
+    SENT,
+    DELIVERED,
+    READ
+}
 
-class MessageStatus(Enum):
-    SENT = auto()
-    DELIVERED = auto()
-    READ = auto()
+public class User {
+    private final String userId;
+    private final String name;
+    private final String phone;
 
+    public User(String name, String phone) {
+        this.userId = UUID.randomUUID().toString();
+        this.name = name;
+        this.phone = phone;
+    }
 
-class User:
-    def __init__(self, name: str, phone: str):
-        self.user_id = str(uuid.uuid4())
-        self.name = name
-        self.phone = phone
+    public String getUserId() { return userId; }
+    public String getName() { return name; }
+    public String getPhone() { return phone; }
 
-    def __hash__(self):
-        return hash(self.user_id)
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        User user = (User) o;
+        return Objects.equals(userId, user.userId);
+    }
 
-    def __eq__(self, other):
-        return isinstance(other, User) and self.user_id == other.user_id
+    @Override
+    public int hashCode() {
+        return Objects.hash(userId);
+    }
 
-    def __repr__(self):
-        return f"User({self.name})"
+    @Override
+    public String toString() {
+        return "User(" + name + ")";
+    }
+}
 
+public class Media {
+    private final String url;
+    private final String mediaType; // "image" | "video" | "document" | "audio"
 
-class Media:
-    def __init__(self, url: str, media_type: str):
-        self.url = url
-        self.media_type = media_type  # "image" | "video" | "document" | "audio"
+    public Media(String url, String mediaType) {
+        this.url = url;
+        this.mediaType = mediaType;
+    }
 
+    public String getUrl() { return url; }
+    public String getMediaType() { return mediaType; }
+}
 
-# ---- Observer pattern ----
-class StatusObserver(ABC):
-    @abstractmethod
-    def on_status_changed(self, message: "Message", user: User, status: MessageStatus) -> None:
-        ...
+// ---- Observer pattern ----
+public interface StatusObserver {
+    void onStatusChanged(Message message, User user, MessageStatus status);
+}
 
+public class SenderNotifier implements StatusObserver {
+    /** Notifies the sender UI/session that status changed (e.g. blue ticks). */
+    @Override
+    public void onStatusChanged(Message message, User user, MessageStatus status) {
+        System.out.println("[UI] " + message.getSender().getName() + "'s message " +
+            message.getMessageId().substring(0, 6) + " is now " + status.name() + " for " + user.getName());
+    }
+}
 
-class SenderNotifier(StatusObserver):
-    """Notifies the sender's UI/session that status changed (e.g., blue ticks)."""
-    def on_status_changed(self, message: "Message", user: User, status: MessageStatus) -> None:
-        print(f"[UI] {message.sender.name}'s message {message.message_id[:6]} "
-              f"is now {status.name} for {user.name}")
+public class PushNotificationService implements StatusObserver {
+    @Override
+    public void onStatusChanged(Message message, User user, MessageStatus status) {
+        if (status == MessageStatus.DELIVERED) {
+            System.out.println("[PUSH] Delivered receipt sent to " + message.getSender().getName());
+        }
+    }
+}
 
+public class Message {
+    private final String messageId;
+    private final User sender;
+    private final String content;
+    private final Media media;
+    private final Instant timestamp;
+    // per-recipient status — critical for group chats
+    private final Map<User, MessageStatus> statusMap = new ConcurrentHashMap<>();
+    private final List<StatusObserver> observers = new CopyOnWriteArrayList<>();
 
-class PushNotificationService(StatusObserver):
-    def on_status_changed(self, message: "Message", user: User, status: MessageStatus) -> None:
-        if status == MessageStatus.DELIVERED:
-            print(f"[PUSH] Delivered receipt sent to {message.sender.name}")
+    public Message(User sender, List<User> recipients, String content, Media media) {
+        this.messageId = UUID.randomUUID().toString();
+        this.sender = sender;
+        this.content = content;
+        this.media = media;
+        this.timestamp = Instant.now();
+        for (User r : recipients) {
+            statusMap.put(r, MessageStatus.SENT);
+        }
+    }
 
+    public void attachObserver(StatusObserver observer) {
+        observers.add(observer);
+    }
 
-class Message:
-    def __init__(self, sender: User, recipients: List[User],
-                 content: str, media: Optional[Media] = None):
-        self.message_id = str(uuid.uuid4())
-        self.sender = sender
-        self.content = content
-        self.media = media
-        self.timestamp = datetime.utcnow()
-        # per-recipient status — critical for group chats
-        self.status_map: Dict[User, MessageStatus] = {r: MessageStatus.SENT for r in recipients}
-        self._observers: List[StatusObserver] = []
+    public void markDelivered(User user) {
+        updateStatus(user, MessageStatus.DELIVERED);
+    }
 
-    def attach_observer(self, observer: StatusObserver) -> None:
-        self._observers.append(observer)
+    public void markRead(User user) {
+        updateStatus(user, MessageStatus.READ);
+    }
 
-    def mark_delivered(self, user: User) -> None:
-        self._update_status(user, MessageStatus.DELIVERED)
+    private synchronized void updateStatus(User user, MessageStatus status) {
+        if (!statusMap.containsKey(user)) {
+            return;
+        }
+        // never downgrade READ -> DELIVERED etc.
+        if (statusMap.get(user).ordinal() >= status.ordinal()) {
+            return;
+        }
+        statusMap.put(user, status);
+        for (StatusObserver obs : observers) {
+            obs.onStatusChanged(this, user, status);
+        }
+    }
 
-    def mark_read(self, user: User) -> None:
-        self._update_status(user, MessageStatus.READ)
+    /** For a group: the status shown to the sender is the MIN across recipients. */
+    public MessageStatus getOverallStatus() {
+        return statusMap.values().stream()
+            .min(Comparator.comparingInt(Enum::ordinal))
+            .orElse(MessageStatus.SENT);
+    }
 
-    def _update_status(self, user: User, status: MessageStatus) -> None:
-        if user not in self.status_map:
-            return
-        # never downgrade READ -> DELIVERED etc.
-        if self.status_map[user].value >= status.value:
-            return
-        self.status_map[user] = status
-        for obs in self._observers:
-            obs.on_status_changed(self, user, status)
+    public String getMessageId() { return messageId; }
+    public User getSender() { return sender; }
+    public String getContent() { return content; }
+    public Media getMedia() { return media; }
+    public Instant getTimestamp() { return timestamp; }
+    public Map<User, MessageStatus> getStatusMap() { return Collections.unmodifiableMap(statusMap); }
+}
 
-    def overall_status(self) -> MessageStatus:
-        """For a group: the status shown to the sender is the MIN across recipients."""
-        return min(self.status_map.values(), key=lambda s: s.value)
+public abstract class Chat {
+    protected final String chatId;
+    protected final List<User> participants = new CopyOnWriteArrayList<>();
+    protected final List<Message> messages = new CopyOnWriteArrayList<>();
 
+    public Chat(List<User> participants) {
+        this.chatId = UUID.randomUUID().toString();
+        this.participants.addAll(participants);
+    }
 
-class Chat(ABC):
-    def __init__(self, participants: List[User]):
-        self.chat_id = str(uuid.uuid4())
-        self.participants: List[User] = participants
-        self.messages: List[Message] = []
+    public List<User> getParticipants() {
+        return Collections.unmodifiableList(participants);
+    }
 
-    def get_participants(self) -> List[User]:
-        return list(self.participants)
+    public synchronized Message sendMessage(User sender, String content, Media media) {
+        List<User> recipients = participants.stream()
+            .filter(u -> !u.equals(sender))
+            .collect(Collectors.toList());
+        Message message = new Message(sender, recipients, content, media);
+        attachDefaultObservers(message);
+        messages.add(message);
+        return message;
+    }
 
-    def send_message(self, sender: User, content: str,
-                      media: Optional[Media] = None) -> Message:
-        recipients = [u for u in self.participants if u != sender]
-        message = Message(sender, recipients, content, media)
-        self._attach_default_observers(message)
-        self.messages.append(message)
-        return message
+    protected void attachDefaultObservers(Message message) {
+        message.attachObserver(new SenderNotifier());
+        message.attachObserver(new PushNotificationService());
+    }
 
-    def _attach_default_observers(self, message: Message) -> None:
-        message.attach_observer(SenderNotifier())
-        message.attach_observer(PushNotificationService())
+    public Instant getLastActivity() {
+        return messages.isEmpty() ? Instant.MIN : messages.get(messages.size() - 1).getTimestamp();
+    }
 
-    def last_activity(self) -> datetime:
-        return self.messages[-1].timestamp if self.messages else datetime.min
+    public String getChatId() { return chatId; }
+    public List<Message> getMessages() { return Collections.unmodifiableList(messages); }
+}
 
+public class OneToOneChat extends Chat {
+    public OneToOneChat(User userA, User userB) {
+        super(List.of(userA, userB));
+    }
+}
 
-class OneToOneChat(Chat):
-    def __init__(self, user_a: User, user_b: User):
-        super().__init__([user_a, user_b])
+public class Group extends Chat {
+    private final String groupName;
+    private final List<User> admins = new CopyOnWriteArrayList<>();
 
+    public Group(String name, User creator, List<User> members) {
+        super(mergeMembers(members, creator));
+        this.groupName = name;
+        this.admins.add(creator);
+    }
 
-class Group(Chat):
-    def __init__(self, name: str, creator: User, members: List[User]):
-        super().__init__(members + [creator] if creator not in members else members)
-        self.group_name = name
-        self.admins: List[User] = [creator]
+    private static List<User> mergeMembers(List<User> members, User creator) {
+        Set<User> set = new LinkedHashSet<>(members);
+        set.add(creator);
+        return new ArrayList<>(set);
+    }
 
-    def add_member(self, admin: User, new_member: User) -> None:
-        if admin not in self.admins:
-            raise PermissionError("Only admins can add members")
-        if new_member not in self.participants:
-            self.participants.append(new_member)
+    public synchronized void addMember(User admin, User newMember) {
+        if (!admins.contains(admin)) {
+            throw new SecurityException("Only admins can add members");
+        }
+        if (!participants.contains(newMember)) {
+            participants.add(newMember);
+        }
+    }
 
-    def remove_member(self, admin: User, member: User) -> None:
-        if admin not in self.admins:
-            raise PermissionError("Only admins can remove members")
-        self.participants.remove(member)
+    public synchronized void removeMember(User admin, User member) {
+        if (!admins.contains(admin)) {
+            throw new SecurityException("Only admins can remove members");
+        }
+        participants.remove(member);
+    }
 
+    public String getGroupName() { return groupName; }
+    public List<User> getAdmins() { return Collections.unmodifiableList(admins); }
+}
 
-class ChatService:
-    """Single point of lookup/creation — decouples User from Chat internals."""
-    def __init__(self):
-        self._one_to_one: Dict[frozenset, OneToOneChat] = {}
-        self._groups: List[Group] = []
+/** Single point of lookup/creation — decouples User from Chat internals. */
+public class ChatService {
+    private final Map<Set<String>, OneToOneChat> oneToOne = new ConcurrentHashMap<>();
+    private final List<Group> groups = new CopyOnWriteArrayList<>();
 
-    def get_or_create_1to1(self, a: User, b: User) -> OneToOneChat:
-        key = frozenset([a.user_id, b.user_id])
-        if key not in self._one_to_one:
-            self._one_to_one[key] = OneToOneChat(a, b)
-        return self._one_to_one[key]
+    public OneToOneChat getOrCreate1to1(User a, User b) {
+        Set<String> key = Set.of(a.getUserId(), b.getUserId());
+        return oneToOne.computeIfAbsent(key, k -> new OneToOneChat(a, b));
+    }
 
-    def create_group(self, name: str, creator: User, members: List[User]) -> Group:
-        group = Group(name, creator, members)
-        self._groups.append(group)
-        return group
+    public Group createGroup(String name, User creator, List<User> members) {
+        Group group = new Group(name, creator, members);
+        groups.add(group);
+        return group;
+    }
 
-    def chats_for(self, user: User) -> List[Chat]:
-        chats: List[Chat] = [c for c in self._one_to_one.values() if user in c.participants]
-        chats += [g for g in self._groups if user in g.participants]
-        return sorted(chats, key=lambda c: c.last_activity(), reverse=True)
+    public List<Chat> chatsFor(User user) {
+        List<Chat> chats = new ArrayList<>();
+        for (OneToOneChat chat : oneToOne.values()) {
+            if (chat.getParticipants().contains(user)) {
+                chats.add(chat);
+            }
+        }
+        for (Group group : groups) {
+            if (group.getParticipants().contains(user)) {
+                chats.add(group);
+            }
+        }
+        chats.sort(Comparator.comparing(Chat::getLastActivity).reversed());
+        return chats;
+    }
+}
 ```
 
 ---

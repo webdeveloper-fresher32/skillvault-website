@@ -166,17 +166,14 @@ Ride           * ────── * RideObserver    (subject-observer, notifie
 2. Compute `location.distance_to(driver.location)` for each candidate.
 3. Return the minimum-distance driver (or top-K for fallback if the first rejects).
 
-```python
-class DriverMatcher:
-    def find_nearest(self, pickup: "Location", drivers: List["Driver"],
-                      vehicle_type: Optional[str] = None) -> Optional["Driver"]:
-        candidates = [
-            d for d in drivers
-            if d.is_available and (vehicle_type is None or d.vehicle.vehicle_type == vehicle_type)
-        ]
-        if not candidates:
-            return None
-        return min(candidates, key=lambda d: pickup.distance_to(d.location))
+```java
+public class DriverMatcher {
+    public Optional<Driver> findNearest(Location pickup, List<Driver> drivers, VehicleType vehicleType) {
+        return drivers.stream()
+            .filter(d -> d.isAvailable() && (vehicleType == null || d.getVehicle().getVehicleType() == vehicleType))
+            .min(Comparator.comparingDouble(d -> pickup.distanceTo(d.getLocation())));
+    }
+}
 ```
 
 **Why this is O(n) and how to say so correctly:** for a small city/simulation this is fine. At real scale (state this explicitly in interview), you'd replace the linear scan with a **geospatial index** — geohash-bucket the drivers and only scan nearby buckets, or use a quad-tree/R-tree — while keeping `DriverMatcher`'s interface identical. This demonstrates you understand the LLD/HLD boundary: the *design* accommodates the swap without an interviewer needing you to actually implement a quad-tree on the whiteboard.
@@ -185,191 +182,215 @@ class DriverMatcher:
 
 ---
 
-## 10. Python Skeleton
+## 10. Java Skeleton
 
-```python
-from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from enum import Enum, auto
-from math import radians, sin, cos, sqrt, atan2
-from typing import List, Optional
-import uuid
+```java
+import java.util.*;
+import java.util.concurrent.CopyOnWriteArrayList;
 
-
-@dataclass(frozen=True)
-class Location:
-    lat: float
-    lng: float
-
-    def distance_to(self, other: "Location") -> float:
-        # Haversine distance in km
-        R = 6371.0
-        lat1, lat2 = radians(self.lat), radians(other.lat)
-        dlat = radians(other.lat - self.lat)
-        dlng = radians(other.lng - self.lng)
-        a = sin(dlat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(dlng / 2) ** 2
-        return 2 * R * atan2(sqrt(a), sqrt(1 - a))
-
-
-class VehicleType(Enum):
-    MINI = auto()
-    SEDAN = auto()
-    SUV = auto()
-
-
-@dataclass
-class Vehicle:
-    plate_number: str
-    vehicle_type: VehicleType
-
-
-@dataclass
-class Rider:
-    rider_id: str
-    name: str
-
-
-class Driver:
-    def __init__(self, driver_id: str, vehicle: Vehicle, location: Location):
-        self.driver_id = driver_id
-        self.vehicle = vehicle
-        self.location = location
-        self.is_available = True
-
-    def update_location(self, location: Location) -> None:
-        self.location = location
-
-
-class RideStatus(Enum):
-    REQUESTED = auto()
-    ACCEPTED = auto()
-    ARRIVED = auto()
-    IN_PROGRESS = auto()
-    COMPLETED = auto()
-    CANCELLED = auto()
-
-
-VALID_TRANSITIONS = {
-    RideStatus.REQUESTED: {RideStatus.ACCEPTED, RideStatus.CANCELLED},
-    RideStatus.ACCEPTED: {RideStatus.ARRIVED, RideStatus.CANCELLED},
-    RideStatus.ARRIVED: {RideStatus.IN_PROGRESS, RideStatus.CANCELLED},
-    RideStatus.IN_PROGRESS: {RideStatus.COMPLETED},
-    RideStatus.COMPLETED: set(),
-    RideStatus.CANCELLED: set(),
+public record Location(double lat, double lng) {
+    public double distanceTo(Location other) {
+        final double R = 6371.0;
+        double lat1 = Math.toRadians(this.lat);
+        double lat2 = Math.toRadians(other.lat);
+        double dlat = Math.toRadians(other.lat - this.lat);
+        double dlng = Math.toRadians(other.lng - this.lng);
+        double a = Math.sin(dlat / 2) * Math.sin(dlat / 2)
+                 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dlng / 2) * Math.sin(dlng / 2);
+        return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
 }
 
+public enum VehicleType {
+    MINI, SEDAN, SUV
+}
 
-class RideObserver(ABC):
-    @abstractmethod
-    def on_status_changed(self, ride: "Ride") -> None: ...
+public class Vehicle {
+    private final String plateNumber;
+    private final VehicleType vehicleType;
 
+    public Vehicle(String plateNumber, VehicleType vehicleType) {
+        this.plateNumber = plateNumber;
+        this.vehicleType = vehicleType;
+    }
 
-class RiderNotifier(RideObserver):
-    def on_status_changed(self, ride: "Ride") -> None:
-        print(f"[Rider Notify] Ride {ride.ride_id} is now {ride.status.name}")
+    public String getPlateNumber() { return plateNumber; }
+    public VehicleType getVehicleType() { return vehicleType; }
+}
 
+public record Rider(String riderId, String name) {}
 
-class DriverNotifier(RideObserver):
-    def on_status_changed(self, ride: "Ride") -> None:
-        print(f"[Driver Notify] Ride {ride.ride_id} is now {ride.status.name}")
+public class Driver {
+    private final String driverId;
+    private final Vehicle vehicle;
+    private Location location;
+    private boolean isAvailable = true;
 
+    public Driver(String driverId, Vehicle vehicle, Location location) {
+        this.driverId = driverId;
+        this.vehicle = vehicle;
+        this.location = location;
+    }
 
-class Ride:
-    def __init__(self, ride_id: str, rider: Rider, pickup: Location, drop: Location):
-        self.ride_id = ride_id
-        self.rider = rider
-        self.driver: Optional[Driver] = None
-        self.pickup = pickup
-        self.drop = drop
-        self.status = RideStatus.REQUESTED
-        self.fare: Optional[float] = None
-        self._observers: List[RideObserver] = []
+    public synchronized void updateLocation(Location loc) { this.location = loc; }
+    public synchronized Location getLocation() { return location; }
+    public synchronized boolean isAvailable() { return isAvailable; }
+    public synchronized void setAvailable(boolean available) { this.isAvailable = available; }
+    public Vehicle getVehicle() { return vehicle; }
+    public String getDriverId() { return driverId; }
+}
 
-    def add_observer(self, observer: RideObserver) -> None:
-        self._observers.append(observer)
+public enum RideStatus {
+    REQUESTED, ACCEPTED, ARRIVED, IN_PROGRESS, COMPLETED, CANCELLED;
 
-    def _transition(self, new_status: RideStatus) -> None:
-        if new_status not in VALID_TRANSITIONS[self.status]:
-            raise ValueError(f"Cannot go from {self.status} to {new_status}")
-        self.status = new_status
-        for obs in self._observers:
-            obs.on_status_changed(self)
+    public boolean canTransitionTo(RideStatus next) {
+        return switch (this) {
+            case REQUESTED -> next == ACCEPTED || next == CANCELLED;
+            case ACCEPTED -> next == ARRIVED || next == CANCELLED;
+            case ARRIVED -> next == IN_PROGRESS || next == CANCELLED;
+            case IN_PROGRESS -> next == COMPLETED;
+            case COMPLETED, CANCELLED -> false;
+        };
+    }
+}
 
-    def accept(self, driver: Driver) -> None:
-        self.driver = driver
-        driver.is_available = False
-        self._transition(RideStatus.ACCEPTED)
+public interface RideObserver {
+    void onStatusChanged(Ride ride);
+}
 
-    def mark_arrived(self) -> None:
-        self._transition(RideStatus.ARRIVED)
+public class RiderNotifier implements RideObserver {
+    @Override public void onStatusChanged(Ride ride) {
+        System.out.println("[Rider Notify] Ride " + ride.getRideId() + " is now " + ride.getStatus());
+    }
+}
 
-    def start(self) -> None:
-        self._transition(RideStatus.IN_PROGRESS)
+public class DriverNotifier implements RideObserver {
+    @Override public void onStatusChanged(Ride ride) {
+        System.out.println("[Driver Notify] Ride " + ride.getRideId() + " is now " + ride.getStatus());
+    }
+}
 
-    def complete(self, fare_strategy: "FareStrategy") -> None:
-        self.fare = fare_strategy.calculate(self)
-        self._transition(RideStatus.COMPLETED)
-        if self.driver:
-            self.driver.is_available = True
+public class Ride {
+    private final String rideId;
+    private final Rider rider;
+    private Driver driver;
+    private final Location pickup;
+    private final Location drop;
+    private RideStatus status = RideStatus.REQUESTED;
+    private Double fare;
+    private final List<RideObserver> observers = new CopyOnWriteArrayList<>();
 
-    def cancel(self) -> None:
-        self._transition(RideStatus.CANCELLED)
-        if self.driver:
-            self.driver.is_available = True
+    public Ride(String rideId, Rider rider, Location pickup, Location drop) {
+        this.rideId = rideId;
+        this.rider = rider;
+        this.pickup = pickup;
+        this.drop = drop;
+    }
 
+    public void addObserver(RideObserver observer) { observers.add(observer); }
 
-class FareStrategy(ABC):
-    @abstractmethod
-    def calculate(self, ride: Ride) -> float: ...
+    private synchronized void transition(RideStatus newStatus) {
+        if (!this.status.canTransitionTo(newStatus)) {
+            throw new IllegalStateException("Cannot transition from " + status + " to " + newStatus);
+        }
+        this.status = newStatus;
+        for (RideObserver obs : observers) {
+            obs.onStatusChanged(this);
+        }
+    }
 
+    public synchronized void accept(Driver driver) {
+        this.driver = driver;
+        driver.setAvailable(false);
+        transition(RideStatus.ACCEPTED);
+    }
 
-class PerKmFareStrategy(FareStrategy):
-    BASE_FARE = 40.0
-    RATE_PER_KM = 12.0
+    public synchronized void markArrived() { transition(RideStatus.ARRIVED); }
+    public synchronized void start() { transition(RideStatus.IN_PROGRESS); }
 
-    def calculate(self, ride: Ride) -> float:
-        distance = ride.pickup.distance_to(ride.drop)
-        return self.BASE_FARE + distance * self.RATE_PER_KM
+    public synchronized void complete(FareStrategy fareStrategy) {
+        this.fare = fareStrategy.calculate(this);
+        transition(RideStatus.COMPLETED);
+        if (this.driver != null) {
+            this.driver.setAvailable(true);
+        }
+    }
 
+    public synchronized void cancel() {
+        transition(RideStatus.CANCELLED);
+        if (this.driver != null) {
+            this.driver.setAvailable(true);
+        }
+    }
 
-class SurgeFareStrategy(FareStrategy):
-    def __init__(self, base_strategy: FareStrategy, surge_multiplier: float):
-        self.base_strategy = base_strategy
-        self.surge_multiplier = surge_multiplier
+    public String getRideId() { return rideId; }
+    public RideStatus getStatus() { return status; }
+    public Location getPickup() { return pickup; }
+    public Location getDrop() { return drop; }
+    public Double getFare() { return fare; }
+    public Driver getDriver() { return driver; }
+}
 
-    def calculate(self, ride: Ride) -> float:
-        return self.base_strategy.calculate(ride) * self.surge_multiplier
+public interface FareStrategy {
+    double calculate(Ride ride);
+}
 
+public class PerKmFareStrategy implements FareStrategy {
+    public static final double BASE_FARE = 40.0;
+    public static final double RATE_PER_KM = 12.0;
 
-class DriverMatcher:
-    def find_nearest(self, pickup: Location, drivers: List[Driver],
-                      vehicle_type: Optional[VehicleType] = None) -> Optional[Driver]:
-        candidates = [
-            d for d in drivers
-            if d.is_available and (vehicle_type is None or d.vehicle.vehicle_type == vehicle_type)
-        ]
-        if not candidates:
-            return None
-        return min(candidates, key=lambda d: pickup.distance_to(d.location))
+    @Override
+    public double calculate(Ride ride) {
+        double distance = ride.getPickup().distanceTo(ride.getDrop());
+        return BASE_FARE + (distance * RATE_PER_KM);
+    }
+}
 
+public class SurgeFareStrategy implements FareStrategy {
+    private final FareStrategy baseStrategy;
+    private final double surgeMultiplier;
 
-class RideBookingService:
-    def __init__(self, matcher: DriverMatcher, fare_strategy: FareStrategy):
-        self.matcher = matcher
-        self.fare_strategy = fare_strategy
+    public SurgeFareStrategy(FareStrategy baseStrategy, double surgeMultiplier) {
+        this.baseStrategy = baseStrategy;
+        this.surgeMultiplier = surgeMultiplier;
+    }
 
-    def request_ride(self, rider: Rider, pickup: Location, drop: Location,
-                      drivers: List[Driver], vehicle_type: Optional[VehicleType] = None) -> Ride:
-        ride = Ride(ride_id=str(uuid.uuid4()), rider=rider, pickup=pickup, drop=drop)
-        ride.add_observer(RiderNotifier())
-        ride.add_observer(DriverNotifier())
+    @Override
+    public double calculate(Ride ride) {
+        return baseStrategy.calculate(ride) * surgeMultiplier;
+    }
+}
 
-        driver = self.matcher.find_nearest(pickup, drivers, vehicle_type)
-        if driver is None:
-            ride.cancel()
-            raise RuntimeError("No available drivers")
-        ride.accept(driver)
-        return ride
+public class DriverMatcher {
+    public Optional<Driver> findNearest(Location pickup, List<Driver> drivers, VehicleType vehicleType) {
+        return drivers.stream()
+            .filter(d -> d.isAvailable() && (vehicleType == null || d.getVehicle().getVehicleType() == vehicleType))
+            .min(Comparator.comparingDouble(d -> pickup.distanceTo(d.getLocation())));
+    }
+}
+
+public class RideBookingService {
+    private final DriverMatcher matcher;
+    private final FareStrategy fareStrategy;
+
+    public RideBookingService(DriverMatcher matcher, FareStrategy fareStrategy) {
+        this.matcher = matcher;
+        this.fareStrategy = fareStrategy;
+    }
+
+    public Ride requestRide(Rider rider, Location pickup, Location drop,
+                            List<Driver> drivers, VehicleType vehicleType) {
+        Ride ride = new Ride(UUID.randomUUID().toString(), rider, pickup, drop);
+        ride.addObserver(new RiderNotifier());
+        ride.addObserver(new DriverNotifier());
+
+        Driver driver = matcher.findNearest(pickup, drivers, vehicleType)
+            .orElseThrow(() -> new IllegalStateException("No available drivers nearby"));
+
+        ride.accept(driver);
+        return ride;
+    }
+}
 ```
 
 ---

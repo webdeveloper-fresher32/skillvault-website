@@ -105,9 +105,9 @@ decisions below.
 | Principle | Applied how |
 |-----------|-------------|
 | **SRP** | `Order` manages its own item list & status; it does NOT choose a delivery partner or talk to a payment processor — those live in `DeliveryAssignmentStrategy` and `PaymentGateway` |
-| **OCP** | New delivery-assignment algorithms (nearest, rating-based, load-balanced) are added as new `DeliveryAssignmentStrategy` subclasses — `Order` code never changes |
-| **LSP** | Any `DeliveryAssignmentStrategy` subclass must return a `DeliveryPartner` (or `None`) — never throw for "no partner found"; callers rely on this consistent contract |
-| **ISP** | `PaymentGateway` exposes only `charge(amount, method) -> PaymentResult` — clients aren't forced to depend on refund/payout methods they don't use in this flow |
+| **OCP** | New delivery-assignment algorithms (nearest, rating-based, load-balanced) are added as new `DeliveryAssignmentStrategy` implementations — `Order` code never changes |
+| **LSP** | Any `DeliveryAssignmentStrategy` implementation must return an `Optional<DeliveryPartner>` — never throw an unexpected exception for "no partner found"; callers rely on this consistent contract |
+| **ISP** | `PaymentGateway` exposes only `PaymentResult charge(double amount, PaymentMethod method)` — clients aren't forced to depend on refund/payout methods they don't use in this flow |
 | **DIP** | `Order`/`OrderService` depend on the `PaymentGateway` interface and `DeliveryAssignmentStrategy` interface, not concrete `StripeGateway` or `NearestPartnerStrategy` classes |
 
 ---
@@ -120,66 +120,87 @@ decisions below.
 service, notification service) need to react when an order's status changes, without
 `Order` knowing about any of them by name.
 
-```python
-from abc import ABC, abstractmethod
-from enum import Enum, auto
+```java
+public enum OrderStatus {
+    PLACED,
+    ACCEPTED,
+    PREPARING,
+    OUT_FOR_DELIVERY,
+    DELIVERED,
+    CANCELLED
+}
 
+public interface OrderObserver {
+    void update(Order order);
+}
 
-class OrderStatus(Enum):
-    PLACED = auto()
-    ACCEPTED = auto()
-    PREPARING = auto()
-    OUT_FOR_DELIVERY = auto()
-    DELIVERED = auto()
-    CANCELLED = auto()
+public class CustomerNotifier implements OrderObserver {
+    @Override
+    public void update(Order order) {
+        System.out.println("[Customer app] order " + order.getId() + " is now " + order.getStatus());
+    }
+}
 
+public class DeliveryPartnerNotifier implements OrderObserver {
+    @Override
+    public void update(Order order) {
+        if (order.getStatus() == OrderStatus.OUT_FOR_DELIVERY) {
+            System.out.println("[Partner app] pickup ready for order " + order.getId());
+        }
+    }
+}
 
-class OrderObserver(ABC):
-    @abstractmethod
-    def update(self, order: "Order") -> None: ...
+public class Order {
+    private final String id;
+    private final Restaurant restaurant;
+    private final Customer customer;
+    private final List<OrderItem> items = new ArrayList<>();
+    private OrderStatus status = OrderStatus.PLACED;
+    private DeliveryPartner deliveryPartner;
+    private final List<OrderObserver> observers = new CopyOnWriteArrayList<>();
 
+    public Order(String id, Restaurant restaurant, Customer customer) {
+        this.id = id;
+        this.restaurant = restaurant;
+        this.customer = customer;
+    }
 
-class CustomerNotifier(OrderObserver):
-    def update(self, order: "Order") -> None:
-        print(f"[Customer app] order {order.id} is now {order.status.name}")
+    public void addObserver(OrderObserver observer) {
+        observers.add(observer);
+    }
 
+    private void setStatus(OrderStatus status) {
+        this.status = status;
+        for (OrderObserver observer : observers) {
+            observer.update(this);
+        }
+    }
 
-class DeliveryPartnerNotifier(OrderObserver):
-    def update(self, order: "Order") -> None:
-        if order.status == OrderStatus.OUT_FOR_DELIVERY:
-            print(f"[Partner app] pickup ready for order {order.id}")
+    public void accept() {
+        setStatus(OrderStatus.ACCEPTED);
+    }
 
+    public void markOutForDelivery(DeliveryPartner partner) {
+        this.deliveryPartner = partner;
+        setStatus(OrderStatus.OUT_FOR_DELIVERY);
+    }
 
-class Order:
-    def __init__(self, order_id: str, restaurant: "Restaurant", customer: "Customer"):
-        self.id = order_id
-        self.restaurant = restaurant
-        self.customer = customer
-        self.items: list["OrderItem"] = []
-        self.status = OrderStatus.PLACED
-        self.delivery_partner: "DeliveryPartner | None" = None
-        self._observers: list[OrderObserver] = []
+    public void markDelivered() {
+        setStatus(OrderStatus.DELIVERED);
+    }
 
-    def add_observer(self, observer: OrderObserver) -> None:
-        self._observers.append(observer)
+    public double getTotal() {
+        return items.stream().mapToDouble(OrderItem::getSubtotal).sum();
+    }
 
-    def _set_status(self, status: OrderStatus) -> None:
-        self.status = status
-        for observer in self._observers:
-            observer.update(self)
-
-    def accept(self) -> None:
-        self._set_status(OrderStatus.ACCEPTED)
-
-    def mark_out_for_delivery(self, partner: "DeliveryPartner") -> None:
-        self.delivery_partner = partner
-        self._set_status(OrderStatus.OUT_FOR_DELIVERY)
-
-    def mark_delivered(self) -> None:
-        self._set_status(OrderStatus.DELIVERED)
-
-    def total(self) -> float:
-        return sum(item.subtotal() for item in self.items)
+    public String getId() { return id; }
+    public OrderStatus getStatus() { return status; }
+    public Restaurant getRestaurant() { return restaurant; }
+    public Customer getCustomer() { return customer; }
+    public DeliveryPartner getDeliveryPartner() { return deliveryPartner; }
+    public List<OrderItem> getItems() { return Collections.unmodifiableList(items); }
+    public void addItem(OrderItem item) { items.add(item); }
+}
 ```
 
 ### Strategy — Delivery Partner Assignment
@@ -188,45 +209,56 @@ class Order:
 launch, then rating-weighted, then load-balanced) — this must not require touching
 `Order` or `OrderService` code each time.
 
-```python
-class DeliveryAssignmentStrategy(ABC):
-    @abstractmethod
-    def assign(self, order: "Order", available_partners: list["DeliveryPartner"]) -> "DeliveryPartner | None": ...
+```java
+public interface DeliveryAssignmentStrategy {
+    Optional<DeliveryPartner> assign(Order order, List<DeliveryPartner> availablePartners);
+}
 
+public class NearestPartnerStrategy implements DeliveryAssignmentStrategy {
+    @Override
+    public Optional<DeliveryPartner> assign(Order order, List<DeliveryPartner> availablePartners) {
+        if (availablePartners == null || availablePartners.isEmpty()) {
+            return Optional.empty();
+        }
+        return availablePartners.stream()
+            .min(Comparator.comparingDouble(p -> p.distanceTo(order.getRestaurant().getLocation())));
+    }
+}
 
-class NearestPartnerStrategy(DeliveryAssignmentStrategy):
-    def assign(self, order, available_partners):
-        if not available_partners:
-            return None
-        return min(
-            available_partners,
-            key=lambda p: p.distance_to(order.restaurant.location),
-        )
+public class HighestRatedPartnerStrategy implements DeliveryAssignmentStrategy {
+    @Override
+    public Optional<DeliveryPartner> assign(Order order, List<DeliveryPartner> availablePartners) {
+        if (availablePartners == null || availablePartners.isEmpty()) {
+            return Optional.empty();
+        }
+        return availablePartners.stream()
+            .filter(p -> p.distanceTo(order.getRestaurant().getLocation()) <= 5.0)
+            .max(Comparator.comparingDouble(DeliveryPartner::getRating));
+    }
+}
 
+public class OrderService {
+    private final DeliveryAssignmentStrategy strategy; // injected — DIP
 
-class HighestRatedPartnerStrategy(DeliveryAssignmentStrategy):
-    def assign(self, order, available_partners):
-        candidates = [p for p in available_partners if p.distance_to(order.restaurant.location) <= 5.0]
-        if not candidates:
-            return None
-        return max(candidates, key=lambda p: p.rating)
+    public OrderService(DeliveryAssignmentStrategy strategy) {
+        this.strategy = strategy;
+    }
 
-
-class OrderService:
-    def __init__(self, assignment_strategy: DeliveryAssignmentStrategy):
-        self._strategy = assignment_strategy   # injected — DIP
-
-    def assign_delivery_partner(self, order: "Order", available_partners: list["DeliveryPartner"]) -> bool:
-        partner = self._strategy.assign(order, available_partners)
-        if partner is None:
-            return False
-        partner.mark_busy()
-        order.mark_out_for_delivery(partner)
-        return True
+    public boolean assignDeliveryPartner(Order order, List<DeliveryPartner> availablePartners) {
+        Optional<DeliveryPartner> partnerOpt = strategy.assign(order, availablePartners);
+        if (partnerOpt.isEmpty()) {
+            return false;
+        }
+        DeliveryPartner partner = partnerOpt.get();
+        partner.markBusy();
+        order.markOutForDelivery(partner);
+        return true;
+    }
+}
 ```
 
 Swapping `NearestPartnerStrategy` for `HighestRatedPartnerStrategy` requires zero changes
-to `Order`, `OrderService.assign_delivery_partner`'s caller, or `DeliveryPartner`.
+to `Order`, `OrderService.assignDeliveryPartner`'s caller, or `DeliveryPartner`.
 
 ---
 

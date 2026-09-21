@@ -134,12 +134,21 @@ public class ContentIndexingService {
         }
 
         List<File> standaloneMdFiles = new ArrayList<>();
+        Set<String> discoveredModuleSlugs = new HashSet<>();
 
         for (File file : subFiles) {
             if (file.getName().startsWith(".")) continue;
 
             if (file.isDirectory()) {
                 String modName = file.getName();
+                if (modName.equalsIgnoreCase("0.Assets") || 
+                    modName.equalsIgnoreCase("assets") || 
+                    modName.equalsIgnoreCase("images") || 
+                    modName.equalsIgnoreCase("img") ||
+                    modName.equalsIgnoreCase("Reference-Code")) {
+                    continue;
+                }
+
                 String modSlug = modName.toLowerCase();
                 String modTitle = formatModuleTitle(modName);
 
@@ -151,13 +160,19 @@ public class ContentIndexingService {
                 module = moduleRepository.save(module);
 
                 int lessonCount = indexLessonsInModule(file, module, course);
-                totalLessonCount += lessonCount;
+                if (lessonCount == 0) {
+                    moduleRepository.delete(module);
+                } else {
+                    discoveredModuleSlugs.add(modSlug);
+                    totalLessonCount += lessonCount;
+                }
             } else if (file.getName().endsWith(".md") && !file.getName().equalsIgnoreCase("README.md")) {
                 standaloneMdFiles.add(file);
             }
         }
 
         if (!standaloneMdFiles.isEmpty()) {
+            discoveredModuleSlugs.add("core-material");
             CourseModule generalModule = moduleMap.getOrDefault("core-material", new CourseModule());
             generalModule.setCourse(course);
             generalModule.setSlug("core-material");
@@ -171,8 +186,10 @@ public class ContentIndexingService {
             }
 
             int order = 0;
+            Set<String> standaloneSlugs = new HashSet<>();
             for (File mdFile : standaloneMdFiles) {
                 String lessonSlug = mdFile.getName().replace(".md", "").toLowerCase();
+                standaloneSlugs.add(lessonSlug);
                 String lessonTitle = formatLessonTitle(mdFile.getName().replace(".md", ""));
                 Lesson lesson = existingLessons.getOrDefault(lessonSlug, new Lesson());
                 lesson.setTitle(lessonTitle);
@@ -183,6 +200,19 @@ public class ContentIndexingService {
                 lesson.setModule(generalModule);
                 lessonRepository.save(lesson);
                 totalLessonCount++;
+            }
+
+            for (Lesson l : new ArrayList<>(generalModule.getLessons())) {
+                if (!standaloneSlugs.contains(l.getSlug())) {
+                    lessonRepository.delete(l);
+                }
+            }
+        }
+
+        // Delete any modules that no longer exist on disk (e.g. renamed folders)
+        for (CourseModule m : new ArrayList<>(existingModules)) {
+            if (!discoveredModuleSlugs.contains(m.getSlug())) {
+                moduleRepository.delete(m);
             }
         }
 
@@ -203,8 +233,10 @@ public class ContentIndexingService {
         }
 
         int order = 0;
+        Set<String> discoveredLessonSlugs = new HashSet<>();
         for (File f : files) {
             String lessonSlug = f.getName().replace(".md", "").toLowerCase();
+            discoveredLessonSlugs.add(lessonSlug);
             String lessonTitle = formatLessonTitle(f.getName().replace(".md", ""));
             
             Lesson lesson = existingLessons.getOrDefault(lessonSlug, new Lesson());
@@ -216,6 +248,14 @@ public class ContentIndexingService {
             lesson.setModule(module);
             lessonRepository.save(lesson);
         }
+
+        // Delete any lessons that no longer exist on disk
+        for (Lesson l : new ArrayList<>(module.getLessons())) {
+            if (!discoveredLessonSlugs.contains(l.getSlug())) {
+                lessonRepository.delete(l);
+            }
+        }
+
         return files.length;
     }
 

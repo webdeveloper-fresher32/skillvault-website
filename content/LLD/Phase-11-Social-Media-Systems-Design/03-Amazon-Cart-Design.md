@@ -175,184 +175,267 @@ Order         "paid via"            Payment           1 -------- 1
 
 ---
 
-## 8. Python Implementation
+## 8. Java Implementation
 
-```python
-from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from decimal import Decimal
-from enum import Enum, auto
-from typing import Dict, List
-import uuid
+```java
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 
+public record Product(String sku, String name, BigDecimal price, String category) {
+    public Product(String sku, String name, BigDecimal price) {
+        this(sku, name, price, "general");
+    }
+}
 
-@dataclass
-class Product:
-    sku: str
-    name: str
-    price: Decimal
-    category: str = "general"
+public class CartItem {
+    private final Product product;
+    private int quantity;
 
+    public CartItem(Product product, int quantity) {
+        this.product = product;
+        this.quantity = quantity;
+    }
 
-@dataclass
-class CartItem:
-    product: Product
-    quantity: int
+    public Product getProduct() { return product; }
+    public int getQuantity() { return quantity; }
+    public void setQuantity(int quantity) { this.quantity = quantity; }
 
-    def subtotal(self) -> Decimal:
-        return self.product.price * self.quantity
+    public BigDecimal getSubtotal() {
+        return product.price().multiply(BigDecimal.valueOf(quantity));
+    }
+}
 
+// ---- Strategy pattern ----
+public interface DiscountStrategy {
+    BigDecimal calculateDiscount(Cart cart);
+}
 
-# ---- Strategy pattern ----
-class DiscountStrategy(ABC):
-    @abstractmethod
-    def calculate_discount(self, cart: "Cart") -> Decimal:
-        ...
+public class PercentageDiscount implements DiscountStrategy {
+    private final BigDecimal percent; // e.g. new BigDecimal("10") for 10%
 
+    public PercentageDiscount(BigDecimal percent) {
+        this.percent = percent;
+    }
 
-class PercentageDiscount(DiscountStrategy):
-    def __init__(self, percent: Decimal):
-        self.percent = percent  # e.g. Decimal("10") for 10%
+    @Override
+    public BigDecimal calculateDiscount(Cart cart) {
+        return cart.subtotal()
+            .multiply(percent)
+            .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+    }
+}
 
-    def calculate_discount(self, cart: "Cart") -> Decimal:
-        return cart.subtotal() * (self.percent / Decimal("100"))
+public class FlatDiscount implements DiscountStrategy {
+    private final BigDecimal amount;
 
+    public FlatDiscount(BigDecimal amount) {
+        this.amount = amount;
+    }
 
-class FlatDiscount(DiscountStrategy):
-    def __init__(self, amount: Decimal):
-        self.amount = amount
+    @Override
+    public BigDecimal calculateDiscount(Cart cart) {
+        // never discount below zero
+        return amount.min(cart.subtotal());
+    }
+}
 
-    def calculate_discount(self, cart: "Cart") -> Decimal:
-        return min(self.amount, cart.subtotal())  # never discount below zero
+public class BuyOneGetOneDiscount implements DiscountStrategy {
+    private final String productSku;
 
+    public BuyOneGetOneDiscount(String productSku) {
+        this.productSku = productSku;
+    }
 
-class BuyOneGetOneDiscount(DiscountStrategy):
-    """For each pair of the same product, one is free."""
-    def __init__(self, product_sku: str):
-        self.product_sku = product_sku
+    @Override
+    public BigDecimal calculateDiscount(Cart cart) {
+        for (CartItem item : cart.getItems()) {
+            if (item.getProduct().sku().equals(productSku)) {
+                int freeUnits = item.getQuantity() / 2;
+                return item.getProduct().price().multiply(BigDecimal.valueOf(freeUnits));
+            }
+        }
+        return BigDecimal.ZERO;
+    }
+}
 
-    def calculate_discount(self, cart: "Cart") -> Decimal:
-        item = next((i for i in cart.items if i.product.sku == self.product_sku), None)
-        if not item:
-            return Decimal("0")
-        free_units = item.quantity // 2
-        return free_units * item.product.price
+/** A named, validity-windowed wrapper around a DiscountStrategy. */
+public class Coupon {
+    private final String code;
+    private final DiscountStrategy strategy;
 
+    public Coupon(String code, DiscountStrategy strategy) {
+        this.code = code;
+        this.strategy = strategy;
+    }
 
-class Coupon:
-    """A named, validity-windowed wrapper around a DiscountStrategy."""
-    def __init__(self, code: str, strategy: DiscountStrategy):
-        self.code = code
-        self.strategy = strategy
+    public String getCode() { return code; }
+    public DiscountStrategy getStrategy() { return strategy; }
 
-    def calculate_discount(self, cart: "Cart") -> Decimal:
-        return self.strategy.calculate_discount(cart)
+    public BigDecimal calculateDiscount(Cart cart) {
+        return strategy.calculateDiscount(cart);
+    }
+}
 
+public class Cart {
+    private final String ownerId;
+    private final List<CartItem> items = new CopyOnWriteArrayList<>();
+    private final List<DiscountStrategy> discounts = new CopyOnWriteArrayList<>();
 
-class Cart:
-    def __init__(self, owner_id: str):
-        self.owner_id = owner_id
-        self.items: List[CartItem] = []
-        self._discounts: List[DiscountStrategy] = []
+    public Cart(String ownerId) {
+        this.ownerId = ownerId;
+    }
 
-    def add_item(self, product: Product, quantity: int = 1) -> None:
-        existing = next((i for i in self.items if i.product.sku == product.sku), None)
-        if existing:
-            existing.quantity += quantity
-        else:
-            self.items.append(CartItem(product, quantity))
+    public synchronized void addItem(Product product, int quantity) {
+        for (CartItem item : items) {
+            if (item.getProduct().sku().equals(product.sku())) {
+                item.setQuantity(item.getQuantity() + quantity);
+                return;
+            }
+        }
+        items.add(new CartItem(product, quantity));
+    }
 
-    def remove_item(self, product: Product) -> None:
-        self.items = [i for i in self.items if i.product.sku != product.sku]
+    public synchronized void removeItem(Product product) {
+        items.removeIf(item -> item.getProduct().sku().equals(product.sku()));
+    }
 
-    def apply_discount(self, strategy: DiscountStrategy) -> None:
-        self._discounts.append(strategy)
+    public void applyDiscount(DiscountStrategy strategy) {
+        discounts.add(strategy);
+    }
 
-    def apply_coupon(self, coupon: Coupon) -> None:
-        self.apply_discount(coupon.strategy)
+    public void applyCoupon(Coupon coupon) {
+        applyDiscount(coupon.getStrategy());
+    }
 
-    def subtotal(self) -> Decimal:
-        return sum((item.subtotal() for item in self.items), Decimal("0"))
+    public BigDecimal subtotal() {
+        return items.stream()
+            .map(CartItem::getSubtotal)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
 
-    def total(self) -> Decimal:
-        subtotal = self.subtotal()
-        total_discount = sum((d.calculate_discount(self) for d in self._discounts), Decimal("0"))
-        return max(subtotal - total_discount, Decimal("0"))
+    public BigDecimal total() {
+        BigDecimal sub = subtotal();
+        BigDecimal totalDiscount = discounts.stream()
+            .map(d -> d.calculateDiscount(this))
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+        return sub.subtract(totalDiscount).max(BigDecimal.ZERO);
+    }
 
+    public String getOwnerId() { return ownerId; }
+    public List<CartItem> getItems() { return Collections.unmodifiableList(items); }
+}
 
-class Inventory:
-    def __init__(self):
-        self._stock: Dict[str, int] = {}
+public class Inventory {
+    private final Map<String, Integer> stock = new ConcurrentHashMap<>();
 
-    def set_stock(self, product: Product, quantity: int) -> None:
-        self._stock[product.sku] = quantity
+    public void setStock(Product product, int quantity) {
+        stock.put(product.sku(), quantity);
+    }
 
-    def check_availability(self, product: Product, quantity: int) -> bool:
-        return self._stock.get(product.sku, 0) >= quantity
+    public boolean checkAvailability(Product product, int quantity) {
+        return stock.getOrDefault(product.sku(), 0) >= quantity;
+    }
 
-    def reserve(self, product: Product, quantity: int) -> None:
-        if not self.check_availability(product, quantity):
-            raise ValueError(f"Insufficient stock for {product.name}")
-        self._stock[product.sku] -= quantity
+    public synchronized void reserve(Product product, int quantity) {
+        if (!checkAvailability(product, quantity)) {
+            throw new IllegalStateException("Insufficient stock for " + product.name());
+        }
+        stock.put(product.sku(), stock.get(product.sku()) - quantity);
+    }
 
-    def release(self, product: Product, quantity: int) -> None:
-        self._stock[product.sku] = self._stock.get(product.sku, 0) + quantity
+    public synchronized void release(Product product, int quantity) {
+        stock.put(product.sku(), stock.getOrDefault(product.sku(), 0) + quantity);
+    }
+}
 
+public enum OrderStatus {
+    PLACED,
+    PAID,
+    FAILED
+}
 
-class OrderStatus(Enum):
-    PLACED = auto()
-    PAID = auto()
-    FAILED = auto()
+/** Snapshot of cart items + total, frozen at checkout time. */
+public class Order {
+    private final String orderId;
+    private final List<CartItem> items;
+    private final BigDecimal total;
+    private OrderStatus status;
 
+    public Order(Cart cart) {
+        this.orderId = UUID.randomUUID().toString();
+        // copy, not reference — later cart mutations must not affect this order
+        List<CartItem> snapshot = new ArrayList<>();
+        for (CartItem item : cart.getItems()) {
+            snapshot.add(new CartItem(item.getProduct(), item.getQuantity()));
+        }
+        this.items = Collections.unmodifiableList(snapshot);
+        this.total = cart.total();
+        this.status = OrderStatus.PLACED;
+    }
 
-class Order:
-    """Snapshot of cart items + total, frozen at checkout time."""
-    def __init__(self, cart: Cart):
-        self.order_id = str(uuid.uuid4())
-        # copy, not reference — later cart mutations must not affect this order
-        self.items: List[CartItem] = [CartItem(i.product, i.quantity) for i in cart.items]
-        self.total: Decimal = cart.total()
-        self.status = OrderStatus.PLACED
+    public void markPaid() {
+        this.status = OrderStatus.PAID;
+    }
 
-    def mark_paid(self) -> None:
-        self.status = OrderStatus.PAID
+    public void markFailed() {
+        this.status = OrderStatus.FAILED;
+    }
 
-    def mark_failed(self) -> None:
-        self.status = OrderStatus.FAILED
+    public String getOrderId() { return orderId; }
+    public List<CartItem> getItems() { return items; }
+    public BigDecimal getTotal() { return total; }
+    public OrderStatus getStatus() { return status; }
+}
 
+public class Payment {
+    public boolean charge(BigDecimal amount) {
+        // placeholder for real gateway integration (Stripe, Razorpay, etc.)
+        System.out.println("Charging $" + amount);
+        return true;
+    }
+}
 
-class Payment:
-    def charge(self, amount: Decimal) -> bool:
-        # placeholder for real gateway integration (Stripe, etc.)
-        print(f"Charging ${amount}")
-        return True
+/**
+ * Orchestrates: reserve inventory -> charge payment -> create order,
+ * rolling back inventory reservation if payment fails.
+ */
+public class Checkout {
+    private final Inventory inventory;
+    private final Payment payment;
 
+    public Checkout(Inventory inventory, Payment payment) {
+        this.inventory = inventory;
+        this.payment = payment;
+    }
 
-class Checkout:
-    """Orchestrates: reserve inventory -> charge payment -> create order,
-    rolling back inventory reservation if payment fails."""
-    def __init__(self, inventory: Inventory, payment: Payment):
-        self.inventory = inventory
-        self.payment = payment
+    public synchronized Order checkout(Cart cart) {
+        for (CartItem item : cart.getItems()) {
+            if (!inventory.checkAvailability(item.getProduct(), item.getQuantity())) {
+                throw new IllegalStateException(item.getProduct().name() + " is out of stock");
+            }
+        }
 
-    def checkout(self, cart: Cart) -> Order:
-        for item in cart.items:
-            if not self.inventory.check_availability(item.product, item.quantity):
-                raise ValueError(f"{item.product.name} is out of stock")
+        for (CartItem item : cart.getItems()) {
+            inventory.reserve(item.getProduct(), item.getQuantity());
+        }
 
-        for item in cart.items:
-            self.inventory.reserve(item.product, item.quantity)
+        Order order = new Order(cart);
+        if (payment.charge(order.getTotal())) {
+            order.markPaid();
+        } else {
+            // roll back reservation on payment failure
+            for (CartItem item : cart.getItems()) {
+                inventory.release(item.getProduct(), item.getQuantity());
+            }
+            order.markFailed();
+        }
 
-        order = Order(cart)
-        if self.payment.charge(order.total):
-            order.mark_paid()
-        else:
-            # roll back reservation on payment failure
-            for item in cart.items:
-                self.inventory.release(item.product, item.quantity)
-            order.mark_failed()
-
-        return order
+        return order;
+    }
+}
 ```
 
 ---

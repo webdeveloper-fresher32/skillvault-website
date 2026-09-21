@@ -55,237 +55,305 @@
 
 ## 3. Full Implementation
 
-```python
-"""
-Cab Booking — single-file runnable LLD reference implementation.
-"""
+```java
+/**
+ * Cab Booking — single-file runnable LLD reference implementation in Java.
+ * Run directly with: java CabBookingDemo.java
+ */
 
-from __future__ import annotations
+import java.util.*;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
 
-import itertools
-import math
-from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from enum import Enum, auto
-from typing import List, Optional
+// ---------------------------------------------------------------------------
+// Location + distance
+// ---------------------------------------------------------------------------
 
+record Location(double lat, double lng) {
+    /**
+     * Simple flat-plane Euclidean approximation, scaled roughly to km.
+     * Good enough for city-scale LLD demo purposes (not real geodesy).
+     */
+    public double distanceTo(Location other) {
+        double dx = (this.lat - other.lat) * 111.0; // ~111 km per degree latitude
+        double dy = (this.lng - other.lng) * 111.0;
+        return Math.hypot(dx, dy);
+    }
+}
 
-# ---------------------------------------------------------------------------
-# Location + distance
-# ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
 
-@dataclass(frozen=True)
-class Location:
-    lat: float
-    lng: float
+enum RideStatus {
+    REQUESTED,
+    ACCEPTED,
+    IN_PROGRESS,
+    COMPLETED,
+    CANCELLED
+}
 
-    def distance_to(self, other: "Location") -> float:
-        """
-        Simple flat-plane Euclidean approximation, scaled roughly to km.
-        Good enough for city-scale LLD demo purposes (not real geodesy).
-        """
-        dx = (self.lat - other.lat) * 111.0        # ~111 km per degree latitude
-        dy = (self.lng - other.lng) * 111.0
-        return math.hypot(dx, dy)
+// ---------------------------------------------------------------------------
+// People
+// ---------------------------------------------------------------------------
 
+class Driver {
+    private final String driverId;
+    private final String name;
+    private Location currentLocation;
+    private boolean isAvailable = true;
 
-# ---------------------------------------------------------------------------
-# Enums
-# ---------------------------------------------------------------------------
+    public Driver(String driverId, String name, Location currentLocation) {
+        this.driverId = driverId;
+        this.name = name;
+        this.currentLocation = currentLocation;
+    }
 
-class RideStatus(Enum):
-    REQUESTED = auto()
-    ACCEPTED = auto()
-    IN_PROGRESS = auto()
-    COMPLETED = auto()
-    CANCELLED = auto()
+    public String getDriverId() { return driverId; }
+    public String getName() { return name; }
+    public synchronized Location getCurrentLocation() { return currentLocation; }
+    public synchronized void setCurrentLocation(Location loc) { this.currentLocation = loc; }
+    public synchronized boolean isAvailable() { return isAvailable; }
+    public synchronized void setAvailable(boolean available) { this.isAvailable = available; }
 
+    @Override
+    public String toString() {
+        return "Driver(" + name + ")";
+    }
+}
 
-# ---------------------------------------------------------------------------
-# People
-# ---------------------------------------------------------------------------
+record Passenger(String passengerId, String name) {
+    @Override
+    public String toString() {
+        return "Passenger(" + name + ")";
+    }
+}
 
-class Driver:
-    def __init__(self, driver_id: str, name: str, location: Location):
-        self.driver_id = driver_id
-        self.name = name
-        self.current_location = location
-        self.is_available = True
+// ---------------------------------------------------------------------------
+// Strategy: fare calculation
+// ---------------------------------------------------------------------------
 
-    def __repr__(self) -> str:
-        return f"Driver({self.name})"
+interface FareStrategy {
+    double calculateFare(double distanceKm, double surgeMultiplier);
+}
 
+class StandardFareStrategy implements FareStrategy {
+    public static final double BASE_FARE = 2.5;
+    public static final double PER_KM_RATE = 1.2;
 
-@dataclass
-class Passenger:
-    passenger_id: str
-    name: str
+    @Override
+    public double calculateFare(double distanceKm, double surgeMultiplier) {
+        double fare = BASE_FARE + (distanceKm * PER_KM_RATE);
+        return Math.round(fare * surgeMultiplier * 100.0) / 100.0;
+    }
+}
 
-    def __repr__(self) -> str:
-        return f"Passenger({self.name})"
+class PremiumFareStrategy implements FareStrategy {
+    public static final double BASE_FARE = 6.0;
+    public static final double PER_KM_RATE = 2.5;
 
+    @Override
+    public double calculateFare(double distanceKm, double surgeMultiplier) {
+        double fare = BASE_FARE + (distanceKm * PER_KM_RATE);
+        return Math.round(fare * surgeMultiplier * 100.0) / 100.0;
+    }
+}
 
-# ---------------------------------------------------------------------------
-# Strategy: fare calculation
-# ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Ride
+// ---------------------------------------------------------------------------
 
-class FareStrategy(ABC):
-    @abstractmethod
-    def calculate_fare(self, distance_km: float, surge_multiplier: float = 1.0) -> float:
-        ...
+class Ride {
+    private final String rideId;
+    private final Passenger passenger;
+    private final Location pickup;
+    private final Location drop;
+    private Driver driver;
+    private RideStatus status = RideStatus.REQUESTED;
+    private Double fare;
 
+    public Ride(String rideId, Passenger passenger, Location pickup, Location drop) {
+        this.rideId = rideId;
+        this.passenger = passenger;
+        this.pickup = pickup;
+        this.drop = drop;
+    }
 
-class StandardFareStrategy(FareStrategy):
-    BASE_FARE = 2.5
-    PER_KM_RATE = 1.2
+    public synchronized void accept(Driver driver) {
+        if (status != RideStatus.REQUESTED) {
+            throw new IllegalStateException("Cannot accept ride in status " + status);
+        }
+        this.driver = driver;
+        this.status = RideStatus.ACCEPTED;
+        driver.setAvailable(false);
+    }
 
-    def calculate_fare(self, distance_km: float, surge_multiplier: float = 1.0) -> float:
-        fare = self.BASE_FARE + distance_km * self.PER_KM_RATE
-        return round(fare * surge_multiplier, 2)
+    public synchronized void start() {
+        if (status != RideStatus.ACCEPTED) {
+            throw new IllegalStateException("Cannot start ride in status " + status);
+        }
+        this.status = RideStatus.IN_PROGRESS;
+    }
 
+    public synchronized double complete(FareStrategy fareStrategy, double surgeMultiplier) {
+        if (status != RideStatus.IN_PROGRESS) {
+            throw new IllegalStateException("Cannot complete ride in status " + status);
+        }
+        double distance = pickup.distanceTo(drop);
+        this.fare = fareStrategy.calculateFare(distance, surgeMultiplier);
+        this.status = RideStatus.COMPLETED;
+        if (driver != null) {
+            driver.setAvailable(true);
+            driver.setCurrentLocation(drop);
+        }
+        return this.fare;
+    }
 
-class PremiumFareStrategy(FareStrategy):
-    BASE_FARE = 6.0
-    PER_KM_RATE = 2.5
+    public synchronized void cancel() {
+        if (status == RideStatus.COMPLETED || status == RideStatus.CANCELLED) {
+            throw new IllegalStateException("Cannot cancel ride in status " + status);
+        }
+        if (driver != null) {
+            driver.setAvailable(true);
+        }
+        this.status = RideStatus.CANCELLED;
+    }
 
-    def calculate_fare(self, distance_km: float, surge_multiplier: float = 1.0) -> float:
-        fare = self.BASE_FARE + distance_km * self.PER_KM_RATE
-        return round(fare * surge_multiplier, 2)
+    public String getRideId() { return rideId; }
+    public Passenger getPassenger() { return passenger; }
+    public Location getPickup() { return pickup; }
+    public Location getDrop() { return drop; }
+    public synchronized Driver getDriver() { return driver; }
+    public synchronized RideStatus getStatus() { return status; }
+    public synchronized Double getFare() { return fare; }
+}
 
+// ---------------------------------------------------------------------------
+// RideDispatcher: matching + orchestration
+// ---------------------------------------------------------------------------
 
-# ---------------------------------------------------------------------------
-# Ride
-# ---------------------------------------------------------------------------
+class NoDriverAvailableException extends RuntimeException {
+    public NoDriverAvailableException(String message) {
+        super(message);
+    }
+}
 
-@dataclass
-class Ride:
-    ride_id: str
-    passenger: Passenger
-    pickup: Location
-    drop: Location
-    driver: Optional[Driver] = None
-    status: RideStatus = RideStatus.REQUESTED
-    fare: Optional[float] = None
+class RideDispatcher {
+    private final List<Driver> drivers;
+    private FareStrategy fareStrategy;
+    private final AtomicInteger rideCounter = new AtomicInteger(1);
+    private final List<Ride> rides = new CopyOnWriteArrayList<>();
 
-    def accept(self, driver: Driver) -> None:
-        if self.status != RideStatus.REQUESTED:
-            raise ValueError(f"Cannot accept ride in status {self.status.name}")
-        self.driver = driver
-        self.status = RideStatus.ACCEPTED
-        driver.is_available = False
+    public RideDispatcher(List<Driver> drivers, FareStrategy fareStrategy) {
+        this.drivers = new ArrayList<>(drivers);
+        this.fareStrategy = fareStrategy != null ? fareStrategy : new StandardFareStrategy();
+    }
 
-    def start(self) -> None:
-        if self.status != RideStatus.ACCEPTED:
-            raise ValueError(f"Cannot start ride in status {self.status.name}")
-        self.status = RideStatus.IN_PROGRESS
+    public void setFareStrategy(FareStrategy fareStrategy) {
+        this.fareStrategy = fareStrategy;
+    }
 
-    def complete(self, fare_strategy: FareStrategy, surge_multiplier: float = 1.0) -> float:
-        if self.status != RideStatus.IN_PROGRESS:
-            raise ValueError(f"Cannot complete ride in status {self.status.name}")
-        distance = self.pickup.distance_to(self.drop)
-        self.fare = fare_strategy.calculate_fare(distance, surge_multiplier)
-        self.status = RideStatus.COMPLETED
-        if self.driver:
-            self.driver.is_available = True
-            self.driver.current_location = self.drop
-        return self.fare
+    public synchronized Optional<Driver> findNearestDriver(Location pickup) {
+        Driver bestDriver = null;
+        double bestDistance = Double.POSITIVE_INFINITY;
+        for (Driver driver : drivers) {
+            if (!driver.isAvailable()) {
+                continue;
+            }
+            double distance = driver.getCurrentLocation().distanceTo(pickup);
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                bestDriver = driver;
+            }
+        }
+        return Optional.ofNullable(bestDriver);
+    }
 
-    def cancel(self) -> None:
-        if self.status in (RideStatus.COMPLETED, RideStatus.CANCELLED):
-            raise ValueError(f"Cannot cancel ride in status {self.status.name}")
-        if self.driver:
-            self.driver.is_available = True
-        self.status = RideStatus.CANCELLED
+    public synchronized Ride requestRide(Passenger passenger, Location pickup, Location drop) {
+        String rideId = String.format("RIDE-%04d", rideCounter.getAndIncrement());
+        Ride ride = new Ride(rideId, passenger, pickup, drop);
+        rides.add(ride);
 
+        Optional<Driver> driverOpt = findNearestDriver(pickup);
+        if (driverOpt.isEmpty()) {
+            ride.cancel();
+            throw new NoDriverAvailableException("No available drivers near pickup location");
+        }
 
-# ---------------------------------------------------------------------------
-# RideDispatcher: matching + orchestration
-# ---------------------------------------------------------------------------
+        ride.accept(driverOpt.get());
+        return ride;
+    }
 
-class NoDriverAvailableError(Exception):
-    pass
+    public synchronized double completeRide(Ride ride, double surgeMultiplier) {
+        ride.start();
+        return ride.complete(fareStrategy, surgeMultiplier);
+    }
 
+    public double completeRide(Ride ride) {
+        return completeRide(ride, 1.0);
+    }
+}
 
-class RideDispatcher:
-    def __init__(self, drivers: List[Driver], fare_strategy: Optional[FareStrategy] = None):
-        self.drivers = drivers
-        self.fare_strategy = fare_strategy or StandardFareStrategy()
-        self._ride_counter = itertools.count(1)
-        self.rides: List[Ride] = []
+// ---------------------------------------------------------------------------
+// Demo
+// ---------------------------------------------------------------------------
 
-    def find_nearest_driver(self, pickup: Location) -> Optional[Driver]:
-        best_driver: Optional[Driver] = None
-        best_distance = math.inf
-        for driver in self.drivers:
-            if not driver.is_available:
-                continue
-            distance = driver.current_location.distance_to(pickup)
-            if distance < best_distance:
-                best_distance = distance
-                best_driver = driver
-        return best_driver
+public class CabBookingDemo {
+    public static void main(String[] args) {
+        Location downtown = new Location(12.9716, 77.5946);
 
-    def request_ride(self, passenger: Passenger, pickup: Location, drop: Location) -> Ride:
-        ride = Ride(
-            ride_id=f"RIDE-{next(self._ride_counter):04d}",
-            passenger=passenger,
-            pickup=pickup,
-            drop=drop,
-        )
-        self.rides.append(ride)
+        List<Driver> drivers = List.of(
+            new Driver("D1", "Ramesh", new Location(12.9750, 77.6000)), // ~0.7km away
+            new Driver("D2", "Suresh", new Location(13.0500, 77.5946)), // ~8.7km away
+            new Driver("D3", "Ganesh", new Location(12.9720, 77.5950))  // ~0.06km away, closest
+        );
 
-        driver = self.find_nearest_driver(pickup)
-        if driver is None:
-            ride.cancel()
-            raise NoDriverAvailableError("No available drivers near pickup location")
+        RideDispatcher dispatcher = new RideDispatcher(drivers, new StandardFareStrategy());
+        Passenger passenger = new Passenger("P1", "Meera");
 
-        ride.accept(driver)
-        return ride
+        Location dropLocation = new Location(12.9352, 77.6146); // ~4.6 km south
 
-    def complete_ride(self, ride: Ride, surge_multiplier: float = 1.0) -> float:
-        ride.start()
-        return ride.complete(self.fare_strategy, surge_multiplier)
+        Ride ride = dispatcher.requestRide(passenger, downtown, dropLocation);
+        System.out.printf("%s matched with %s (status: %s)
+",
+            ride.getRideId(), ride.getDriver().getName(), ride.getStatus());
 
+        double fare = dispatcher.completeRide(ride, 1.0);
+        System.out.printf("Ride completed. Distance-based fare: $%.2f (status: %s)
+",
+            fare, ride.getStatus());
+        System.out.printf("%s is now available again: %b
+",
+            ride.getDriver().getName(), ride.getDriver().isAvailable());
 
-if __name__ == "__main__":
-    downtown = Location(lat=12.9716, lng=77.5946)
+        // A second ride during surge pricing, using the premium strategy
+        dispatcher.setFareStrategy(new PremiumFareStrategy());
+        Ride ride2 = dispatcher.requestRide(passenger, downtown, dropLocation);
+        System.out.printf("
+%s matched with %s
+", ride2.getRideId(), ride2.getDriver().getName());
+        double surgeFare = dispatcher.completeRide(ride2, 1.5);
+        System.out.printf("Premium ride completed with 1.5x surge. Fare: $%.2f
+", surgeFare);
 
-    drivers = [
-        Driver("D1", "Ramesh", Location(lat=12.9750, lng=77.6000)),   # ~0.7km away
-        Driver("D2", "Suresh", Location(lat=13.0500, lng=77.5946)),   # ~8.7km away
-        Driver("D3", "Ganesh", Location(lat=12.9720, lng=77.5950)),   # ~0.06km away, closest
-    ]
+        // Both drivers used above are free again (their rides completed). Now exhaust
+        // all 3 drivers with uncompleted (still ACCEPTED) rides to trigger the error.
+        System.out.println();
+        for (int i = 0; i < 3; i++) {
+            Ride r = dispatcher.requestRide(passenger, downtown, dropLocation);
+            System.out.printf("%s matched with %s (driver now unavailable)
+",
+                r.getRideId(), r.getDriver().getName());
+        }
 
-    dispatcher = RideDispatcher(drivers, fare_strategy=StandardFareStrategy())
-    passenger = Passenger("P1", "Meera")
-
-    drop_location = Location(lat=12.9352, lng=77.6146)  # ~4.6 km south
-
-    ride = dispatcher.request_ride(passenger, pickup=downtown, drop=drop_location)
-    print(f"{ride.ride_id} matched with {ride.driver.name} (status: {ride.status.name})")
-
-    fare = dispatcher.complete_ride(ride, surge_multiplier=1.0)
-    print(f"Ride completed. Distance-based fare: ${fare:.2f} (status: {ride.status.name})")
-    print(f"{ride.driver.name} is now available again: {ride.driver.is_available}")
-
-    # A second ride during surge pricing, using the premium strategy
-    dispatcher.fare_strategy = PremiumFareStrategy()
-    ride2 = dispatcher.request_ride(passenger, pickup=downtown, drop=drop_location)
-    print(f"\n{ride2.ride_id} matched with {ride2.driver.name}")
-    surge_fare = dispatcher.complete_ride(ride2, surge_multiplier=1.5)
-    print(f"Premium ride completed with 1.5x surge. Fare: ${surge_fare:.2f}")
-
-    # Both drivers used above are free again (their rides completed). Now exhaust
-    # all 3 drivers with uncompleted (still ACCEPTED) rides to trigger the error.
-    print()
-    for _ in range(3):
-        r = dispatcher.request_ride(passenger, pickup=downtown, drop=drop_location)
-        print(f"{r.ride_id} matched with {r.driver.name} (driver now unavailable)")
-
-    try:
-        dispatcher.request_ride(passenger, pickup=downtown, drop=drop_location)
-    except NoDriverAvailableError as e:
-        print(f"\nNext ride request failed as expected: {e}")
+        try {
+            dispatcher.requestRide(passenger, downtown, dropLocation);
+        } catch (NoDriverAvailableException e) {
+            System.out.println("
+Next ride request failed as expected: " + e.getMessage());
+        }
+    }
+}
 ```
 
 **Expected output:**

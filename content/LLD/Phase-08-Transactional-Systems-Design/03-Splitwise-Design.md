@@ -249,181 +249,242 @@ Result: 2 transactions instead of the up-to-3 pairwise debts that
 
 ---
 
-## 9. Class Skeletons (Python)
+## 9. Class Skeletons (Java)
 
 > Design skeletons — signatures and key logic. Full runnable implementation lives in `LLD/Projects/`.
 
-```python
-from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from collections import defaultdict
-import heapq
-from uuid import uuid4
+```java
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
+// ---------- Domain data ----------
 
-# ---------- Domain data ----------
+public record User(String id, String name) {}
 
-@dataclass(frozen=True)
-class User:
-    id: str
-    name: str
+public class Group {
+    private final String id;
+    private final String name;
+    private final List<User> members = new ArrayList<>();
 
+    public Group(String id, String name) {
+        this.id = id;
+        this.name = name;
+    }
 
-@dataclass
-class Group:
-    id: str
-    name: str
-    members: list[User] = field(default_factory=list)
+    public void addMember(User user) {
+        members.add(user);
+    }
 
-    def add_member(self, user: User) -> None:
-        self.members.append(user)
+    public String getId() { return id; }
+    public String getName() { return name; }
+    public List<User> getMembers() { return Collections.unmodifiableList(members); }
+}
 
+public record Split(User user, double amountOwed) {}
 
-@dataclass(frozen=True)
-class Split:
-    """Immutable: this user owes this much for one expense."""
-    user: User
-    amount_owed: float
+// ---------- Strategy: split types ----------
 
+public interface SplitStrategy {
+    List<Split> computeSplits(double amount, List<User> participants, Map<String, Object> metadata);
+}
 
-# ---------- Strategy: split types ----------
+public class EqualSplitStrategy implements SplitStrategy {
+    @Override
+    public List<Split> computeSplits(double amount, List<User> participants, Map<String, Object> metadata) {
+        int n = participants.size();
+        double base = Math.round((amount / n) * 100.0) / 100.0;
+        List<Split> splits = new ArrayList<>();
+        for (User u : participants) {
+            splits.add(new Split(u, base));
+        }
 
-class SplitStrategy(ABC):
-    @abstractmethod
-    def compute_splits(
-        self, amount: float, participants: list[User], metadata: dict
-    ) -> list[Split]:
-        """metadata carries strategy-specific input, e.g. exact amounts or percentages."""
-        ...
+        // Distribute rounding remainder cents to first participants
+        double remainder = Math.round((amount - (base * n)) * 100.0) / 100.0;
+        int cents = (int) Math.round(remainder * 100);
+        for (int i = 0; i < Math.abs(cents); i++) {
+            User u = splits.get(i).user();
+            double adjust = cents > 0 ? 0.01 : -0.01;
+            double adjustedAmount = Math.round((splits.get(i).amountOwed() + adjust) * 100.0) / 100.0;
+            splits.set(i, new Split(u, adjustedAmount));
+        }
+        return splits;
+    }
+}
 
+public class ExactSplitStrategy implements SplitStrategy {
+    @Override
+    @SuppressWarnings("unchecked")
+    public List<Split> computeSplits(double amount, List<User> participants, Map<String, Object> metadata) {
+        Map<String, Double> amounts = (Map<String, Double>) metadata.get("amounts");
+        double sum = amounts.values().stream().mapToDouble(Double::doubleValue).sum();
+        if (Math.abs(sum - amount) > 0.01) {
+            throw new IllegalArgumentException("Exact splits sum (" + sum + ") does not match total (" + amount + ")");
+        }
 
-class EqualSplitStrategy(SplitStrategy):
-    def compute_splits(self, amount: float, participants: list[User], metadata: dict) -> list[Split]:
-        """Divide evenly; distribute rounding remainder (cents) to the first N participants
-        so the splits sum EXACTLY to `amount`.
-        """
-        n = len(participants)
-        base = round(amount / n, 2)
-        splits = [Split(u, base) for u in participants]
-        remainder = round(amount - base * n, 2)
-        # distribute leftover cents deterministically
-        cents = int(round(remainder * 100))
-        for i in range(abs(cents)):
-            u = splits[i].user
-            adjust = 0.01 if cents > 0 else -0.01
-            splits[i] = Split(u, round(splits[i].amount_owed + adjust, 2))
-        return splits
+        List<Split> splits = new ArrayList<>();
+        for (User u : participants) {
+            splits.add(new Split(u, amounts.getOrDefault(u.id(), 0.0)));
+        }
+        return splits;
+    }
+}
 
+public class PercentageSplitStrategy implements SplitStrategy {
+    @Override
+    @SuppressWarnings("unchecked")
+    public List<Split> computeSplits(double amount, List<User> participants, Map<String, Object> metadata) {
+        Map<String, Double> percentages = (Map<String, Double>) metadata.get("percentages");
+        double sum = percentages.values().stream().mapToDouble(Double::doubleValue).sum();
+        if (Math.abs(sum - 100.0) > 0.01) {
+            throw new IllegalArgumentException("Percentages must sum to 100");
+        }
 
-class ExactSplitStrategy(SplitStrategy):
-    def compute_splits(self, amount: float, participants: list[User], metadata: dict) -> list[Split]:
-        """metadata = {"amounts": {user_id: amount, ...}}. Must sum to `amount` exactly."""
-        amounts = metadata["amounts"]
-        total = round(sum(amounts.values()), 2)
-        if total != round(amount, 2):
-            raise ValueError(f"Exact splits ({total}) do not sum to expense amount ({amount})")
-        return [Split(u, amounts[u.id]) for u in participants]
+        List<Split> splits = new ArrayList<>();
+        for (User u : participants) {
+            double pct = percentages.getOrDefault(u.id(), 0.0);
+            double share = Math.round((amount * pct / 100.0) * 100.0) / 100.0;
+            splits.add(new Split(u, share));
+        }
+        return splits;
+    }
+}
 
+// ---------- Expense ----------
 
-class PercentageSplitStrategy(SplitStrategy):
-    def compute_splits(self, amount: float, participants: list[User], metadata: dict) -> list[Split]:
-        """metadata = {"percentages": {user_id: pct, ...}}. Percentages must sum to 100."""
-        percentages = metadata["percentages"]
-        if round(sum(percentages.values()), 2) != 100.0:
-            raise ValueError("Percentages must sum to 100")
-        return [Split(u, round(amount * percentages[u.id] / 100, 2)) for u in participants]
+public class Expense {
+    private final String id;
+    private final String description;
+    private final double amount;
+    private final User paidBy;
+    private final List<User> participants;
+    private final SplitStrategy splitStrategy;
+    private final Map<String, Object> metadata;
+    private List<Split> splits = new ArrayList<>();
 
+    public Expense(String description, double amount, User paidBy, List<User> participants,
+                   SplitStrategy strategy, Map<String, Object> metadata) {
+        this.id = UUID.randomUUID().toString();
+        this.description = description;
+        this.amount = amount;
+        this.paidBy = paidBy;
+        this.participants = new ArrayList<>(participants);
+        this.splitStrategy = strategy;
+        this.metadata = (metadata == null) ? Collections.emptyMap() : metadata;
+    }
 
-# ---------- Expense ----------
+    public List<Split> calculateSplits() {
+        this.splits = splitStrategy.computeSplits(amount, participants, metadata);
+        return Collections.unmodifiableList(splits);
+    }
 
-@dataclass
-class Expense:
-    description: str
-    amount: float
-    paid_by: User
-    participants: list[User]
-    split_strategy: SplitStrategy
-    metadata: dict = field(default_factory=dict)
-    id: str = field(default_factory=lambda: str(uuid4()))
-    splits: list[Split] = field(default_factory=list)
+    public String getId() { return id; }
+    public double getAmount() { return amount; }
+    public User getPaidBy() { return paidBy; }
+    public List<Split> getSplits() { return splits; }
+}
 
-    def calculate_splits(self) -> list[Split]:
-        self.splits = self.split_strategy.compute_splits(self.amount, self.participants, self.metadata)
-        return self.splits
+// ---------- Ledger & Balance Sheet ----------
 
+public class Ledger {
+    // Pairwise balance: (creditorId, debtorId) -> amount owed
+    private final Map<String, Map<String, Double>> balances = new ConcurrentHashMap<>();
 
-# ---------- Ledger ----------
+    public synchronized void updateBalance(User creditor, User debtor, double amount) {
+        balances.computeIfAbsent(creditor.id(), k -> new ConcurrentHashMap<>())
+                .merge(debtor.id(), amount, Double::sum);
+        balances.computeIfAbsent(debtor.id(), k -> new ConcurrentHashMap<>())
+                .merge(creditor.id(), -amount, Double::sum);
+    }
 
-class Ledger:
-    """Single source of truth for pairwise balances. balances[(a, b)] = amount b owes a."""
+    public double getBalance(User a, User b) {
+        return balances.getOrDefault(a.id(), Collections.emptyMap()).getOrDefault(b.id(), 0.0);
+    }
 
-    def __init__(self):
-        self.balances: dict[tuple[str, str], float] = defaultdict(float)
+    public Map<User, Double> netBalances(List<User> users) {
+        Map<String, Double> net = new HashMap<>();
+        Map<String, User> userLookup = new HashMap<>();
+        for (User u : users) userLookup.put(u.id(), u);
 
-    def update_balance(self, creditor: User, debtor: User, amount: float) -> None:
-        """debtor owes creditor `amount` more (can be negative to reduce/settle)."""
-        self.balances[(creditor.id, debtor.id)] += amount
-        self.balances[(debtor.id, creditor.id)] -= amount
+        for (var entry : balances.entrySet()) {
+            String creditor = entry.getKey();
+            for (var sub : entry.getValue().entrySet()) {
+                net.merge(creditor, sub.getValue(), Double::sum);
+            }
+        }
 
-    def get_balance(self, a: User, b: User) -> float:
-        """Positive => b owes a."""
-        return self.balances.get((a.id, b.id), 0.0)
+        Map<User, Double> result = new HashMap<>();
+        for (var entry : net.entrySet()) {
+            if (Math.abs(entry.getValue()) > 0.01 && userLookup.containsKey(entry.getKey())) {
+                result.put(userLookup.get(entry.getKey()), Math.round(entry.getValue() * 100.0) / 100.0);
+            }
+        }
+        return result;
+    }
+}
 
-    def net_balances(self, users: list[User]) -> dict[User, float]:
-        """Collapse all pairwise balances into one net figure per user
-        (positive = net creditor, negative = net debtor). Feeds simplify_debts.
-        """
-        net: dict[str, float] = defaultdict(float)
-        seen = {u.id: u for u in users}
-        for (a_id, b_id), amt in self.balances.items():
-            net[a_id] += amt  # amt is what b owes a, i.e. a's net position increases
-        return {seen[uid]: round(bal, 2) for uid, bal in net.items() if abs(bal) > 1e-9}
+// ---------- ExpenseManager (Facade) ----------
 
+public record Settlement(User debtor, User creditor, double amount) {}
 
-# ---------- ExpenseManager (Facade) ----------
+public class ExpenseManager {
+    private final Ledger ledger = new Ledger();
+    private final List<Expense> expenses = new ArrayList<>();
 
-class ExpenseManager:
-    def __init__(self):
-        self.ledger = Ledger()
-        self.expenses: list[Expense] = []
+    public void addExpense(Expense expense) {
+        List<Split> splits = expense.calculateSplits();
+        for (Split split : splits) {
+            if (!split.user().id().equals(expense.getPaidBy().id())) {
+                ledger.updateBalance(expense.getPaidBy(), split.user(), split.amountOwed());
+            }
+        }
+        expenses.add(expense);
+    }
 
-    def add_expense(self, expense: Expense) -> None:
-        splits = expense.calculate_splits()
-        for split in splits:
-            if split.user.id != expense.paid_by.id:
-                self.ledger.update_balance(expense.paid_by, split.user, split.amount_owed)
-        self.expenses.append(expense)
+    public void settleUp(User payer, User payee, double amount) {
+        ledger.updateBalance(payee, payer, -amount);
+    }
 
-    def settle_up(self, payer: User, payee: User, amount: float) -> None:
-        """payer pays payee `amount`, reducing what payer owes payee."""
-        self.ledger.update_balance(payee, payer, -amount)
+    public List<Settlement> simplifyDebts(List<User> users) {
+        Map<User, Double> net = ledger.netBalances(users);
 
-    def simplify_debts(self, users: list[User]) -> list[tuple[User, User, float]]:
-        """Returns list of (debtor, creditor, amount) — minimum-transaction settlement plan."""
-        net = self.ledger.net_balances(users)
+        // PriorityQueue Max-Heaps for Creditors and Debtors
+        PriorityQueue<Map.Entry<User, Double>> creditors = new PriorityQueue<>(
+            (a, b) -> Double.compare(b.getValue(), a.getValue())
+        );
+        PriorityQueue<Map.Entry<User, Double>> debtors = new PriorityQueue<>(
+            (a, b) -> Double.compare(a.getValue(), b.getValue()) // Lowest negative is highest debtor
+        );
 
-        creditors = [(-bal, u) for u, bal in net.items() if bal > 0]        # max-heap via negation
-        debtors = [(bal, u) for u, bal in net.items() if bal < 0]          # amount owed as positive
-        heapq.heapify(creditors)
-        heapq.heapify(debtors)
+        for (var entry : net.entrySet()) {
+            if (entry.getValue() > 0) creditors.offer(entry);
+            else if (entry.getValue() < 0) debtors.offer(entry);
+        }
 
-        transactions = []
-        while creditors and debtors:
-            neg_credit, creditor = heapq.heappop(creditors)
-            neg_debt, debtor = heapq.heappop(debtors)
-            credit_amt, debt_amt = -neg_credit, -neg_debt
+        List<Settlement> settlements = new ArrayList<>();
 
-            settled = min(credit_amt, debt_amt)
-            transactions.append((debtor, creditor, round(settled, 2)))
+        while (!creditors.isEmpty() && !debtors.isEmpty()) {
+            var creditor = creditors.poll();
+            var debtor = debtors.poll();
 
-            remaining_credit = credit_amt - settled
-            remaining_debt = debt_amt - settled
-            if remaining_credit > 1e-9:
-                heapq.heappush(creditors, (-remaining_credit, creditor))
-            if remaining_debt > 1e-9:
-                heapq.heappush(debtors, (-remaining_debt, debtor))
+            double creditAmt = creditor.getValue();
+            double debtAmt = -debtor.getValue();
+            double settled = Math.min(creditAmt, debtAmt);
 
-        return transactions
+            settlements.add(new Settlement(debtor.getKey(), creditor.getKey(), Math.round(settled * 100.0) / 100.0));
+
+            double remainingCredit = creditAmt - settled;
+            double remainingDebt = debtAmt - settled;
+
+            if (remainingCredit > 0.01) {
+                creditors.offer(Map.entry(creditor.getKey(), remainingCredit));
+            }
+            if (remainingDebt > 0.01) {
+                debtors.offer(Map.entry(debtor.getKey(), -remainingDebt));
+            }
+        }
+        return settlements;
+    }
+}
 ```
 
 ---

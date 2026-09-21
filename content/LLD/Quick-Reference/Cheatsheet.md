@@ -47,13 +47,13 @@ Red flag: A high-level class directly instantiates a concrete low-level class in
 
 ## UML Relationships
 
-| Relationship | Meaning | Python hint |
+| Relationship | Meaning | Java hint |
 |---|---|---|
-| Association | Objects know about each other, independent lifecycles, general "uses-a" | `class Driver: def __init__(self, car: Car): self.car = car` |
-| Aggregation | "Has-a", weak ownership — part can outlive the whole | `class Team: def __init__(self): self.players: list[Player] = []` (players created outside, passed in) |
-| Composition | "Owns-a", strong ownership — part's lifecycle bound to whole; deleting whole deletes part | `class Car: def __init__(self): self.engine = Engine()` (Engine created inside Car) |
-| Inheritance (generalization) | "Is-a", subclass extends superclass | `class ElectricCar(Car): ...` |
-| Realization/Implementation | Class implements an interface/abstract contract | `class FileLogger(LoggerInterface): ...` where `LoggerInterface(ABC)` |
+| Association | Objects know about each other, independent lifecycles, general "uses-a" | `class Driver { private Car car; public Driver(Car car) { this.car = car; } }` |
+| Aggregation | "Has-a", weak ownership — part can outlive the whole | `class Team { private List<Player> players; public Team(List<Player> p) { this.players = p; } }` |
+| Composition | "Owns-a", strong ownership — part's lifecycle bound to whole | `class Car { private final Engine engine = new Engine(); }` (Engine created inside Car) |
+| Inheritance (generalization) | "Is-a", subclass extends superclass | `class ElectricCar extends Car { ... }` |
+| Realization/Implementation | Class implements an interface/abstract contract | `class FileLogger implements LoggerInterface { ... }` |
 
 ---
 
@@ -61,54 +61,69 @@ Red flag: A high-level class directly instantiates a concrete low-level class in
 
 **Singleton** — Intent: ensure a class has exactly one instance, provide global access point.
 Use when: shared config, connection pool, logger, cache registry.
-```python
-class Singleton:
-    _instance = None
-    def __new__(cls, *a, **kw):
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-        return cls._instance
+```java
+public class Singleton {
+    private Singleton() {}
+    private static class Holder {
+        private static final Singleton INSTANCE = new Singleton();
+    }
+    public static Singleton getInstance() {
+        return Holder.INSTANCE;
+    }
+}
 ```
 
 **Factory Method** — Intent: defer object creation to subclasses/a creator method instead of calling constructors directly.
 Use when: caller shouldn't know the concrete class; many `if/elif` on type.
-```python
-class ShapeFactory:
-    @staticmethod
-    def create(kind: str) -> "Shape":
-        return {"circle": Circle, "square": Square}[kind]()
+```java
+public class ShapeFactory {
+    public static Shape create(String kind) {
+        return switch (kind.toLowerCase()) {
+            case "circle" -> new Circle();
+            case "square" -> new Square();
+            default -> throw new IllegalArgumentException("Unknown kind: " + kind);
+        };
+    }
+}
 ```
 
 **Abstract Factory** — Intent: create *families* of related objects without specifying concrete classes.
 Use when: you need to swap an entire family of related products together (e.g. Light/Dark UI theme widgets).
-```python
-class UIFactory(ABC):
-    @abstractmethod
-    def create_button(self) -> Button: ...
-    @abstractmethod
-    def create_checkbox(self) -> Checkbox: ...
-class DarkUIFactory(UIFactory):
-    def create_button(self): return DarkButton()
-    def create_checkbox(self): return DarkCheckbox()
+```java
+public interface UIFactory {
+    Button createButton();
+    Checkbox createCheckbox();
+}
+public class DarkUIFactory implements UIFactory {
+    public Button createButton() { return new DarkButton(); }
+    public Checkbox createCheckbox() { return new DarkCheckbox(); }
+}
 ```
 
 **Builder** — Intent: separate construction of a complex object from its representation, build step-by-step.
 Use when: object has many optional params/telescoping constructor problem.
-```python
-class PizzaBuilder:
-    def __init__(self): self.pizza = Pizza()
-    def add_cheese(self): self.pizza.toppings.append("cheese"); return self
-    def add_olives(self): self.pizza.toppings.append("olives"); return self
-    def build(self): return self.pizza
+```java
+public class PizzaBuilder {
+    private final Pizza pizza = new Pizza();
+    public PizzaBuilder addCheese() { pizza.getToppings().add("cheese"); return this; }
+    public PizzaBuilder addOlives() { pizza.getToppings().add("olives"); return this; }
+    public Pizza build() { return pizza; }
+}
 ```
 
 **Prototype** — Intent: create new objects by cloning an existing instance instead of building from scratch.
 Use when: object creation is expensive, or you need copies with slight variations.
-```python
-import copy
-class Prototype:
-    def clone(self):
-        return copy.deepcopy(self)
+```java
+public class Prototype implements Cloneable {
+    @Override
+    public Prototype clone() {
+        try {
+            return (Prototype) super.clone();
+        } catch (CloneNotSupportedException e) {
+            throw new AssertionError();
+        }
+    }
+}
 ```
 
 ---
@@ -117,46 +132,62 @@ class Prototype:
 
 **Adapter** — Intent: convert one interface into another interface clients expect.
 Use when: integrating a third-party/legacy class whose interface doesn't match yours.
-```python
-class OldPrinter:
-    def print_old(self, text): print(text)
-class PrinterAdapter:
-    def __init__(self, old): self.old = old
-    def print(self, text): self.old.print_old(text)
+```java
+public class OldPrinter {
+    public void printOld(String text) { System.out.println(text); }
+}
+public class PrinterAdapter implements Printer {
+    private final OldPrinter old;
+    public PrinterAdapter(OldPrinter old) { this.old = old; }
+    public void print(String text) { old.printOld(text); }
+}
 ```
 
 **Decorator** — Intent: attach additional responsibilities to an object dynamically, without altering its class.
 Use when: need optional/stackable behavior (e.g. add cheese/milk to coffee, add logging to a function).
-```python
-class CoffeeWithMilk:
-    def __init__(self, coffee): self.coffee = coffee
-    def cost(self): return self.coffee.cost() + 2
+```java
+public class CoffeeWithMilk implements Coffee {
+    private final Coffee coffee;
+    public CoffeeWithMilk(Coffee coffee) { this.coffee = coffee; }
+    public double cost() { return coffee.cost() + 2.0; }
+}
 ```
 
 **Facade** — Intent: provide a single simplified interface to a complex subsystem.
 Use when: hide complexity of multiple subsystem classes behind one entry point.
-```python
-class ComputerFacade:
-    def start(self):
-        self.cpu.freeze(); self.memory.load(); self.cpu.execute()
+```java
+public class ComputerFacade {
+    public void start() {
+        cpu.freeze();
+        memory.load();
+        cpu.execute();
+    }
+}
 ```
 
 **Proxy** — Intent: provide a placeholder/surrogate that controls access to another object.
 Use when: lazy loading, access control, caching, remote object stand-in.
-```python
-class ImageProxy:
-    def __init__(self, path): self.path = path; self._real = None
-    def display(self):
-        if self._real is None: self._real = RealImage(self.path)
-        self._real.display()
+```java
+public class ImageProxy implements Image {
+    private final String path;
+    private RealImage real;
+    public ImageProxy(String path) { this.path = path; }
+    public void display() {
+        if (real == null) real = new RealImage(path);
+        real.display();
+    }
+}
 ```
 
 **Composite** — Intent: compose objects into tree structures and treat individual objects and compositions uniformly.
 Use when: part-whole hierarchies (files/folders, UI widget trees, org charts).
-```python
-class Folder:
-    def __init__(self): self.children = []
-    def size(self): return sum(c.size() for c in self.children)
+```java
+public class Folder implements FileSystemItem {
+    private final List<FileSystemItem> children = new ArrayList<>();
+    public int size() {
+        return children.stream().mapToInt(FileSystemItem::size).sum();
+    }
+}
 ```
 
 ---
@@ -165,87 +196,102 @@ class Folder:
 
 **Strategy** — Intent: define a family of interchangeable algorithms, select one at runtime.
 Use when: multiple ways to do the same task, chosen dynamically (payment method, sorting/compression algorithm).
-```python
-class PaymentStrategy(ABC):
-    @abstractmethod
-    def pay(self, amount): ...
-class CreditCardPayment(PaymentStrategy):
-    def pay(self, amount): print(f"Paid {amount} via card")
+```java
+public interface PaymentStrategy {
+    void pay(double amount);
+}
+public class CreditCardPayment implements PaymentStrategy {
+    public void pay(double amount) { System.out.println("Paid " + amount + " via card"); }
+}
 ```
 
 **Observer** — Intent: one-to-many dependency — when subject changes state, all dependents are notified.
 Use when: event/notification systems, pub-sub, UI reacting to model changes.
-```python
-class Subject:
-    def __init__(self): self._observers = []
-    def notify(self):
-        for o in self._observers: o.update(self)
+```java
+public class Subject {
+    private final List<Observer> observers = new CopyOnWriteArrayList<>();
+    public void notifyObservers() {
+        for (Observer o : observers) o.update(this);
+    }
+}
 ```
 
 **Command** — Intent: encapsulate a request as an object, enabling queuing, logging, and undo.
 Use when: need undo/redo, transactional operations, request queues.
-```python
-class Command(ABC):
-    @abstractmethod
-    def execute(self): ...
-    @abstractmethod
-    def undo(self): ...
+```java
+public interface Command {
+    void execute();
+    void undo();
+}
 ```
 
 **State** — Intent: allow an object to alter its behavior when its internal state changes, appears to change class.
 Use when: object behavior branches heavily on a "status" field (order states, TCP connection states, vending machine).
-```python
-class State(ABC):
-    @abstractmethod
-    def handle(self, context): ...
-class IdleState(State):
-    def handle(self, context): context.state = RunningState()
+```java
+public interface State {
+    void handle(Context context);
+}
+public class IdleState implements State {
+    public void handle(Context context) { context.setState(new RunningState()); }
+}
 ```
 
 **Template Method** — Intent: define the skeleton of an algorithm in a base class, let subclasses override specific steps.
 Use when: several classes share the same overall workflow but differ in some steps.
-```python
-class DataProcessor(ABC):
-    def process(self):
-        self.read(); self.transform(); self.write()
-    @abstractmethod
-    def transform(self): ...
+```java
+public abstract class DataProcessor {
+    public final void process() {
+        read();
+        transform();
+        write();
+    }
+    protected abstract void transform();
+}
 ```
 
 **Iterator** — Intent: provide a way to sequentially access elements of a collection without exposing its internals.
 Use when: custom traversal logic over a custom data structure.
-```python
-class Range:
-    def __init__(self, n): self.n = n
-    def __iter__(self):
-        for i in range(self.n): yield i
+```java
+public class CustomCollection implements Iterable<String> {
+    private final List<String> items = new ArrayList<>();
+    @Override
+    public Iterator<String> iterator() {
+        return items.iterator();
+    }
+}
 ```
 
 **Mediator** — Intent: define an object that centralizes communication between a set of objects, reducing direct coupling.
 Use when: many objects reference each other directly (chat room, air-traffic control, UI form components).
-```python
-class ChatRoom:
-    def send(self, sender, message):
-        print(f"[{sender}]: {message}")
+```java
+public class ChatRoom {
+    public void send(User sender, String message) {
+        System.out.println("[" + sender.getName() + "]: " + message);
+    }
+}
 ```
 
 **Chain of Responsibility** — Intent: pass a request along a chain of handlers until one handles it.
 Use when: multiple handlers could process a request, order matters, decouple sender from receiver (middleware, approval workflows, logging levels).
-```python
-class Handler(ABC):
-    def __init__(self): self.next = None
-    def handle(self, req):
-        if self.next: return self.next.handle(req)
+```java
+public abstract class Handler {
+    protected Handler next;
+    public void setNext(Handler next) { this.next = next; }
+    public void handle(Request req) {
+        if (next != null) next.handle(req);
+    }
+}
 ```
 
 **Memento** — Intent: capture and externalize an object's internal state so it can be restored later, without violating encapsulation.
 Use when: need undo/checkpoint/rollback of an object's state (text editor undo, game save states).
-```python
-class Memento:
-    def __init__(self, state): self._state = state
-class Originator:
-    def save(self): return Memento(self.state)
-    def restore(self, memento): self.state = memento._state
+```java
+public record Memento(String state) {}
+public class Originator {
+    private String state;
+    public Memento save() { return new Memento(state); }
+    public void restore(Memento m) { this.state = m.state(); }
+}
 ```
 
 ---

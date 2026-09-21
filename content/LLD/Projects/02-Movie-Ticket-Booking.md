@@ -62,262 +62,345 @@
 
 ## 3. Full Implementation
 
-```python
-"""
-Movie Ticket Booking — single-file runnable LLD reference implementation.
-"""
+```java
+/**
+ * Movie Ticket Booking — single-file runnable LLD reference implementation in Java.
+ * Run directly with: java MovieTicketBookingDemo.java
+ */
 
-from __future__ import annotations
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 
-import itertools
-import uuid
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta
-from enum import Enum, auto
-from typing import Dict, List, Optional
+// ---------------------------------------------------------------------------
+// Enums & Constants
+// ---------------------------------------------------------------------------
 
+enum SeatCategory {
+    REGULAR(10.0),
+    PREMIUM(18.0);
 
-# ---------------------------------------------------------------------------
-# Enums
-# ---------------------------------------------------------------------------
-
-class SeatCategory(Enum):
-    REGULAR = auto()
-    PREMIUM = auto()
-
-
-class SeatStatus(Enum):
-    AVAILABLE = auto()
-    LOCKED = auto()
-    BOOKED = auto()
-
-
-class PaymentStatus(Enum):
-    PENDING = auto()
-    SUCCESS = auto()
-    FAILED = auto()
-
-
-SEAT_PRICE: Dict[SeatCategory, float] = {
-    SeatCategory.REGULAR: 10.0,
-    SeatCategory.PREMIUM: 18.0,
+    private final double price;
+    SeatCategory(double price) { this.price = price; }
+    public double getPrice() { return price; }
 }
 
-LOCK_DURATION = timedelta(minutes=5)
+enum SeatStatus {
+    AVAILABLE,
+    LOCKED,
+    BOOKED
+}
 
+enum PaymentStatus {
+    PENDING,
+    SUCCESS,
+    FAILED
+}
 
-# ---------------------------------------------------------------------------
-# Core static entities
-# ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Core static entities
+// ---------------------------------------------------------------------------
 
-@dataclass(frozen=True)
-class Seat:
-    seat_id: str
-    category: SeatCategory
+record Seat(String seatId, SeatCategory category) {}
 
+record Movie(String title, int durationMinutes) {}
 
-@dataclass
-class Movie:
-    title: str
-    duration_minutes: int
+class Screen {
+    private final String screenId;
+    private final List<Seat> seats;
 
+    public Screen(String screenId, List<Seat> seats) {
+        this.screenId = screenId;
+        this.seats = List.copyOf(seats);
+    }
 
-class Screen:
-    def __init__(self, screen_id: str, seats: List[Seat]):
-        self.screen_id = screen_id
-        self.seats = seats
+    public String getScreenId() { return screenId; }
+    public List<Seat> getSeats() { return seats; }
+}
 
+class Theatre {
+    private final String name;
+    private final List<Screen> screens;
 
-class Theatre:
-    def __init__(self, name: str, screens: List[Screen]):
-        self.name = name
-        self.screens = screens
+    public Theatre(String name, List<Screen> screens) {
+        this.name = name;
+        this.screens = List.copyOf(screens);
+    }
 
+    public String getName() { return name; }
+    public List<Screen> getScreens() { return screens; }
+}
 
-# ---------------------------------------------------------------------------
-# Show: a movie playing on a screen at a specific time, with live seat state
-# ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Show: a movie playing on a screen at a specific time, with live seat state
+// ---------------------------------------------------------------------------
 
-class Show:
-    def __init__(self, show_id: str, movie: Movie, screen: Screen, start_time: datetime):
-        self.show_id = show_id
-        self.movie = movie
-        self.screen = screen
-        self.start_time = start_time
-        self.seat_status: Dict[str, SeatStatus] = {
-            seat.seat_id: SeatStatus.AVAILABLE for seat in screen.seats
+class Show {
+    public static final Duration LOCK_DURATION = Duration.ofMinutes(5);
+
+    private final String showId;
+    private final Movie movie;
+    private final Screen screen;
+    private final LocalDateTime startTime;
+
+    private final Map<String, SeatStatus> seatStatus = new ConcurrentHashMap<>();
+    private final Map<String, LocalDateTime> lockExpiry = new ConcurrentHashMap<>();
+    private final Map<String, Seat> seatsById = new HashMap<>();
+
+    public Show(String showId, Movie movie, Screen screen, LocalDateTime startTime) {
+        this.showId = showId;
+        this.movie = movie;
+        this.screen = screen;
+        this.startTime = startTime;
+        for (Seat seat : screen.getSeats()) {
+            this.seatStatus.put(seat.seatId(), SeatStatus.AVAILABLE);
+            this.seatsById.put(seat.seatId(), seat);
         }
-        self._lock_expiry: Dict[str, datetime] = {}
-        self._seats_by_id: Dict[str, Seat] = {s.seat_id: s for s in screen.seats}
+    }
 
-    def available_seats(self) -> List[Seat]:
-        return [
-            self._seats_by_id[sid]
-            for sid, status in self.seat_status.items()
-            if status == SeatStatus.AVAILABLE
-        ]
+    public synchronized List<Seat> availableSeats() {
+        expireStaleLocks(LocalDateTime.now());
+        return seatStatus.entrySet().stream()
+            .filter(e -> e.getValue() == SeatStatus.AVAILABLE)
+            .map(e -> seatsById.get(e.getKey()))
+            .collect(Collectors.toList());
+    }
 
-    def _expire_stale_locks(self, now: datetime) -> None:
-        for seat_id, expiry in list(self._lock_expiry.items()):
-            if self.seat_status.get(seat_id) == SeatStatus.LOCKED and now >= expiry:
-                self.seat_status[seat_id] = SeatStatus.AVAILABLE
-                del self._lock_expiry[seat_id]
+    private synchronized void expireStaleLocks(LocalDateTime now) {
+        for (Map.Entry<String, LocalDateTime> entry : new HashMap<>(lockExpiry).entrySet()) {
+            String seatId = entry.getKey();
+            LocalDateTime expiry = entry.getValue();
+            if (seatStatus.get(seatId) == SeatStatus.LOCKED && !now.isBefore(expiry)) {
+                seatStatus.put(seatId, SeatStatus.AVAILABLE);
+                lockExpiry.remove(seatId);
+            }
+        }
+    }
 
-    def lock_seats(self, seat_ids: List[str], now: Optional[datetime] = None) -> bool:
-        """Atomically lock a group of seats. Returns False if any seat is unavailable."""
-        now = now or datetime.now()
-        self._expire_stale_locks(now)
+    /** Atomically lock a group of seats. Returns false if any seat is unavailable. */
+    public synchronized boolean lockSeats(List<String> seatIds, LocalDateTime now) {
+        LocalDateTime currentTime = (now != null) ? now : LocalDateTime.now();
+        expireStaleLocks(currentTime);
 
-        for seat_id in seat_ids:
-            if self.seat_status.get(seat_id) != SeatStatus.AVAILABLE:
-                return False  # at least one seat already locked/booked -> abort, lock nothing
+        for (String seatId : seatIds) {
+            if (seatStatus.get(seatId) != SeatStatus.AVAILABLE) {
+                return false; // at least one seat already locked/booked -> abort, lock nothing
+            }
+        }
 
-        for seat_id in seat_ids:
-            self.seat_status[seat_id] = SeatStatus.LOCKED
-            self._lock_expiry[seat_id] = now + LOCK_DURATION
-        return True
+        for (String seatId : seatIds) {
+            seatStatus.put(seatId, SeatStatus.LOCKED);
+            lockExpiry.put(seatId, currentTime.plus(LOCK_DURATION));
+        }
+        return true;
+    }
 
-    def confirm_seats(self, seat_ids: List[str]) -> None:
-        for seat_id in seat_ids:
-            if self.seat_status.get(seat_id) != SeatStatus.LOCKED:
-                raise ValueError(f"Seat {seat_id} is not locked, cannot confirm")
-        for seat_id in seat_ids:
-            self.seat_status[seat_id] = SeatStatus.BOOKED
-            self._lock_expiry.pop(seat_id, None)
+    public synchronized void confirmSeats(List<String> seatIds) {
+        for (String seatId : seatIds) {
+            if (seatStatus.get(seatId) != SeatStatus.LOCKED) {
+                throw new IllegalStateException("Seat " + seatId + " is not locked, cannot confirm");
+            }
+        }
+        for (String seatId : seatIds) {
+            seatStatus.put(seatId, SeatStatus.BOOKED);
+            lockExpiry.remove(seatId);
+        }
+    }
 
-    def release_seats(self, seat_ids: List[str]) -> None:
-        for seat_id in seat_ids:
-            if self.seat_status.get(seat_id) == SeatStatus.LOCKED:
-                self.seat_status[seat_id] = SeatStatus.AVAILABLE
-                self._lock_expiry.pop(seat_id, None)
+    public synchronized void releaseSeats(List<String> seatIds) {
+        for (String seatId : seatIds) {
+            if (seatStatus.get(seatId) == SeatStatus.LOCKED) {
+                seatStatus.put(seatId, SeatStatus.AVAILABLE);
+                lockExpiry.remove(seatId);
+            }
+        }
+    }
 
-    def price_for(self, seat_ids: List[str]) -> float:
-        return sum(SEAT_PRICE[self._seats_by_id[sid].category] for sid in seat_ids)
+    public double priceFor(List<String> seatIds) {
+        return seatIds.stream()
+            .mapToDouble(sid -> seatsById.get(sid).category().getPrice())
+            .sum();
+    }
 
+    public String getShowId() { return showId; }
+    public Movie getMovie() { return movie; }
+    public Screen getScreen() { return screen; }
+    public LocalDateTime getStartTime() { return startTime; }
+}
 
-# ---------------------------------------------------------------------------
-# Booking + Payment
-# ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Booking + Payment
+// ---------------------------------------------------------------------------
 
-@dataclass
-class Payment:
-    amount: float
-    status: PaymentStatus = PaymentStatus.PENDING
+class Payment {
+    private final double amount;
+    private PaymentStatus status;
 
+    public Payment(double amount, PaymentStatus status) {
+        this.amount = amount;
+        this.status = status;
+    }
 
-@dataclass
-class Booking:
-    booking_id: str
-    user: str
-    show: Show
-    seat_ids: List[str]
-    payment: Payment
-    created_at: datetime = field(default_factory=datetime.now)
+    public Payment(double amount) {
+        this(amount, PaymentStatus.PENDING);
+    }
 
+    public double getAmount() { return amount; }
+    public PaymentStatus getStatus() { return status; }
+    public void setStatus(PaymentStatus status) { this.status = status; }
+}
 
-# ---------------------------------------------------------------------------
-# BookingManager: orchestrates the lock -> pay -> confirm workflow
-# ---------------------------------------------------------------------------
+class Booking {
+    private final String bookingId;
+    private final String user;
+    private final Show show;
+    private final List<String> seatIds;
+    private final Payment payment;
+    private final LocalDateTime createdAt;
 
-class SeatsUnavailableError(Exception):
-    pass
+    public Booking(String bookingId, String user, Show show, List<String> seatIds, Payment payment) {
+        this.bookingId = bookingId;
+        this.user = user;
+        this.show = show;
+        this.seatIds = List.copyOf(seatIds);
+        this.payment = payment;
+        this.createdAt = LocalDateTime.now();
+    }
 
+    public String getBookingId() { return bookingId; }
+    public String getUser() { return user; }
+    public Show getShow() { return show; }
+    public List<String> getSeatIds() { return seatIds; }
+    public Payment getPayment() { return payment; }
+    public LocalDateTime getCreatedAt() { return createdAt; }
+}
 
-class PaymentFailedError(Exception):
-    pass
+// ---------------------------------------------------------------------------
+// BookingManager: orchestrates the lock -> pay -> confirm workflow
+// ---------------------------------------------------------------------------
 
+class SeatsUnavailableException extends RuntimeException {
+    public SeatsUnavailableException(String message) {
+        super(message);
+    }
+}
 
-class BookingManager:
-    def __init__(self):
-        self._booking_counter = itertools.count(1)
-        self.bookings: Dict[str, Booking] = {}
+class PaymentFailedException extends RuntimeException {
+    public PaymentFailedException(String message) {
+        super(message);
+    }
+}
 
-    def book(
-        self,
-        user: str,
-        show: Show,
-        seat_ids: List[str],
-        payment_should_succeed: bool = True,
-    ) -> Booking:
-        locked = show.lock_seats(seat_ids)
-        if not locked:
-            raise SeatsUnavailableError(
-                f"One or more seats in {seat_ids} are no longer available"
-            )
+class BookingManager {
+    private final AtomicInteger bookingCounter = new AtomicInteger(1);
+    private final Map<String, Booking> bookings = new ConcurrentHashMap<>();
 
-        amount = show.price_for(seat_ids)
-        payment = Payment(amount=amount)
+    public synchronized Booking book(
+        String user,
+        Show show,
+        List<String> seatIds,
+        boolean paymentShouldSucceed
+    ) {
+        boolean locked = show.lockSeats(seatIds, LocalDateTime.now());
+        if (!locked) {
+            throw new SeatsUnavailableException("One or more seats in " + seatIds + " are no longer available");
+        }
 
-        if not payment_should_succeed:
-            payment.status = PaymentStatus.FAILED
-            show.release_seats(seat_ids)
-            raise PaymentFailedError(f"Payment of ${amount:.2f} failed; seats released")
+        double amount = show.priceFor(seatIds);
+        Payment payment = new Payment(amount);
 
-        payment.status = PaymentStatus.SUCCESS
-        show.confirm_seats(seat_ids)
+        if (!paymentShouldSucceed) {
+            payment.setStatus(PaymentStatus.FAILED);
+            show.releaseSeats(seatIds);
+            throw new PaymentFailedException(String.format("Payment of $%.2f failed; seats released", amount));
+        }
 
-        booking = Booking(
-            booking_id=f"BKG-{next(self._booking_counter):04d}",
-            user=user,
-            show=show,
-            seat_ids=seat_ids,
-            payment=payment,
-        )
-        self.bookings[booking.booking_id] = booking
-        return booking
+        payment.setStatus(PaymentStatus.SUCCESS);
+        show.confirmSeats(seatIds);
 
+        String bookingId = String.format("BKG-%04d", bookingCounter.getAndIncrement());
+        Booking booking = new Booking(bookingId, user, show, seatIds, payment);
+        bookings.put(booking.getBookingId(), booking);
+        return booking;
+    }
 
-# ---------------------------------------------------------------------------
-# Helper: build a small demo theatre + show
-# ---------------------------------------------------------------------------
+    public Booking book(String user, Show show, List<String> seatIds) {
+        return book(user, show, seatIds, true);
+    }
 
-def build_sample_show() -> Show:
-    seats = (
-        [Seat(f"A{i}", SeatCategory.PREMIUM) for i in range(1, 4)]
-        + [Seat(f"B{i}", SeatCategory.REGULAR) for i in range(1, 6)]
-    )
-    screen = Screen("SCR-1", seats)
-    theatre = Theatre("Cineplex Downtown", [screen])
-    movie = Movie("The LLD Interview", duration_minutes=125)
-    return Show(
-        show_id="SHOW-001",
-        movie=movie,
-        screen=screen,
-        start_time=datetime.now() + timedelta(hours=3),
-    )
+    public Map<String, Booking> getBookings() {
+        return Collections.unmodifiableMap(bookings);
+    }
+}
 
+// ---------------------------------------------------------------------------
+// Demo
+// ---------------------------------------------------------------------------
 
-if __name__ == "__main__":
-    show = build_sample_show()
-    manager = BookingManager()
+public class MovieTicketBookingDemo {
+    public static Show buildSampleShow() {
+        List<Seat> seats = new ArrayList<>();
+        for (int i = 1; i <= 3; i++) {
+            seats.add(new Seat("A" + i, SeatCategory.PREMIUM));
+        }
+        for (int i = 1; i <= 5; i++) {
+            seats.add(new Seat("B" + i, SeatCategory.REGULAR));
+        }
+        Screen screen = new Screen("SCR-1", seats);
+        Theatre theatre = new Theatre("Cineplex Downtown", List.of(screen));
+        Movie movie = new Movie("The LLD Interview", 125);
+        return new Show("SHOW-001", movie, screen, LocalDateTime.now().plusHours(3));
+    }
 
-    print(f"Available seats before booking: {[s.seat_id for s in show.available_seats()]}")
+    public static void main(String[] args) {
+        Show show = buildSampleShow();
+        BookingManager manager = new BookingManager();
 
-    # User A books two premium seats successfully
-    booking_a = manager.book("alice", show, ["A1", "A2"])
-    print(f"\n{booking_a.booking_id}: alice booked {booking_a.seat_ids} "
-          f"for ${booking_a.payment.amount:.2f} ({booking_a.payment.status.name})")
+        System.out.println("Available seats before booking: " +
+            show.availableSeats().stream().map(Seat::seatId).toList());
 
-    # User B tries to book one of the same seats -> must fail, no double booking
-    try:
-        manager.book("bob", show, ["A1", "B1"])
-    except SeatsUnavailableError as e:
-        print(f"\nbob's booking rejected as expected: {e}")
+        // User A books two premium seats successfully
+        Booking bookingA = manager.book("alice", show, List.of("A1", "A2"));
+        System.out.printf("
+%s: alice booked %s for $%.2f (%s)
+",
+            bookingA.getBookingId(), bookingA.getSeatIds(), bookingA.getPayment().getAmount(), bookingA.getPayment().getStatus());
 
-    # User C books different seats, but payment fails -> seats must be released
-    try:
-        manager.book("carol", show, ["B2", "B3"], payment_should_succeed=False)
-    except PaymentFailedError as e:
-        print(f"\ncarol's booking failed as expected: {e}")
+        // User B tries to book one of the same seats -> must fail, no double booking
+        try {
+            manager.book("bob", show, List.of("A1", "B1"));
+        } catch (SeatsUnavailableException e) {
+            System.out.println("
+bob's booking rejected as expected: " + e.getMessage());
+        }
 
-    print(f"\nAvailable seats after all attempts: {[s.seat_id for s in show.available_seats()]}")
+        // User C books different seats, but payment fails -> seats must be released
+        try {
+            manager.book("carol", show, List.of("B2", "B3"), false);
+        } catch (PaymentFailedException e) {
+            System.out.println("
+carol's booking failed as expected: " + e.getMessage());
+        }
 
-    # carol retries and succeeds now that seats were released
-    booking_c = manager.book("carol", show, ["B2", "B3"])
-    print(f"\n{booking_c.booking_id}: carol booked {booking_c.seat_ids} "
-          f"for ${booking_c.payment.amount:.2f} ({booking_c.payment.status.name})")
+        System.out.println("
+Available seats after all attempts: " +
+            show.availableSeats().stream().map(Seat::seatId).toList());
 
-    print(f"\nFinal available seats: {[s.seat_id for s in show.available_seats()]}")
+        // carol retries and succeeds now that seats were released
+        Booking bookingC = manager.book("carol", show, List.of("B2", "B3"));
+        System.out.printf("
+%s: carol booked %s for $%.2f (%s)
+",
+            bookingC.getBookingId(), bookingC.getSeatIds(), bookingC.getPayment().getAmount(), bookingC.getPayment().getStatus());
+
+        System.out.println("
+Final available seats: " +
+            show.availableSeats().stream().map(Seat::seatId).toList());
+    }
+}
 ```
 
 **Expected output:**

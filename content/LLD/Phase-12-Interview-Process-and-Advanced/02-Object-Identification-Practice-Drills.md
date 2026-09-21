@@ -43,60 +43,94 @@ For each drill:
 
 ### Code Skeleton
 
-```python
-from abc import ABC, abstractmethod
-from enum import Enum
+```java
+import java.util.*;
 
+public enum Color {
+    WHITE,
+    BLACK
+}
 
-class Color(Enum):
-    WHITE = "white"
-    BLACK = "black"
+public record Position(int row, int col) {}
 
+public abstract class Piece {
+    private final Color color;
 
-class Piece(ABC):
-    def __init__(self, color: Color):
-        self.color = color
+    public Piece(Color color) {
+        this.color = color;
+    }
 
-    @abstractmethod
-    def get_valid_moves(self, board: "Board", position: tuple[int, int]) -> list[tuple[int, int]]:
-        """Each subclass computes its own legal destination squares."""
-        ...
+    public Color getColor() { return color; }
 
+    /** Each subclass computes its own legal destination squares. */
+    public abstract List<Position> getValidMoves(Board board, Position position);
+}
 
-class Knight(Piece):
-    def get_valid_moves(self, board, position):
-        r, c = position
-        deltas = [(-2, -1), (-2, 1), (2, -1), (2, 1), (-1, -2), (-1, 2), (1, -2), (1, 2)]
-        candidates = [(r + dr, c + dc) for dr, dc in deltas]
-        return [p for p in candidates if board.is_on_board(p) and board.is_landable(p, self.color)]
+public class Knight extends Piece {
+    private static final int[][] DELTAS = {
+        {-2, -1}, {-2, 1}, {2, -1}, {2, 1},
+        {-1, -2}, {-1, 2}, {1, -2}, {1, 2}
+    };
 
+    public Knight(Color color) {
+        super(color);
+    }
 
-class Pawn(Piece):
-    def get_valid_moves(self, board, position):
-        # Direction depends on color; capture vs forward-move logic differs.
-        ...  # omitted for brevity — this is a drill skeleton
+    @Override
+    public List<Position> getValidMoves(Board board, Position position) {
+        List<Position> moves = new ArrayList<>();
+        for (int[] d : DELTAS) {
+            Position next = new Position(position.row() + d[0], position.col() + d[1]);
+            if (board.isOnBoard(next) && board.isLandable(next, getColor())) {
+                moves.add(next);
+            }
+        }
+        return moves;
+    }
+}
 
+public class Pawn extends Piece {
+    public Pawn(Color color) {
+        super(color);
+    }
 
-class Board:
-    def __init__(self):
-        self.grid: dict[tuple[int, int], Piece] = {}  # populated with starting position
+    @Override
+    public List<Position> getValidMoves(Board board, Position position) {
+        // Direction depends on color; capture vs forward-move logic differs.
+        return Collections.emptyList(); // drill skeleton
+    }
+}
 
-    def is_on_board(self, pos) -> bool:
-        r, c = pos
-        return 0 <= r < 8 and 0 <= c < 8
+public class Board {
+    private final Map<Position, Piece> grid = new HashMap<>();
 
-    def is_landable(self, pos, color: Color) -> bool:
-        occupant = self.grid.get(pos)
-        return occupant is None or occupant.color != color
+    public boolean isOnBoard(Position pos) {
+        return pos.row() >= 0 && pos.row() < 8 && pos.col() >= 0 && pos.col() < 8;
+    }
 
-    def move_piece(self, frm, to) -> None:
-        piece = self.grid.pop(frm)
-        self.grid[to] = piece
+    public boolean isLandable(Position pos, Color color) {
+        Piece occupant = grid.get(pos);
+        return occupant == null || occupant.getColor() != color;
+    }
 
+    public void movePiece(Position from, Position to) {
+        Piece piece = grid.remove(from);
+        if (piece != null) {
+            grid.put(to, piece);
+        }
+    }
+}
 
-class Player:
-    def __init__(self, color: Color):
-        self.color = color
+public class Player {
+    private final Color color;
+
+    public Player(Color color) {
+        this.color = color;
+    }
+
+    public Color getColor() { return color; }
+}
+```
 
 
 class Game:
@@ -139,51 +173,78 @@ class Game:
 
 ### Code Skeleton
 
-```python
-import random
+```java
+import java.util.*;
+import java.util.concurrent.ThreadLocalRandom;
 
+public class Dice {
+    public int roll() {
+        return ThreadLocalRandom.current().nextInt(1, 7);
+    }
+}
 
-class Dice:
-    def roll(self) -> int:
-        return random.randint(1, 6)
+public class Board {
+    private final int size;
+    private final Map<Integer, Integer> jumps = new HashMap<>(); // startCell -> endCell, covers snakes AND ladders
 
+    public Board(int size) {
+        this.size = size;
+    }
 
-class Board:
-    def __init__(self, size: int = 100):
-        self.size = size
-        self.jumps: dict[int, int] = {}  # start_cell -> end_cell, covers snakes AND ladders
+    public Board() {
+        this(100);
+    }
 
-    def add_snake(self, head: int, tail: int) -> None:
-        assert head > tail
-        self.jumps[head] = tail
+    public void addSnake(int head, int tail) {
+        if (head <= tail) throw new IllegalArgumentException("Snake head must be greater than tail");
+        jumps.put(head, tail);
+    }
 
-    def add_ladder(self, bottom: int, top: int) -> None:
-        assert top > bottom
-        self.jumps[bottom] = top
+    public void addLadder(int bottom, int top) {
+        if (top <= bottom) throw new IllegalArgumentException("Ladder top must be greater than bottom");
+        jumps.put(bottom, top);
+    }
 
-    def resolve(self, position: int) -> int:
-        return self.jumps.get(position, position)
+    public int resolve(int position) {
+        return jumps.getOrDefault(position, position);
+    }
 
+    public int getSize() { return size; }
+}
 
-class Player:
-    def __init__(self, name: str):
-        self.name = name
-        self.position = 0
+public class Player {
+    private final String name;
+    private int position = 0;
 
+    public Player(String name) {
+        this.name = name;
+    }
 
-class Game:
-    def __init__(self, board: Board, players: list[Player]):
-        self.board = board
-        self.players = players
-        self.dice = Dice()
+    public String getName() { return name; }
+    public int getPosition() { return position; }
+    public void setPosition(int position) { this.position = position; }
+}
 
-    def play_turn(self, player: Player) -> bool:
-        roll = self.dice.roll()
-        new_pos = player.position + roll
-        if new_pos > self.board.size:
-            return False  # overshoot, stay put — no win yet
-        player.position = self.board.resolve(new_pos)
-        return player.position == self.board.size
+public class Game {
+    private final Board board;
+    private final List<Player> players;
+    private final Dice dice = new Dice();
+
+    public Game(Board board, List<Player> players) {
+        this.board = board;
+        this.players = players;
+    }
+
+    public boolean playTurn(Player player) {
+        int roll = dice.roll();
+        int newPos = player.getPosition() + roll;
+        if (newPos > board.getSize()) {
+            return false; // overshoot, stay put — no win yet
+        }
+        player.setPosition(board.resolve(newPos));
+        return player.getPosition() == board.getSize();
+    }
+}
 ```
 
 ---
@@ -196,49 +257,83 @@ Lesson 1 covered the full 7-step build. Here we go one level deeper on two thing
 
 The naive approach re-scans the whole board every move (rows + columns + 2 diagonals = O(n) lines of O(n) each = O(n²) per move). For small boards (3x3) this is completely fine and is what you should default to in an interview — don't over-engineer.
 
-```python
-def check_winner_naive(grid: list[list], size: int, symbol) -> bool:
-    for i in range(size):
-        if all(grid[i][j] == symbol for j in range(size)):      # row i
-            return True
-        if all(grid[j][i] == symbol for j in range(size)):      # column i
-            return True
-    if all(grid[i][i] == symbol for i in range(size)):          # main diagonal
-        return True
-    if all(grid[i][size - 1 - i] == symbol for i in range(size)):  # anti-diagonal
-        return True
-    return False
+```java
+public boolean checkWinnerNaive(Symbol[][] grid, int size, Symbol symbol) {
+    for (int i = 0; i < size; i++) {
+        // row i
+        boolean rowWin = true;
+        for (int j = 0; j < size; j++) {
+            if (grid[i][j] != symbol) { rowWin = false; break; }
+        }
+        if (rowWin) return true;
+
+        // column i
+        boolean colWin = true;
+        for (int j = 0; j < size; j++) {
+            if (grid[j][i] != symbol) { colWin = false; break; }
+        }
+        if (colWin) return true;
+    }
+
+    // main diagonal
+    boolean diagWin = true;
+    for (int i = 0; i < size; i++) {
+        if (grid[i][i] != symbol) { diagWin = false; break; }
+    }
+    if (diagWin) return true;
+
+    // anti-diagonal
+    boolean antiDiagWin = true;
+    for (int i = 0; i < size; i++) {
+        if (grid[i][size - 1 - i] != symbol) { antiDiagWin = false; break; }
+    }
+    return antiDiagWin;
+}
 ```
 
 **If asked to optimize** (common follow-up: "what if the board is 1000x1000 and you need win-detection after every move?"): maintain running counters instead of rescanning.
 
-```python
-class OptimizedWinTracker:
-    """O(1) win check per move by maintaining running tallies,
-    instead of O(n) rescans of the affected row/col/diagonal."""
+```java
+import java.util.*;
 
-    def __init__(self, size: int):
-        self.size = size
-        self.row_count = [{} for _ in range(size)]     # row_count[r][symbol] = count
-        self.col_count = [{} for _ in range(size)]
-        self.diag_count = {}
-        self.anti_diag_count = {}
+/**
+ * O(1) win check per move by maintaining running tallies,
+ * instead of O(n) rescans of the affected row/col/diagonal.
+ */
+public class OptimizedWinTracker {
+    private final int size;
+    private final List<Map<Symbol, Integer>> rowCount;
+    private final List<Map<Symbol, Integer>> colCount;
+    private final Map<Symbol, Integer> diagCount = new HashMap<>();
+    private final Map<Symbol, Integer> antiDiagCount = new HashMap<>();
 
-    def place(self, row: int, col: int, symbol) -> bool:
-        n = self.size
-        self.row_count[row][symbol] = self.row_count[row].get(symbol, 0) + 1
-        self.col_count[col][symbol] = self.col_count[col].get(symbol, 0) + 1
-        if row == col:
-            self.diag_count[symbol] = self.diag_count.get(symbol, 0) + 1
-        if row + col == n - 1:
-            self.anti_diag_count[symbol] = self.anti_diag_count.get(symbol, 0) + 1
+    public OptimizedWinTracker(int size) {
+        this.size = size;
+        this.rowCount = new ArrayList<>(size);
+        this.colCount = new ArrayList<>(size);
+        for (int i = 0; i < size; i++) {
+            rowCount.add(new HashMap<>());
+            colCount.add(new HashMap<>());
+        }
+    }
 
-        return (
-            self.row_count[row][symbol] == n
-            or self.col_count[col][symbol] == n
-            or self.diag_count.get(symbol, 0) == n
-            or self.anti_diag_count.get(symbol, 0) == n
-        )
+    public boolean place(int row, int col, Symbol symbol) {
+        int rVal = rowCount.get(row).merge(symbol, 1, Integer::sum);
+        int cVal = colCount.get(col).merge(symbol, 1, Integer::sum);
+
+        int dVal = 0;
+        if (row == col) {
+            dVal = diagCount.merge(symbol, 1, Integer::sum);
+        }
+
+        int adVal = 0;
+        if (row + col == size - 1) {
+            adVal = antiDiagCount.merge(symbol, 1, Integer::sum);
+        }
+
+        return rVal == size || cVal == size || dVal == size || adVal == size;
+    }
+}
 ```
 
 This turns the win check from O(n) into O(1) per move — a strong answer when the interviewer pushes on scale.
@@ -273,44 +368,63 @@ This drill is intentionally stateless-ish at the class level (no complex State M
 
 ### Code Skeleton
 
-```python
-class Item:
-    def __init__(self, name: str, price: int, stock: int):
-        self.name = name
-        self.price = price
-        self.stock = stock
+```java
+import java.util.Map;
 
+public record Item(String name, int price, int stock) {
+    public Item withDecrementedStock() {
+        return new Item(name, price, stock - 1);
+    }
+}
 
-class OutOfStockError(Exception):
-    pass
+public class OutOfStockException extends RuntimeException {
+    public OutOfStockException(String message) {
+        super(message);
+    }
+}
 
+public class InsufficientPaymentException extends RuntimeException {
+    public InsufficientPaymentException(String message) {
+        super(message);
+    }
+}
 
-class InsufficientPaymentError(Exception):
-    pass
+public class VendingMachine {
+    private final Map<String, Item> inventory;
+    private int balance = 0;
 
+    public VendingMachine(Map<String, Item> inventory) {
+        this.inventory = inventory;
+    }
 
-class VendingMachine:
-    def __init__(self, inventory: dict[str, Item]):
-        self.inventory = inventory
-        self.balance = 0
+    public synchronized void insertCoin(int amount) {
+        this.balance += amount;
+    }
 
-    def insert_coin(self, amount: int) -> None:
-        self.balance += amount
+    public synchronized Item selectItem(String code) {
+        Item item = inventory.get(code);
+        if (item == null) {
+            throw new IllegalArgumentException("Invalid code: " + code);
+        }
+        if (item.stock() <= 0) {
+            throw new OutOfStockException(item.name());
+        }
+        if (balance < item.price()) {
+            throw new InsufficientPaymentException("Need " + (item.price() - balance) + " more");
+        }
+        return item;
+    }
 
-    def select_item(self, code: str) -> Item:
-        item = self.inventory[code]
-        if item.stock <= 0:
-            raise OutOfStockError(item.name)
-        if self.balance < item.price:
-            raise InsufficientPaymentError(f"Need {item.price - self.balance} more")
-        return item
+    public synchronized DispenseResult dispense(String code) {
+        Item item = selectItem(code);
+        inventory.put(code, item.withDecrementedStock());
+        int change = balance - item.price();
+        balance = 0;
+        return new DispenseResult(item, change);
+    }
 
-    def dispense(self, code: str) -> tuple[Item, int]:
-        item = self.select_item(code)
-        item.stock -= 1
-        change = self.balance - item.price
-        self.balance = 0
-        return item, change
+    public record DispenseResult(Item item, int change) {}
+}
 ```
 
 ---
@@ -333,61 +447,80 @@ class VendingMachine:
 
 ### Code Skeleton
 
-```python
-from abc import ABC, abstractmethod
+```java
+import java.util.HashMap;
+import java.util.Map;
 
+public interface Operation {
+    double execute(double a, double b);
+}
 
-class Operation(ABC):
-    @abstractmethod
-    def execute(self, a: float, b: float) -> float:
-        ...
+public class Add implements Operation {
+    @Override
+    public double execute(double a, double b) {
+        return a + b;
+    }
+}
 
+public class Subtract implements Operation {
+    @Override
+    public double execute(double a, double b) {
+        return a - b;
+    }
+}
 
-class Add(Operation):
-    def execute(self, a, b):
-        return a + b
+public class Multiply implements Operation {
+    @Override
+    public double execute(double a, double b) {
+        return a * b;
+    }
+}
 
-
-class Subtract(Operation):
-    def execute(self, a, b):
-        return a - b
-
-
-class Multiply(Operation):
-    def execute(self, a, b):
-        return a * b
-
-
-class Divide(Operation):
-    def execute(self, a, b):
-        if b == 0:
-            raise ZeroDivisionError("Cannot divide by zero")
-        return a / b
-
-
-class Calculator:
-    def __init__(self):
-        self._operations: dict[str, Operation] = {
-            "+": Add(), "-": Subtract(), "*": Multiply(), "/": Divide(),
+public class Divide implements Operation {
+    @Override
+    public double execute(double a, double b) {
+        if (b == 0) {
+            throw new ArithmeticException("Cannot divide by zero");
         }
+        return a / b;
+    }
+}
 
-    def register_operation(self, symbol: str, operation: Operation) -> None:
-        # Extensibility hook: new ops plug in without touching compute().
-        self._operations[symbol] = operation
+public class Calculator {
+    private final Map<String, Operation> operations = new HashMap<>();
 
-    def compute(self, a: float, symbol: str, b: float) -> float:
-        if symbol not in self._operations:
-            raise ValueError(f"Unsupported operation: {symbol}")
-        return self._operations[symbol].execute(a, b)
+    public Calculator() {
+        operations.put("+", new Add());
+        operations.put("-", new Subtract());
+        operations.put("*", new Multiply());
+        operations.put("/", new Divide());
+    }
 
+    /** Extensibility hook: new ops plug in without touching compute(). */
+    public void registerOperation(String symbol, Operation operation) {
+        operations.put(symbol, operation);
+    }
 
-# Extending later requires zero changes above this line:
-class Power(Operation):
-    def execute(self, a, b):
-        return a ** b
+    public double compute(double a, String symbol, double b) {
+        Operation op = operations.get(symbol);
+        if (op == null) {
+            throw new IllegalArgumentException("Unsupported operation: " + symbol);
+        }
+        return op.execute(a, b);
+    }
+}
 
-calc = Calculator()
-calc.register_operation("^", Power())
+// Extending later requires zero changes to the classes above:
+public class Power implements Operation {
+    @Override
+    public double execute(double a, double b) {
+        return Math.pow(a, b);
+    }
+}
+
+// Usage:
+// Calculator calc = new Calculator();
+// calc.registerOperation("^", new Power());
 ```
 
 ---

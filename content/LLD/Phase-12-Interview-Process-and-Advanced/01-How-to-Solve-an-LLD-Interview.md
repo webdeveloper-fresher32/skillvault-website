@@ -159,14 +159,15 @@ This is where many candidates lose points: they get the classes right but stuff 
 
 > Tell an object what to do; don't pull its internal data out and make the decision yourself.
 
-```python
-# Bad — Ask (Game reaches into Board's internals)
-if game.board.grid[r][c] != Symbol.EMPTY:
-    raise InvalidMoveError()
-game.board.grid[r][c] = symbol
+```java
+// Bad — Ask (Game reaches into Board's internals)
+if (game.getBoard().getGrid()[r][c] != Symbol.EMPTY) {
+    throw new InvalidMoveException("Cell already occupied");
+}
+game.getBoard().getGrid()[r][c] = symbol;
 
-# Good — Tell (Game delegates the decision to Board)
-game.board.place_mark(r, c, symbol)   # Board validates internally and raises if invalid
+// Good — Tell (Game delegates the decision to Board)
+game.getBoard().placeMark(r, c, symbol); // Board validates internally and throws if invalid
 ```
 
 ### Quick "Who Owns This?" Table
@@ -282,104 +283,196 @@ Win-checking has multiple independent "lines to check" (rows, columns, diagonals
 
 ### Code
 
-```python
-from enum import Enum
-from typing import Optional
+```java
+import java.util.*;
 
+public enum Symbol {
+    EMPTY(" "),
+    X("X"),
+    O("O");
 
-class Symbol(Enum):
-    EMPTY = " "
-    X = "X"
-    O = "O"
+    private final String value;
+    Symbol(String value) { this.value = value; }
+    public String getValue() { return value; }
+}
 
+public class Move {
+    private final int row;
+    private final int col;
 
-class Player:
-    def __init__(self, name: str, symbol: Symbol):
-        self.name = name
-        self.symbol = symbol
+    public Move(int row, int col) {
+        this.row = row;
+        this.col = col;
+    }
 
-    def get_move(self) -> tuple[int, int]:
-        # Extensibility: an AIPlayer subclass could override this method
-        # to compute a move instead of reading input — Game never changes.
-        raw = input(f"{self.name} ({self.symbol.value}), enter 'row col': ")
-        row, col = map(int, raw.split())
-        return row, col
+    public int getRow() { return row; }
+    public int getCol() { return col; }
+}
 
+public class Player {
+    private final String name;
+    private final Symbol symbol;
+    private final Scanner scanner = new Scanner(System.in);
 
-class InvalidMoveError(Exception):
-    pass
+    public Player(String name, Symbol symbol) {
+        this.name = name;
+        this.symbol = symbol;
+    }
 
+    public Move getMove() {
+        // Extensibility: an AIPlayer subclass could override this method
+        // to compute a move instead of reading input — Game never changes.
+        System.out.print(name + " (" + symbol.getValue() + "), enter 'row col': ");
+        int row = scanner.nextInt();
+        int col = scanner.nextInt();
+        return new Move(row, col);
+    }
 
-class Board:
-    def __init__(self, size: int = 3):
-        # Extensibility: size is parameterized so NxN boards need zero
-        # changes to this class beyond passing a different size.
-        self.size = size
-        self.grid = [[Symbol.EMPTY] * size for _ in range(size)]
+    public String getName() { return name; }
+    public Symbol getSymbol() { return symbol; }
+}
 
-    def place_mark(self, row: int, col: int, symbol: Symbol) -> None:
-        if not (0 <= row < self.size and 0 <= col < self.size):
-            raise InvalidMoveError("Out of bounds")
-        if self.grid[row][col] != Symbol.EMPTY:
-            raise InvalidMoveError("Cell already occupied")
-        self.grid[row][col] = symbol
+public class InvalidMoveException extends RuntimeException {
+    public InvalidMoveException(String message) {
+        super(message);
+    }
+}
 
-    def is_full(self) -> bool:
-        return all(cell != Symbol.EMPTY for row in self.grid for cell in row)
+public class Board {
+    private final int size;
+    private final Symbol[][] grid;
 
-    def _lines(self):
-        """Generate every winnable line: rows, columns, both diagonals.
-        Extensibility: adding a new win-shape means adding one generator
-        here — nothing else in Board or Game changes (Open/Closed)."""
-        n = self.size
-        yield from self.grid                                   # rows
-        yield from (list(col) for col in zip(*self.grid))       # columns
-        yield [self.grid[i][i] for i in range(n)]                # main diagonal
-        yield [self.grid[i][n - 1 - i] for i in range(n)]        # anti-diagonal
+    public Board(int size) {
+        // Extensibility: size is parameterized so NxN boards need zero
+        // changes to this class beyond passing a different size.
+        this.size = size;
+        this.grid = new Symbol[size][size];
+        for (int i = 0; i < size; i++) {
+            Arrays.fill(grid[i], Symbol.EMPTY);
+        }
+    }
 
-    def check_winner(self) -> Optional[Symbol]:
-        for line in self._lines():
-            if line[0] != Symbol.EMPTY and all(cell == line[0] for cell in line):
-                return line[0]
-        return None
+    public Board() {
+        this(3);
+    }
 
-    def display(self) -> None:
-        for row in self.grid:
-            print(" | ".join(cell.value for cell in row))
+    public void placeMark(int row, int col, Symbol symbol) {
+        if (row < 0 || row >= size || col < 0 || col >= size) {
+            throw new InvalidMoveException("Out of bounds");
+        }
+        if (grid[row][col] != Symbol.EMPTY) {
+            throw new InvalidMoveException("Cell already occupied");
+        }
+        grid[row][col] = symbol;
+    }
 
+    public boolean isFull() {
+        for (int r = 0; r < size; r++) {
+            for (int c = 0; c < size; c++) {
+                if (grid[r][c] == Symbol.EMPTY) return false;
+            }
+        }
+        return true;
+    }
 
-class Game:
-    def __init__(self, player1: Player, player2: Player, board_size: int = 3):
-        self.board = Board(board_size)
-        self.players = [player1, player2]
+    private List<List<Symbol>> getLines() {
+        List<List<Symbol>> lines = new ArrayList<>();
+        // Rows
+        for (int r = 0; r < size; r++) {
+            lines.add(Arrays.asList(grid[r]));
+        }
+        // Columns
+        for (int c = 0; c < size; c++) {
+            List<Symbol> col = new ArrayList<>();
+            for (int r = 0; r < size; r++) {
+                col.add(grid[r][c]);
+            }
+            lines.add(col);
+        }
+        // Main diagonal
+        List<Symbol> diag1 = new ArrayList<>();
+        for (int i = 0; i < size; i++) {
+            diag1.add(grid[i][i]);
+        }
+        lines.add(diag1);
+        // Anti-diagonal
+        List<Symbol> diag2 = new ArrayList<>();
+        for (int i = 0; i < size; i++) {
+            diag2.add(grid[i][size - 1 - i]);
+        }
+        lines.add(diag2);
+        return lines;
+    }
 
-    def play(self) -> None:
-        turn = 0
-        while True:
-            current = self.players[turn % 2]
-            self.board.display()
-            row, col = current.get_move()
-            try:
-                self.board.place_mark(row, col, current.symbol)
-            except InvalidMoveError as e:
-                print(f"Invalid move: {e}")
-                continue
+    public Optional<Symbol> checkWinner() {
+        for (List<Symbol> line : getLines()) {
+            Symbol first = line.get(0);
+            if (first != Symbol.EMPTY && line.stream().allMatch(s -> s == first)) {
+                return Optional.of(first);
+            }
+        }
+        return Optional.empty();
+    }
 
-            winner = self.board.check_winner()
-            if winner:
-                self.board.display()
-                print(f"{current.name} wins!")
-                return
-            if self.board.is_full():
-                self.board.display()
-                print("Draw!")
-                return
-            turn += 1
+    public void display() {
+        for (int r = 0; r < size; r++) {
+            List<String> rowSymbols = new ArrayList<>();
+            for (int c = 0; c < size; c++) {
+                rowSymbols.add(grid[r][c].getValue());
+            }
+            System.out.println(String.join(" | ", rowSymbols));
+        }
+    }
 
+    public int getSize() { return size; }
+}
 
-if __name__ == "__main__":
-    game = Game(Player("Alice", Symbol.X), Player("Bob", Symbol.O))
-    game.play()
+public class Game {
+    private final Board board;
+    private final List<Player> players;
+
+    public Game(Player player1, Player player2, int boardSize) {
+        this.board = new Board(boardSize);
+        this.players = List.of(player1, player2);
+    }
+
+    public Game(Player player1, Player player2) {
+        this(player1, player2, 3);
+    }
+
+    public void play() {
+        int turn = 0;
+        while (true) {
+            Player current = players.get(turn % 2);
+            board.display();
+            Move move = current.getMove();
+            try {
+                board.placeMark(move.getRow(), move.getCol(), current.getSymbol());
+            } catch (InvalidMoveException e) {
+                System.out.println("Invalid move: " + e.getMessage());
+                continue;
+            }
+
+            Optional<Symbol> winner = board.checkWinner();
+            if (winner.isPresent()) {
+                board.display();
+                System.out.println(current.getName() + " wins!");
+                return;
+            }
+            if (board.isFull()) {
+                board.display();
+                System.out.println("Draw!");
+                return;
+            }
+            turn++;
+        }
+    }
+
+    public static void main(String[] args) {
+        Game game = new Game(new Player("Alice", Symbol.X), new Player("Bob", Symbol.O));
+        game.play();
+    }
+}
 ```
 
 **Closing remarks to the interviewer** (Step 7, restated at the end): "This generalizes to NxN by just passing a different `size`; adding an AI player only requires subclassing `Player` and overriding `get_move()`; and win conditions are open for extension via `_lines()` without touching `check_winner()`."

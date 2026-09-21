@@ -178,190 +178,298 @@ Playlist     "traversed by"      SongIterator     (same interface, different con
 
 ---
 
-## 8. Python Implementation
+## 8. Java Implementation
 
-```python
-from abc import ABC, abstractmethod
-from collections import deque
-from typing import Deque, Iterable, Iterator, List, Optional
-import uuid
+```java
+import java.util.*;
+import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.stream.Collectors;
 
+public class Artist {
+    private final String artistId;
+    private final String name;
 
-class Artist:
-    def __init__(self, name: str):
-        self.artist_id = str(uuid.uuid4())
-        self.name = name
+    public Artist(String name) {
+        this.artistId = UUID.randomUUID().toString();
+        this.name = name;
+    }
 
+    public String getArtistId() { return artistId; }
+    public String getName() { return name; }
 
-class Song:
-    def __init__(self, title: str, artist: Artist, duration_sec: int):
-        self.song_id = str(uuid.uuid4())
-        self.title = title
-        self.artist = artist
-        self.duration_sec = duration_sec
+    @Override
+    public String toString() {
+        return name;
+    }
+}
 
-    def __repr__(self):
-        return f"{self.title} - {self.artist.name}"
+public class Song {
+    private final String songId;
+    private final String title;
+    private final Artist artist;
+    private final int durationSec;
 
+    public Song(String title, Artist artist, int durationSec) {
+        this.songId = UUID.randomUUID().toString();
+        this.title = title;
+        this.artist = artist;
+        this.durationSec = durationSec;
+    }
 
-class Album:
-    def __init__(self, title: str, artist: Artist, songs: List[Song]):
-        self.title = title
-        self.artist = artist
-        self.songs = songs  # order matters — track list
+    public String getSongId() { return songId; }
+    public String getTitle() { return title; }
+    public Artist getArtist() { return artist; }
+    public int getDurationSec() { return durationSec; }
 
-    def __iter__(self) -> Iterator[Song]:
-        return iter(self.songs)
+    @Override
+    public String toString() {
+        return title + " - " + artist.getName();
+    }
+}
 
+public class Album implements Iterable<Song> {
+    private final String title;
+    private final Artist artist;
+    private final List<Song> songs; // order matters — track list
 
-class Playlist:
-    """References songs; does not own them. Multiple playlists can share a song."""
-    def __init__(self, name: str, owner: "User"):
-        self.name = name
-        self.owner = owner
-        self._songs: List[Song] = []
+    public Album(String title, Artist artist, List<Song> songs) {
+        this.title = title;
+        this.artist = artist;
+        this.songs = new ArrayList<>(songs);
+    }
 
-    def add_song(self, song: Song) -> None:
-        self._songs.append(song)
+    public String getTitle() { return title; }
+    public Artist getArtist() { return artist; }
+    public List<Song> getSongs() { return Collections.unmodifiableList(songs); }
 
-    def remove_song(self, song: Song) -> None:
-        if song in self._songs:
-            self._songs.remove(song)
+    @Override
+    public Iterator<Song> iterator() {
+        return songs.iterator();
+    }
+}
 
-    def __iter__(self) -> Iterator[Song]:
-        return iter(self._songs)
+/** References songs; does not own them. Multiple playlists can share a song. */
+public class Playlist implements Iterable<Song> {
+    private final String name;
+    private final User owner;
+    private final List<Song> songs = new CopyOnWriteArrayList<>();
 
+    public Playlist(String name, User owner) {
+        this.name = name;
+        this.owner = owner;
+    }
 
-class User:
-    def __init__(self, name: str):
-        self.user_id = str(uuid.uuid4())
-        self.name = name
-        self.playlists: List[Playlist] = []
+    public void addSong(Song song) {
+        songs.add(song);
+    }
 
-    def create_playlist(self, name: str) -> Playlist:
-        playlist = Playlist(name, self)
-        self.playlists.append(playlist)
-        return playlist
+    public void removeSong(Song song) {
+        songs.remove(song);
+    }
 
+    public String getName() { return name; }
+    public User getOwner() { return owner; }
+    public List<Song> getSongs() { return Collections.unmodifiableList(songs); }
 
-class PlayQueue:
-    """Transient, session-scoped 'play next' ordering — distinct from a saved Playlist."""
-    def __init__(self):
-        self._songs: Deque[Song] = deque()
+    @Override
+    public Iterator<Song> iterator() {
+        return songs.iterator();
+    }
+}
 
-    def enqueue(self, song: Song) -> None:
-        self._songs.append(song)
+public class User {
+    private final String userId;
+    private final String name;
+    private final List<Playlist> playlists = new CopyOnWriteArrayList<>();
 
-    def enqueue_all(self, songs: Iterable[Song]) -> None:
-        self._songs.extend(songs)
+    public User(String name) {
+        this.userId = UUID.randomUUID().toString();
+        this.name = name;
+    }
 
-    def dequeue(self) -> Optional[Song]:
-        return self._songs.popleft() if self._songs else None
+    public Playlist createPlaylist(String name) {
+        Playlist playlist = new Playlist(name, this);
+        playlists.add(playlist);
+        return playlist;
+    }
 
-    def is_empty(self) -> bool:
-        return len(self._songs) == 0
+    public String getUserId() { return userId; }
+    public String getName() { return name; }
+    public List<Playlist> getPlaylists() { return Collections.unmodifiableList(playlists); }
+}
 
-    def __iter__(self) -> Iterator[Song]:
-        return iter(self._songs)
+/** Transient, session-scoped "play next" ordering — distinct from a saved Playlist. */
+public class PlayQueue implements Iterable<Song> {
+    private final Deque<Song> songs = new ArrayDeque<>();
 
+    public synchronized void enqueue(Song song) {
+        songs.addLast(song);
+    }
 
-# ---- State pattern ----
-class PlayerState(ABC):
-    @abstractmethod
-    def play(self, player: "Player") -> None: ...
-    @abstractmethod
-    def pause(self, player: "Player") -> None: ...
-    @abstractmethod
-    def stop(self, player: "Player") -> None: ...
+    public synchronized void enqueueAll(Iterable<Song> incoming) {
+        for (Song s : incoming) {
+            songs.addLast(s);
+        }
+    }
 
+    public synchronized Optional<Song> dequeue() {
+        return songs.isEmpty() ? Optional.empty() : Optional.of(songs.removeFirst());
+    }
 
-class StoppedState(PlayerState):
-    def play(self, player: "Player") -> None:
-        song = player.queue.dequeue()
-        if song:
-            player.current_song = song
-            player.set_state(PlayingState())
-            print(f"Now playing: {song}")
+    public synchronized boolean isEmpty() {
+        return songs.isEmpty();
+    }
 
-    def pause(self, player: "Player") -> None:
-        pass  # no-op: nothing is playing
+    public synchronized int size() {
+        return songs.size();
+    }
 
-    def stop(self, player: "Player") -> None:
-        pass  # already stopped
+    @Override
+    public synchronized Iterator<Song> iterator() {
+        return new ArrayList<>(songs).iterator();
+    }
+}
 
+// ---- State pattern ----
+public interface PlayerState {
+    void play(Player player);
+    void pause(Player player);
+    void stop(Player player);
+}
 
-class PlayingState(PlayerState):
-    def play(self, player: "Player") -> None:
-        pass  # already playing
+public class StoppedState implements PlayerState {
+    @Override
+    public void play(Player player) {
+        Optional<Song> songOpt = player.getQueue().dequeue();
+        if (songOpt.isPresent()) {
+            Song song = songOpt.get();
+            player.setCurrentSong(song);
+            player.setState(new PlayingState());
+            System.out.println("Now playing: " + song);
+        }
+    }
 
-    def pause(self, player: "Player") -> None:
-        player.set_state(PausedState())
-        print(f"Paused: {player.current_song}")
+    @Override
+    public void pause(Player player) {
+        // no-op: nothing is playing
+    }
 
-    def stop(self, player: "Player") -> None:
-        player.current_song = None
-        player.set_state(StoppedState())
-        print("Stopped")
+    @Override
+    public void stop(Player player) {
+        // already stopped
+    }
+}
 
+public class PlayingState implements PlayerState {
+    @Override
+    public void play(Player player) {
+        // already playing
+    }
 
-class PausedState(PlayerState):
-    def play(self, player: "Player") -> None:
-        player.set_state(PlayingState())
-        print(f"Resumed: {player.current_song}")
+    @Override
+    public void pause(Player player) {
+        player.setState(new PausedState());
+        System.out.println("Paused: " + player.getCurrentSong());
+    }
 
-    def pause(self, player: "Player") -> None:
-        pass  # already paused
+    @Override
+    public void stop(Player player) {
+        player.setCurrentSong(null);
+        player.setState(new StoppedState());
+        System.out.println("Stopped");
+    }
+}
 
-    def stop(self, player: "Player") -> None:
-        player.current_song = None
-        player.set_state(StoppedState())
-        print("Stopped")
+public class PausedState implements PlayerState {
+    @Override
+    public void play(Player player) {
+        player.setState(new PlayingState());
+        System.out.println("Resumed: " + player.getCurrentSong());
+    }
 
+    @Override
+    public void pause(Player player) {
+        // already paused
+    }
 
-class Player:
-    def __init__(self):
-        self.state: PlayerState = StoppedState()
-        self.queue = PlayQueue()
-        self.current_song: Optional[Song] = None
+    @Override
+    public void stop(Player player) {
+        player.setCurrentSong(null);
+        player.setState(new StoppedState());
+        System.out.println("Stopped");
+    }
+}
 
-    def set_state(self, state: PlayerState) -> None:
-        self.state = state
+public class Player {
+    private PlayerState state = new StoppedState();
+    private final PlayQueue queue = new PlayQueue();
+    private Song currentSong;
 
-    def play(self) -> None:
-        self.state.play(self)
+    public synchronized void setState(PlayerState state) {
+        this.state = state;
+    }
 
-    def pause(self) -> None:
-        self.state.pause(self)
+    public synchronized void play() {
+        state.play(this);
+    }
 
-    def stop(self) -> None:
-        self.state.stop(self)
+    public synchronized void pause() {
+        state.pause(this);
+    }
 
-    def next(self) -> None:
-        """Works whether currently playing or paused — always advances the queue."""
-        self.current_song = None
-        self.set_state(StoppedState())
-        self.play()
+    public synchronized void stop() {
+        state.stop(this);
+    }
 
-    def play_collection(self, collection: Iterable[Song]) -> None:
-        """Uniform entry point — works for Playlist, Album, or another PlayQueue
-        because all three implement __iter__ over Song."""
-        self.queue.enqueue_all(collection)
-        self.play()
+    /** Works whether currently playing or paused — always advances the queue. */
+    public synchronized void next() {
+        this.currentSong = null;
+        setState(new StoppedState());
+        play();
+    }
 
+    /**
+     * Uniform entry point — works for Playlist, Album, or another PlayQueue
+     * because all three implement Iterable<Song>.
+     */
+    public synchronized void playCollection(Iterable<Song> collection) {
+        queue.enqueueAll(collection);
+        play();
+    }
 
-class MusicLibrary:
-    def __init__(self):
-        self._songs: List[Song] = []
-        self._albums: List[Album] = []
-        self._artists: List[Artist] = []
+    public PlayerState getState() { return state; }
+    public PlayQueue getQueue() { return queue; }
+    public Song getCurrentSong() { return currentSong; }
+    public void setCurrentSong(Song currentSong) { this.currentSong = currentSong; }
+}
 
-    def add_album(self, album: Album) -> None:
-        self._albums.append(album)
-        self._songs.extend(album.songs)
+public class MusicLibrary {
+    private final List<Song> songs = new CopyOnWriteArrayList<>();
+    private final List<Album> albums = new CopyOnWriteArrayList<>();
+    private final List<Artist> artists = new CopyOnWriteArrayList<>();
 
-    def search(self, query: str) -> List[Song]:
-        q = query.lower()
-        return [s for s in self._songs if q in s.title.lower() or q in s.artist.name.lower()]
+    public void addAlbum(Album album) {
+        albums.add(album);
+        for (Song s : album) {
+            songs.add(s);
+        }
+        if (!artists.contains(album.getArtist())) {
+            artists.add(album.getArtist());
+        }
+    }
+
+    public List<Song> search(String query) {
+        String q = query.toLowerCase();
+        return songs.stream()
+            .filter(s -> s.getTitle().toLowerCase().contains(q) || s.getArtist().getName().toLowerCase().contains(q))
+            .collect(Collectors.toList());
+    }
+
+    public List<Song> getSongs() { return Collections.unmodifiableList(songs); }
+    public List<Album> getAlbums() { return Collections.unmodifiableList(albums); }
+    public List<Artist> getArtists() { return Collections.unmodifiableList(artists); }
+}
 ```
 
 ---

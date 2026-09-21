@@ -131,71 +131,109 @@ User        1 ──── * Message      (a user sends many messages)          
 | `Message` | `mark_delivered()`, `mark_read()` — owns its own status transitions |
 | `Media` | `get_file_url()`, `get_size()` — knows about its own storage details |
 
-```python
-from abc import ABC
-from datetime import datetime
-from enum import Enum, auto
+```java
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
 
+enum MessageStatus {
+    SENT, DELIVERED, READ
+}
 
-class MessageStatus(Enum):
-    SENT = auto()
-    DELIVERED = auto()
-    READ = auto()
+class Media {
+    private final String fileUrl;
+    private final long sizeBytes;
 
+    public Media(String fileUrl, long sizeBytes) {
+        this.fileUrl = fileUrl;
+        this.sizeBytes = sizeBytes;
+    }
 
-class Media:
-    def __init__(self, file_url: str, size_bytes: int):
-        self.file_url = file_url
-        self.size_bytes = size_bytes
+    public String getFileUrl() { return fileUrl; }
+    public long getSizeBytes() { return sizeBytes; }
+}
 
+class Message {
+    private final User sender;
+    private final String text;
+    private final Media media; // aggregation: Media created outside, optionally attached
+    private MessageStatus status;
+    private final Instant timestamp;
 
-class Message:
-    def __init__(self, sender: "User", text: str, media: Media | None = None):
-        self.sender = sender
-        self.text = text
-        self.media = media                      # aggregation: Media created outside, optionally attached
-        self.status = MessageStatus.SENT
-        self.timestamp = datetime.now()
+    public Message(User sender, String text, Media media) {
+        this.sender = Objects.requireNonNull(sender);
+        this.text = text;
+        this.media = media;
+        this.status = MessageStatus.SENT;
+        this.timestamp = Instant.now();
+    }
 
-    def mark_delivered(self) -> None:
-        self.status = MessageStatus.DELIVERED
+    public void markDelivered() { this.status = MessageStatus.DELIVERED; }
+    public void markRead() { this.status = MessageStatus.READ; }
 
-    def mark_read(self) -> None:
-        self.status = MessageStatus.READ
+    public User getSender() { return sender; }
+    public String getText() { return text; }
+    public Media getMedia() { return media; }
+    public MessageStatus getStatus() { return status; }
+    public Instant getTimestamp() { return timestamp; }
+}
 
+class Chat {
+    private final String chatId;
+    protected final List<User> participants;
+    protected final List<Message> messages; // composition: Chat owns its Messages
 
-class Chat:
-    def __init__(self, chat_id: str, participants: list["User"]):
-        self.chat_id = chat_id
-        self.participants = participants
-        self.messages: list[Message] = []       # composition: Chat owns its Messages
+    public Chat(String chatId, List<User> participants) {
+        this.chatId = chatId;
+        this.participants = new ArrayList<>(participants);
+        this.messages = new ArrayList<>();
+    }
 
-    def add_message(self, message: Message) -> None:
-        self.messages.append(message)
+    public void addMessage(Message message) {
+        messages.add(message);
+    }
 
+    public String getChatId() { return chatId; }
+    public List<User> getParticipants() { return List.copyOf(participants); }
+    public List<Message> getMessages() { return List.copyOf(messages); }
+}
 
-class Group(Chat):                               # inheritance: Group IS-A Chat
-    def __init__(self, chat_id: str, participants: list["User"], admin: "User"):
-        super().__init__(chat_id, participants)
-        self.admin = admin
+class Group extends Chat { // inheritance: Group IS-A Chat
+    private final User admin;
 
-    def add_member(self, user: "User") -> None:
-        self.participants.append(user)
+    public Group(String chatId, List<User> participants, User admin) {
+        super(chatId, participants);
+        this.admin = Objects.requireNonNull(admin);
+    }
 
-    def remove_member(self, user: "User") -> None:
-        self.participants.remove(user)
+    public void addMember(User user) { participants.add(user); }
+    public void removeMember(User user) { participants.remove(user); }
+    public User getAdmin() { return admin; }
+}
 
+class User {
+    private final String name;
+    private final String phoneNumber;
+    private boolean isOnline;
 
-class User:
-    def __init__(self, name: str, phone_number: str):
-        self.name = name
-        self.phone_number = phone_number
-        self.is_online = False
+    public User(String name, String phoneNumber) {
+        this.name = name;
+        this.phoneNumber = phoneNumber;
+        this.isOnline = false;
+    }
 
-    def send_message(self, chat: Chat, text: str, media: Media | None = None) -> Message:
-        message = Message(sender=self, text=text, media=media)
-        chat.add_message(message)
-        return message
+    public Message sendMessage(Chat chat, String text, Media media) {
+        Message message = new Message(this, text, media);
+        chat.addMessage(message);
+        return message;
+    }
+
+    public String getName() { return name; }
+    public String getPhoneNumber() { return phoneNumber; }
+    public boolean isOnline() { return isOnline; }
+    public void setOnline(boolean online) { isOnline = online; }
+}
 ```
 
 ---
@@ -280,78 +318,110 @@ Librarian   ────▷  Person; Member ────▷ Person  (both IS-A P
 | `Loan` | `is_overdue()`, `calculate_fine()` — owns the data (dates) needed to compute this |
 | `Library` | `search_by_title()`, `find_available_copy()` — coordinates across the whole catalog |
 
-```python
-from datetime import date, timedelta
+```java
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+import java.time.temporal.ChronoUnit;
 
+class BookCopy {
+    private final String copyId;
+    private boolean available;
 
-class BookTitle:
-    def __init__(self, isbn: str, title: str, author: str):
-        self.isbn = isbn
-        self.title = title
-        self.author = author
-        self.copies: list["BookCopy"] = []      # composition: title owns its copies
+    public BookCopy(String copyId) {
+        this.copyId = copyId;
+        this.available = true;
+    }
 
-    def add_copy(self, copy: "BookCopy") -> None:
-        self.copies.append(copy)
+    public void markCheckedOut() { this.available = false; }
+    public void markAvailable() { this.available = true; }
+    public boolean isAvailable() { return available; }
+    public String getCopyId() { return copyId; }
+}
 
-    def find_available_copy(self) -> "BookCopy | None":
-        return next((c for c in self.copies if c.is_available), None)
+class BookTitle {
+    private final String isbn;
+    private final String title;
+    private final String author;
+    private final List<BookCopy> copies; // composition: title owns its copies
 
+    public BookTitle(String isbn, String title, String author) {
+        this.isbn = isbn;
+        this.title = title;
+        this.author = author;
+        this.copies = new ArrayList<>();
+    }
 
-class BookCopy:
-    def __init__(self, copy_id: str):
-        self.copy_id = copy_id
-        self.is_available = True
+    public void addCopy(BookCopy copy) {
+        copies.add(copy);
+    }
 
-    def mark_checked_out(self) -> None:
-        self.is_available = False
+    public BookCopy findAvailableCopy() {
+        return copies.stream().filter(BookCopy::isAvailable).findFirst().orElse(null);
+    }
 
-    def mark_available(self) -> None:
-        self.is_available = True
+    public String getTitle() { return title; }
+}
 
+record Fine(double amount, boolean isPaid) {}
 
-class Fine:
-    def __init__(self, amount: float):
-        self.amount = amount
-        self.is_paid = False
+class Loan {
+    private final BookCopy copy;
+    private final LocalDate dueDate;
+    private LocalDate returnedDate;
 
+    public Loan(BookCopy copy, LocalDate dueDate) {
+        this.copy = copy;
+        this.dueDate = dueDate;
+    }
 
-class Loan:
-    def __init__(self, copy: BookCopy, due_date: date):
-        self.copy = copy
-        self.due_date = due_date
-        self.returned_date: date | None = None
+    public boolean isOverdue() {
+        LocalDate end = (returnedDate != null) ? returnedDate : LocalDate.now();
+        return end.isAfter(dueDate);
+    }
 
-    def is_overdue(self) -> bool:
-        end = self.returned_date or date.today()
-        return end > self.due_date
+    public Fine calculateFine() {
+        if (!isOverdue()) return null;
+        LocalDate end = (returnedDate != null) ? returnedDate : LocalDate.now();
+        long daysLate = ChronoUnit.DAYS.between(dueDate, end);
+        return new Fine(daysLate * 0.50, false);
+    }
 
-    def calculate_fine(self) -> Fine | None:
-        if not self.is_overdue():
-            return None
-        days_late = ((self.returned_date or date.today()) - self.due_date).days
-        return Fine(amount=days_late * 0.50)
+    public void setReturnedDate(LocalDate returnedDate) {
+        this.returnedDate = returnedDate;
+    }
 
+    public BookCopy getCopy() { return copy; }
+}
 
-class Member:
-    def __init__(self, name: str, member_id: str):
-        self.name = name
-        self.member_id = member_id
-        self.loans: list[Loan] = []
+class Member {
+    private final String name;
+    private final String memberId;
+    private final List<Loan> loans = new ArrayList<>();
 
-    def borrow(self, title: BookTitle) -> Loan:
-        copy = title.find_available_copy()
-        if copy is None:
-            raise ValueError(f"No available copy of {title.title}")
-        copy.mark_checked_out()
-        loan = Loan(copy, due_date=date.today() + timedelta(days=14))
-        self.loans.append(loan)
-        return loan
+    public Member(String name, String memberId) {
+        this.name = name;
+        this.memberId = memberId;
+    }
 
-    def return_copy(self, loan: Loan) -> Fine | None:
-        loan.returned_date = date.today()
-        loan.copy.mark_available()
-        return loan.calculate_fine()
+    public Loan borrow(BookTitle title) {
+        BookCopy copy = title.findAvailableCopy();
+        if (copy == null) {
+            throw new IllegalStateException("No available copy of: " + title.getTitle());
+        }
+        copy.markCheckedOut();
+        Loan loan = new Loan(copy, LocalDate.now().plusDays(14));
+        loans.add(loan);
+        return loan;
+    }
+
+    public Fine returnCopy(Loan loan) {
+        loan.setReturnedDate(LocalDate.now());
+        loan.getCopy().markAvailable();
+        return loan.calculateFine();
+    }
+}
 ```
 
 ---
@@ -425,75 +495,84 @@ Button      ────▷  triggers Request creation (not a stored reference; 
 | `Door` | `open()`, `close()` — owns its own open/closed state |
 | `Controller` | `add_request()`, `step()` (decide next stop) — the only class that needs visibility across all pending requests to make a scheduling decision (Information Expert) |
 
-```python
-from dataclasses import dataclass
-from enum import Enum, auto
+```java
+import java.util.ArrayDeque;
+import java.util.Objects;
+import java.util.Queue;
 
+enum Direction {
+    UP, DOWN, IDLE
+}
 
-class Direction(Enum):
-    UP = auto()
-    DOWN = auto()
-    IDLE = auto()
+class Door {
+    private boolean open;
 
+    public void open() { this.open = true; }
+    public void close() { this.open = false; }
+    public boolean isOpen() { return open; }
+}
 
-class Door:
-    def __init__(self):
-        self.is_open = False
+record ElevatorRequest(int floor, Direction direction) {}
 
-    def open(self) -> None:
-        self.is_open = True
+class Button {
+    private final int floor;
+    private final Direction direction;
 
-    def close(self) -> None:
-        self.is_open = False
+    public Button(int floor, Direction direction) {
+        this.floor = floor;
+        this.direction = direction;
+    }
 
+    public void press(ElevatorController controller) {
+        controller.addRequest(new ElevatorRequest(this.floor, this.direction));
+    }
+}
 
-@dataclass
-class Request:
-    floor: int
-    direction: Direction
+class Elevator {
+    private int currentFloor = 0;
+    private Direction direction = Direction.IDLE;
+    private final int weightLimitKg;
+    private int currentLoadKg = 0;
+    private final Door door = new Door(); // composition: Elevator owns Door
 
+    public Elevator(int weightLimitKg) {
+        this.weightLimitKg = weightLimitKg;
+    }
 
-class Button:
-    def __init__(self, floor: int, direction: Direction):
-        self.floor = floor
-        self.direction = direction
+    public boolean isOverweight(int additionalKg) {
+        return (currentLoadKg + additionalKg) > weightLimitKg;
+    }
 
-    def press(self, controller: "Controller") -> None:
-        controller.add_request(Request(self.floor, self.direction))
+    public void moveTo(int floor) {
+        this.direction = (floor > currentFloor) ? Direction.UP : Direction.DOWN;
+        this.currentFloor = floor;
+        door.open();
+        door.close();
+        this.direction = Direction.IDLE;
+    }
 
+    public int getCurrentFloor() { return currentFloor; }
+}
 
-class Elevator:
-    def __init__(self, weight_limit_kg: int):
-        self.current_floor = 0
-        self.direction = Direction.IDLE
-        self.weight_limit_kg = weight_limit_kg
-        self.current_load_kg = 0
-        self.door = Door()                       # composition: Elevator owns its Door
+class ElevatorController {
+    private final Elevator elevator; // association: drives externally created elevator
+    private final Queue<ElevatorRequest> requests = new ArrayDeque<>(); // aggregation
 
-    def is_overweight(self, additional_kg: int) -> bool:
-        return self.current_load_kg + additional_kg > self.weight_limit_kg
+    public ElevatorController(Elevator elevator) {
+        this.elevator = Objects.requireNonNull(elevator);
+    }
 
-    def move_to(self, floor: int) -> None:
-        self.direction = Direction.UP if floor > self.current_floor else Direction.DOWN
-        self.current_floor = floor
-        self.door.open()
-        self.door.close()
-        self.direction = Direction.IDLE
+    public void addRequest(ElevatorRequest request) {
+        requests.offer(request);
+    }
 
-
-class Controller:
-    def __init__(self, elevator: Elevator):
-        self.elevator = elevator                 # association: drives an externally-created elevator
-        self.requests: list[Request] = []         # aggregation: holds requests created by Buttons
-
-    def add_request(self, request: Request) -> None:
-        self.requests.append(request)
-
-    def step(self) -> None:
-        if not self.requests:
-            return
-        next_request = self.requests.pop(0)       # simplest scheduling: FIFO
-        self.elevator.move_to(next_request.floor)
+    public void step() {
+        ElevatorRequest next = requests.poll(); // FIFO scheduling
+        if (next != null) {
+            elevator.moveTo(next.floor());
+        }
+    }
+}
 ```
 
 ---

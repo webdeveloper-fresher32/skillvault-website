@@ -1,278 +1,360 @@
-# Strategy Pattern — Complete Guide
+# 🧠 The Ultimate Guide to Strategy Pattern (LLD)
 
-## Table of Contents
-1. [The Problem Strategy Solves](#1-the-problem-strategy-solves)
-2. [The Bad Example](#2-the-bad-example)
-3. [The Good Example](#3-the-good-example)
-4. [Real-World Tie-In](#4-real-world-tie-in)
-5. [Complete Runnable Code](#5-complete-runnable-code)
-6. [When to Use / Trade-offs](#6-when-to-use--trade-offs)
-7. [Interview Q&A](#7-interview-qa)
+> **Core Philosophy:** *Encapsulate interchangeable behaviors behind a common contract, allowing behavior to switch dynamically at runtime without modifying existing code.*
 
 ---
 
-## 1. The Problem Strategy Solves
+## 📌 Table of Contents
 
-An e-commerce checkout needs to support many payment methods: Credit Card, UPI, Net Banking, Wallet — and more will be added later (BNPL, crypto). Each method has its own validation and processing logic. If that logic lives inside the `Checkout` class as a giant conditional, the class grows forever and violates Open/Closed.
-
-```
-Without Strategy:
-  Checkout.pay(method, details)
-     if method == "credit_card": ... 40 lines ...
-     elif method == "upi": ... 30 lines ...
-     elif method == "net_banking": ... 35 lines ...
-     elif method == "wallet": ... 20 lines ...
-     # every new payment method touches this method again
-```
-
-**Strategy Pattern**: define a family of algorithms, encapsulate each one in its own class behind a common interface, and make them interchangeable at runtime.
+1. [The Problem: Why Do We Need It?](#1-the-problem-why-do-we-need-it)
+2. [The Core Architecture (The 3 Pillars)](#2-the-core-architecture-the-3-pillars)
+3. [Step-by-Step Implementation (Java)](#3-step-by-step-implementation-java)
+4. [UML Class Diagram &amp; Relationships](#4-uml-class-diagram--relationships)
+5. [Execution Flow &amp; Runtime Polymorphism](#5-execution-flow--runtime-polymorphism)
+6. [Side-by-Side Comparison: Bad Code vs Strategy Pattern](#6-side-by-side-comparison-bad-code-vs-strategy-pattern)
+7. [When to Use &amp; When NOT to Use](#7-when-to-use--when-not-to-use)
+8. [Pros &amp; Cons Trade-off Analysis](#8-pros--cons-trade-off-analysis)
+9. [Real-World Everyday Examples](#9-real-world-everyday-examples)
+10. [The Ultimate Checklist &amp; Mental Formula](#10-the-ultimate-checklist--mental-formula)
 
 ---
 
-## 2. The Bad Example
+## 1. The Problem: Why Do We Need It?
 
-```python
-class Checkout:
-    def pay(self, method: str, amount: float, details: dict) -> bool:
-        if method == "credit_card":
-            print(f"Validating card {details['card_number'][-4:]}")
-            print(f"Charging ${amount} to credit card")
-            return True
-        elif method == "upi":
-            print(f"Validating UPI id {details['upi_id']}")
-            print(f"Charging ${amount} via UPI")
-            return True
-        elif method == "net_banking":
-            print(f"Redirecting to {details['bank']} net banking portal")
-            print(f"Charging ${amount} via net banking")
-            return True
-        elif method == "wallet":
-            print(f"Checking wallet balance for {details['wallet_id']}")
-            print(f"Charging ${amount} from wallet")
-            return True
-        else:
-            raise ValueError(f"Unknown payment method: {method}")
+Imagine designing a checkout system for an e-commerce platform.
+
+### The Scenario
+
+We want to perform **one single action** (`PAY MONEY`), but there are **multiple distinct ways** to do it:
+
+```JavaScript
+                  PAY MONEY (Single Action)
+                             │
+        ┌────────────────────┼────────────────────┐
+        ▼                    ▼                    ▼
+   Credit Card 💳          UPI 📱           Net Banking 🏦
 ```
 
-Problems:
-- Adding "BNPL" means editing `Checkout.pay` again — Open/Closed violated.
-- `Checkout` has to know the internal detail-keys (`card_number`, `upi_id`, `bank`, `wallet_id`) for every method — poor cohesion.
-- Impossible to unit-test one payment method in isolation from the others.
-- No way to swap a strategy at runtime without touching this method's source.
+### The Naive Approach: One Monolithic Service
+
+Putting all payment mechanisms inside a single class using `if-else` or `switch-case` leads to:
+
+* ❌ **Rigid Code:** Adding Apple Pay, PayPal, or Crypto forces modification of existing, battle-tested code.
+* ❌ **Violation of SRP & OCP:** One class manages unrelated business rules (violates Single Responsibility & Open/Closed Principles).
+* ❌ **Testing Nightmare:** Every change requires regression testing on all payment mechanisms.
 
 ---
 
-## 3. The Good Example
+## 2. The Core Architecture (The 3 Pillars)
+
+The Strategy Pattern eliminates conditionals by splitting behavior into three distinct components:
 
 ```
-┌────────────────┐        ┌───────────────────────┐
-│    Checkout    │ ──────▶│  «interface»          │
-│ (context)      │  uses  │  PaymentStrategy       │
-│ - strategy     │        │  + pay(amount) -> bool │
-└────────────────┘        └───────────────────────┘
-                                    ▲
-                    ┌───────────────┼───────────────┬────────────────┐
-                    │               │                │                │
-          ┌─────────────────┐ ┌──────────┐ ┌──────────────────┐ ┌──────────┐
-          │ CreditCardPayment│ │UPIPayment│ │NetBankingPayment │ │WalletPayment│
-          └─────────────────┘ └──────────┘ └──────────────────┘ └──────────┘
-```
-
-`Checkout` holds a reference to a `PaymentStrategy` and delegates. Adding a new payment method means adding a new class — zero changes to `Checkout`.
-
----
-
-## 4. Real-World Tie-In
-
-This is exactly how real checkout systems (Stripe, Razorpay, PayPal SDKs) are structured internally, and how you'd design an e-commerce discount engine too — "Flat Discount", "Percentage Discount", "BuyOneGetOne" are interchangeable `DiscountStrategy` implementations plugged into a `Cart`.
-
----
-
-## 5. Complete Runnable Code
-
-```python
-from abc import ABC, abstractmethod
-from dataclasses import dataclass
-
-
-class PaymentStrategy(ABC):
-    """Common interface every payment method must implement."""
-
-    @abstractmethod
-    def pay(self, amount: float) -> bool:
-        """Process payment of `amount`. Returns True on success."""
-        raise NotImplementedError
-
-
-@dataclass
-class CreditCardPayment(PaymentStrategy):
-    card_number: str
-    cvv: str
-
-    def pay(self, amount: float) -> bool:
-        print(f"[CreditCard] Validating card ending {self.card_number[-4:]}")
-        print(f"[CreditCard] Charging ${amount:.2f}")
-        return True
-
-
-@dataclass
-class UPIPayment(PaymentStrategy):
-    upi_id: str
-
-    def pay(self, amount: float) -> bool:
-        print(f"[UPI] Validating UPI id {self.upi_id}")
-        print(f"[UPI] Charging ${amount:.2f}")
-        return True
-
-
-@dataclass
-class NetBankingPayment(PaymentStrategy):
-    bank_name: str
-
-    def pay(self, amount: float) -> bool:
-        print(f"[NetBanking] Redirecting to {self.bank_name} portal")
-        print(f"[NetBanking] Charging ${amount:.2f}")
-        return True
-
-
-@dataclass
-class WalletPayment(PaymentStrategy):
-    wallet_id: str
-    balance: float
-
-    def pay(self, amount: float) -> bool:
-        if self.balance < amount:
-            print(f"[Wallet] Insufficient balance for wallet {self.wallet_id}")
-            return False
-        self.balance -= amount
-        print(f"[Wallet] Charged ${amount:.2f}, remaining balance ${self.balance:.2f}")
-        return True
-
-
-class Checkout:
-    """Context: holds a strategy and delegates payment to it."""
-
-    def __init__(self, strategy: PaymentStrategy) -> None:
-        self._strategy = strategy
-
-    def set_strategy(self, strategy: PaymentStrategy) -> None:
-        """Swap the strategy at runtime -- e.g. user changes payment method."""
-        self._strategy = strategy
-
-    def checkout(self, amount: float) -> bool:
-        print(f"--- Checking out ${amount:.2f} ---")
-        return self._strategy.pay(amount)
-
-
-if __name__ == "__main__":
-    checkout = Checkout(CreditCardPayment(card_number="4111111111111234", cvv="123"))
-    checkout.checkout(250.0)
-
-    checkout.set_strategy(UPIPayment(upi_id="ganesh@upi"))
-    checkout.checkout(75.5)
-
-    checkout.set_strategy(WalletPayment(wallet_id="W-9001", balance=50.0))
-    checkout.checkout(75.5)  # insufficient balance -> False
-```
-
-Expected output:
-```
---- Checking out $250.00 ---
-[CreditCard] Validating card ending 1234
-[CreditCard] Charging $250.00
---- Checking out $75.50 ---
-[UPI] Validating UPI id ganesh@upi
-[UPI] Charging $75.50
---- Checking out $75.50 ---
-[Wallet] Insufficient balance for wallet W-9001
+   ┌─────────────────────────────────────────────────────────────┐
+   │ 1. Strategy Interface (Contract)                            │
+   │    Defines the signature common to all supported algorithms.│
+   └──────────────────────────────┬──────────────────────────────┘
+                                  │
+                                  ▼
+   ┌─────────────────────────────────────────────────────────────┐
+   │ 2. Concrete Strategies (Implementations)                    │
+   │    Separate classes implementing the interface independently│
+   └──────────────────────────────┬──────────────────────────────┘
+                                  │
+                                  ▼
+   ┌─────────────────────────────────────────────────────────────┐
+   │ 3. Context (Orchestrator)                                   │
+   │    Holds a reference to the strategy interface and executes.│
+   └─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 6. When to Use / Trade-offs
+## 3. Step-by-Step Implementation (Java)
 
-**Use Strategy when:**
-- You have multiple algorithms/behaviors that solve the same problem in different ways (payment methods, discount rules, sorting/compression algorithms, pricing engines).
-- You want to switch behavior at runtime.
-- You want to avoid a long `if/elif`/`switch` ladder that keeps growing.
+### Step 1: Define the Strategy Interface
 
-**Trade-offs:**
-- Adds a class per strategy — can feel like over-engineering for 2 simple, stable variants.
-- Client code must know which concrete strategy to instantiate (often solved by pairing Strategy with a Factory — see Phase 04).
-- If strategies need access to a lot of context state, you either pass many params to `pay()` or store shared state on the context and pass `self` — watch for leaking context internals into the strategy.
+Find what is common across all payment methods. They all make a payment:
 
-| Aspect | Without Strategy | With Strategy |
-|--------|-------------------|----------------|
-| Adding a new algorithm | Edit existing method (Open/Closed violated) | Add a new class (Open/Closed respected) |
-| Testability | Must test through the god method | Test each strategy in isolation |
-| Runtime switching | Awkward / re-enter the conditional | `set_strategy()` in O(1) |
+```java
+public interface PaymentStrategy {
+    void pay(double amount);
+}
+```
 
 ---
 
-## 7. Interview Q&A
+### Step 2: Create Concrete Strategies
 
-**Q: What problem does the Strategy pattern solve?**
-Answer: It eliminates large conditional blocks that select between interchangeable algorithms. Each algorithm is encapsulated in its own class implementing a common interface, and a context object holds a reference to whichever strategy is active, delegating work to it. This satisfies the Open/Closed Principle — new algorithms are added as new classes, not by editing existing code.
+Each payment behavior gets its own encapsulated class:
 
-**Q: How is Strategy different from State pattern? They look identical in code.**
-Answer: Structurally they are nearly identical (context holds an interface reference, concrete classes implement behavior). The difference is intent: Strategy variants are chosen by the *client* and are independent of each other (you pick "pay by UPI" once per checkout); State variants transition *automatically* based on the object's own lifecycle, and each state typically knows which state comes next (an Order in `Placed` state transitions itself to `Shipped`). Strategy = "which algorithm should I use"; State = "what state am I in and how does that change my behavior."
+#### 💳 Credit Card Strategy
 
-**Q: How would you avoid making the client instantiate the wrong concrete strategy directly?**
-Answer: Pair Strategy with a Factory (Simple Factory or Factory Method from Phase 04). The factory takes a string/enum like `"upi"` and returns the correct `PaymentStrategy` instance, so client code never imports concrete strategy classes directly.
-
-**Q: Implement the Strategy pattern from scratch for a discount system with Flat, Percentage, and BOGO (Buy One Get One) discounts applied to a cart total.**
-Answer:
-```python
-from abc import ABC, abstractmethod
-
-
-class DiscountStrategy(ABC):
-    @abstractmethod
-    def apply(self, total: float, item_count: int) -> float:
-        ...
-
-
-class FlatDiscount(DiscountStrategy):
-    def __init__(self, amount: float) -> None:
-        self.amount = amount
-
-    def apply(self, total: float, item_count: int) -> float:
-        return max(0.0, total - self.amount)
-
-
-class PercentageDiscount(DiscountStrategy):
-    def __init__(self, percent: float) -> None:
-        self.percent = percent
-
-    def apply(self, total: float, item_count: int) -> float:
-        return total * (1 - self.percent / 100)
-
-
-class BuyOneGetOneDiscount(DiscountStrategy):
-    def __init__(self, unit_price: float) -> None:
-        self.unit_price = unit_price
-
-    def apply(self, total: float, item_count: int) -> float:
-        free_items = item_count // 2
-        return max(0.0, total - free_items * self.unit_price)
-
-
-class Cart:
-    def __init__(self, total: float, item_count: int, discount: DiscountStrategy) -> None:
-        self.total = total
-        self.item_count = item_count
-        self.discount = discount
-
-    def final_price(self) -> float:
-        return self.discount.apply(self.total, self.item_count)
-
-
-cart = Cart(total=500.0, item_count=4, discount=PercentageDiscount(10))
-print(cart.final_price())  # 450.0
+```java
+public class CreditCardPayment implements PaymentStrategy {
+    @Override
+    public void pay(double amount) {
+        System.out.println("Paid ₹" + amount + " using Credit Card");
+    }
+}
 ```
 
-**Q: Can Strategy be implemented without classes, using plain functions?**
-Answer: Yes — in Python, functions are first-class objects, so a "strategy" can just be a function (or a lambda) with a matching signature stored in a variable or dict: `strategies = {"upi": pay_upi, "wallet": pay_wallet}`. Classes are preferable when the strategy needs to hold state (like `WalletPayment.balance` above) or a multi-method interface; a bare function is enough for simple, stateless, single-method behavior.
+#### 📱 UPI Strategy
 
-**Q: What design principle does Strategy directly demonstrate?**
-Answer: "Favor composition over inheritance" and the Open/Closed Principle. Instead of subclassing `Checkout` for every payment type (inheritance explosion), `Checkout` composes a `PaymentStrategy` object and delegates — behavior is injected, not inherited.
+```java
+public class UPIPayment implements PaymentStrategy {
+    @Override
+    public void pay(double amount) {
+        System.out.println("Paid ₹" + amount + " using UPI");
+    }
+}
+```
+
+#### 🏦 Net Banking Strategy
+
+```java
+public class NetBankingPayment implements PaymentStrategy {
+    @Override
+    public void pay(double amount) {
+        System.out.println("Paid ₹" + amount + " using Net Banking");
+    }
+}
+```
+
+---
+
+### Step 3: Define the Context Class
+
+The Context holds a reference to the abstraction (`PaymentStrategy`), completely decoupled from concrete classes.
+
+```java
+public class PaymentService {
+    private PaymentStrategy paymentStrategy;
+
+    // Inject strategy via constructor (or setter)
+    public PaymentService(PaymentStrategy paymentStrategy) {
+        this.paymentStrategy = paymentStrategy;
+    }
+
+    // Optional setter to switch strategy on the fly
+    public void setPaymentStrategy(PaymentStrategy paymentStrategy) {
+        this.paymentStrategy = paymentStrategy;
+    }
+
+    public void makePayment(double amount) {
+        paymentStrategy.pay(amount);
+    }
+}
+```
+
+> 💡 **Key Insight:** `PaymentService` does not know how UPI, Credit Card, or Net Banking works. It only knows: *"I have a `PaymentStrategy`, and I will invoke its `pay()` contract."*
+
+---
+
+### Step 4: Client Usage & Dynamic Behavior Switching
+
+```java
+public class Main {
+    public static void main(String[] args) {
+        // User selects UPI
+        PaymentStrategy upi = new UPIPayment();
+        PaymentService service = new PaymentService(upi);
+        service.makePayment(1000); // Output: Paid ₹1000 using UPI
+
+        // User switches to Credit Card at runtime
+        PaymentStrategy card = new CreditCardPayment();
+        service.setPaymentStrategy(card);
+        service.makePayment(2500); // Output: Paid ₹2500 using Credit Card
+    }
+}
+```
+
+---
+
+## 4. UML Class Diagram & Relationships
+
+```JavaScript
+                    ┌─────────────────────────┐
+                    │    <<interface>>        │
+                    │   PaymentStrategy       │
+                    ├─────────────────────────┤
+                    │ + pay(amount): void     │
+                    └────────────▲────────────┘
+                                 │
+              ┌──────────────────┼──────────────────┐
+              │                  │                  │
+              │ implements       │ implements       │ implements
+              ▼                  ▼                  ▼
+┌───────────────────┐  ┌───────────────────┐  ┌─────────────────────┐
+│ CreditCardPayment │  │    UPIPayment     │  │ NetBankingPayment   │
+├───────────────────┤  ├───────────────────┤  ├─────────────────────┤
+│ + pay(amount)     │  │ + pay(amount)     │  │ + pay(amount)       │
+└───────────────────┘  └───────────────────┘  └─────────────────────┘
+
+
+                    ┌─────────────────────────┐
+                    │       <<Context>>       │
+                    │     PaymentService      │
+                    ├─────────────────────────┤
+                    │ - strategy              │
+                    │   : PaymentStrategy     │
+                    ├─────────────────────────┤
+                    │ + makePayment(amount)   │
+                    │ + setPaymentStrategy()  │
+                    └────────────┬────────────┘
+                                 │
+                                 │ HAS-A (Composition)
+                                 ▼
+                         PaymentStrategy
+```
+
+### UML Relationships Explained
+
+1. **`implements` (Realization):**
+   `UPIPayment`, `CreditCardPayment`, and `NetBankingPayment` implement `PaymentStrategy`. They guarantee compliance with `pay(double amount)`.
+2. **`HAS-A` (Composition / Aggregation):**
+   `PaymentService` holds a private reference to `PaymentStrategy`. It depends upon abstraction, honoring the **Dependency Inversion Principle (DIP)**.
+
+---
+
+## 5. Execution Flow & Runtime Polymorphism
+
+When `paymentService.makePayment(1000)` is invoked:
+
+```
+CLIENT
+   │
+   │ 1. Instantiates UPIPayment & passes to Context
+   ▼
+PaymentService (Context)
+   │
+   │ 2. Calls paymentStrategy.pay(1000)
+   ▼
+PaymentStrategy (Reference)
+   │
+   │ 3. Resolves at runtime via Dynamic Method Dispatch
+   ▼
+UPIPayment.pay(1000) (Concrete Execution)
+   │
+   ▼
+"Paid ₹1000 using UPI" ✅
+```
+
+### 🤯 The Core Mechanism: Runtime Polymorphism
+
+* Variable type: `PaymentStrategy` (Compile-time contract)
+* Actual Object: `UPIPayment` or `CreditCardPayment` (Runtime entity)
+* Java evaluates the exact instance method at runtime (**Dynamic Dispatch**).
+* **Same method call (`pay()`) → completely different runtime behavior.**
+
+---
+
+## 6. Side-by-Side Comparison: Bad Code vs Strategy Pattern
+
+| Metric                       | ❌ Without Strategy Pattern (Procedural / Monolithic)              | ✅ With Strategy Pattern                                              |
+| :--------------------------- | :----------------------------------------------------------------- | :-------------------------------------------------------------------- |
+| **Code Structure**     | Massive`if-else` or `switch` inside one service class.         | Clean, decoupled classes behind a common interface.                   |
+| **Adding New Feature** | Modifies existing class (`else if (type.equals("PAYPAL"))`).     | Creates one new class (`PayPalPayment implements PaymentStrategy`). |
+| **OCP Adherence**      | ❌ Violates Open/Closed Principle (modifies existing tested code). | ✅ Fully compliant (Open for extension, closed for modification).     |
+| **Unit Testing**       | ❌ Complex; requires mocking and branch coverage testing.          | ✅ Trivial; test each strategy class in total isolation.              |
+| **Merge Conflicts**    | ❌ High; multiple developers edit the same payment file.           | ✅ Low; developers work on independent strategy files.                |
+
+```java
+// ❌ BAD: Fragile, bloated, error-prone
+public void pay(String type, double amount) {
+    if (type.equals("UPI")) {
+        // 50 lines of UPI logic
+    } else if (type.equals("CARD")) {
+        // 50 lines of Card logic
+    } else if (type.equals("NET_BANKING")) {
+        // 50 lines of Bank logic
+    }
+}
+
+// ✅ CLEAN: Open for extension, closed for modification
+public class PayPalPayment implements PaymentStrategy {
+    @Override
+    public void pay(double amount) {
+        System.out.println("Paid using PayPal");
+    }
+}
+// Zero changes to PaymentService, UPIPayment, or CreditCardPayment!
+```
+
+---
+
+## 7. When to Use & When NOT to Use
+
+### ✅ When to USE
+
+1. **Multiple Algorithms for the Same Action:**
+   * Sorting algorithms (`QuickSort`, `MergeSort`, `TimSort`).
+   * Discount strategies (`NormalDiscount`, `FestivalDiscount`, `VipDiscount`).
+2. **Multiple External Providers / Payment Methods:**
+   * Payment gateways, Authentication providers (Google, GitHub, OTP).
+3. **Dynamic Behavior Switching at Runtime:**
+   * Game characters switching attack types (Sword, Gun, Magic).
+   * Navigation routing (Fastest, Shortest, Avoid Tolls, Eco Route).
+4. **Isolating Volatile Logic:**
+   * When algorithms change frequently and need isolation from business services.
+
+### ❌ When NOT to USE
+
+1. **Only One Fixed Implementation:**
+   * If UPI is your only supported method and will remain so, Strategy Pattern is overengineering.
+2. **Different, Non-Interchangeable Behaviors:**
+   * `registerUser()`, `deleteUser()`, `updateUser()` are completely different operations, not interchangeable strategies for the same action.
+3. **Trivial, Static Conditions:**
+   * A single boolean check (`if (isWeekend) discount = 0.1;`) does not warrant an interface, 2 classes, and a context.
+
+---
+
+## 8. Pros & Cons Trade-off Analysis
+
+### 🟢 Advantages
+
+1. **Eliminates Conditional Spaghetti:** Eradicates nested `if-else` and `switch` blocks.
+2. **Open / Closed Principle:** Add new strategies without touching existing code.
+3. **Single Responsibility Principle:** Each strategy encapsulates only its specific algorithm.
+4. **Interchangeable at Runtime:** Behavior can be switched dynamically using setters or dependency injection.
+5. **Independent Testability:** High unit test coverage with minimal mocking.
+
+### 🔴 Disadvantages & Pitfalls
+
+1. **Increased Number of Classes:** Every new behavior introduces a new class file.
+2. **Client Must Select the Strategy:** The client needs to understand which strategy to choose.
+   > 💡 *Industry Best Practice:* Combine **Factory Pattern + Strategy Pattern**. The Factory instantiates the appropriate Strategy based on user input or config, shielding the client.
+   >
+
+---
+
+## 9. Real-World Everyday Examples
+
+| Domain                             | Action               | Strategies                                                           |
+| :--------------------------------- | :------------------- | :------------------------------------------------------------------- |
+| 🚗**Navigation Apps**        | `calculateRoute()` | `FastestRoute`, `ShortestRoute`, `AvoidTolls`, `ScenicRoute` |
+| 📦**Logistics / E-Commerce** | `shipPackage()`    | `AirDelivery`, `RoadDelivery`, `SeaCargo`                      |
+| 🎮**Gaming Engine**          | `attack()`         | `SwordAttack`, `BowAndArrowAttack`, `MagicSpellAttack`         |
+| 📬**Messaging Platform**     | `notify()`         | `EmailNotification`, `SmsNotification`, `PushNotification`     |
+| 🗜️**Compression Tool**     | `compress()`       | `ZipCompression`, `RarCompression`, `GzipCompression`          |
+
+---
+
+## 10. The Ultimate Checklist & Mental Formula
+
+### The Mental Formula
+
+$$
+\text{Interface (Contract)} + \text{Concrete Implementations (Algorithms)} + \text{Context (Has-A Reference)} = \mathbf{Strategy\ Pattern}
+$$
+
+### 6-Point Decision Checklist
+
+* [ ] Do I have **one specific action/goal**?
+* [ ] Are there **multiple ways/algorithms** to achieve it?
+* [ ] Are those behaviors **interchangeable**?
+* [ ] Do they share a **common method signature**?
+* [ ] Do I need to **switch between them at runtime**?
+* [ ] Are **new implementations expected** in the future?
+
+> If you checked **YES** to most points 👉 **Use Strategy Pattern!**

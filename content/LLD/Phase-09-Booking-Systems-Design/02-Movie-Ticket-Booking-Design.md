@@ -172,187 +172,215 @@ Two workable approaches — explain both, pick one, justify it:
 
 ---
 
-## 10. Python Skeleton
+## 10. Java Skeleton
 
-```python
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta
-from enum import Enum, auto
-from threading import Lock
-from typing import Dict, List, Optional
-import uuid
+```java
+import java.time.Duration;
+import java.time.Instant;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantLock;
 
+public enum SeatStatus {
+    AVAILABLE, LOCKED, BOOKED
+}
 
-class SeatStatus(Enum):
-    AVAILABLE = auto()
-    LOCKED = auto()
-    BOOKED = auto()
+public record Seat(String seatId, String row, int number, String category) {}
 
+public class ShowSeat {
+    private final Seat seat;
+    private SeatStatus status = SeatStatus.AVAILABLE;
+    private String lockToken;
+    private Instant lockExpiry;
+    private final ReentrantLock lock = new ReentrantLock();
 
-@dataclass
-class Seat:
-    seat_id: str
-    row: str
-    number: int
-    category: str  # SILVER / GOLD / PREMIUM
+    public ShowSeat(Seat seat) {
+        this.seat = seat;
+    }
 
+    public boolean tryLock(String token, int ttlSeconds) {
+        lock.lock();
+        try {
+            expireIfNeeded();
+            if (status != SeatStatus.AVAILABLE) {
+                return false;
+            }
+            this.status = SeatStatus.LOCKED;
+            this.lockToken = token;
+            this.lockExpiry = Instant.now().plusSeconds(ttlSeconds);
+            return true;
+        } finally {
+            lock.unlock();
+        }
+    }
 
-class ShowSeat:
-    """Per-show booking status of a physical Seat — the unit of concurrency control."""
-    def __init__(self, seat: Seat):
-        self.seat = seat
-        self.status = SeatStatus.AVAILABLE
-        self.lock_token: Optional[str] = None
-        self.lock_expiry: Optional[datetime] = None
-        self._lock = Lock()
+    public boolean confirm(String token) {
+        lock.lock();
+        try {
+            if (status == SeatStatus.LOCKED && Objects.equals(lockToken, token)) {
+                this.status = SeatStatus.BOOKED;
+                this.lockToken = null;
+                this.lockExpiry = null;
+                return true;
+            }
+            return false;
+        } finally {
+            lock.unlock();
+        }
+    }
 
-    def try_lock(self, token: str, ttl_seconds: int) -> bool:
-        with self._lock:
-            self._expire_if_needed()
-            if self.status != SeatStatus.AVAILABLE:
-                return False
-            self.status = SeatStatus.LOCKED
-            self.lock_token = token
-            self.lock_expiry = datetime.now() + timedelta(seconds=ttl_seconds)
-            return True
+    public void release(String token) {
+        lock.lock();
+        try {
+            if (Objects.equals(lockToken, token)) {
+                this.status = SeatStatus.AVAILABLE;
+                this.lockToken = null;
+                this.lockExpiry = null;
+            }
+        } finally {
+            lock.unlock();
+        }
+    }
 
-    def confirm(self, token: str) -> bool:
-        with self._lock:
-            if self.status == SeatStatus.LOCKED and self.lock_token == token:
-                self.status = SeatStatus.BOOKED
-                return True
-            return False
+    private void expireIfNeeded() {
+        if (status == SeatStatus.LOCKED && lockExpiry != null && Instant.now().isAfter(lockExpiry)) {
+            this.status = SeatStatus.AVAILABLE;
+            this.lockToken = null;
+            this.lockExpiry = null;
+        }
+    }
 
-    def release(self, token: str) -> None:
-        with self._lock:
-            if self.lock_token == token:
-                self.status = SeatStatus.AVAILABLE
-                self.lock_token = None
-                self.lock_expiry = None
+    public Seat getSeat() { return seat; }
+    public SeatStatus getStatus() { return status; }
+}
 
-    def _expire_if_needed(self) -> None:
-        if (self.status == SeatStatus.LOCKED and self.lock_expiry
-                and datetime.now() > self.lock_expiry):
-            self.status = SeatStatus.AVAILABLE
-            self.lock_token = None
-            self.lock_expiry = None
+public record Movie(String movieId, String title, int durationMinutes) {}
 
+public record Screen(String screenId, List<Seat> seats) {}
 
-class Show:
-    def __init__(self, show_id: str, movie: "Movie", screen: "Screen", start_time: datetime):
-        self.show_id = show_id
-        self.movie = movie
-        self.screen = screen
-        self.start_time = start_time
-        self.show_seats: Dict[str, ShowSeat] = {
-            seat.seat_id: ShowSeat(seat) for seat in screen.seats
+public record Theatre(String theatreId, String name, List<Screen> screens) {}
+
+public class Show {
+    private final String showId;
+    private final Movie movie;
+    private final Screen screen;
+    private final Instant startTime;
+    private final Map<String, ShowSeat> showSeats = new ConcurrentHashMap<>();
+
+    public Show(String showId, Movie movie, Screen screen, Instant startTime) {
+        this.showId = showId;
+        this.movie = movie;
+        this.screen = screen;
+        this.startTime = startTime;
+        for (Seat seat : screen.seats()) {
+            showSeats.put(seat.seatId(), new ShowSeat(seat));
+        }
+    }
+
+    public List<ShowSeat> getAvailableSeats() {
+        return showSeats.values().stream()
+            .filter(s -> s.getStatus() == SeatStatus.AVAILABLE)
+            .toList();
+    }
+
+    public String getShowId() { return showId; }
+    public Movie getMovie() { return movie; }
+    public Map<String, ShowSeat> getShowSeats() { return showSeats; }
+}
+
+public class SeatLockManager {
+    public static final int DEFAULT_TTL_SECONDS = 600; // 10 minutes
+
+    public String lock(Show show, List<String> seatIds) {
+        String token = UUID.randomUUID().toString();
+        List<ShowSeat> lockedSeats = new ArrayList<>();
+
+        for (String seatId : seatIds) {
+            ShowSeat seat = show.getShowSeats().get(seatId);
+            if (seat != null && seat.tryLock(token, DEFAULT_TTL_SECONDS)) {
+                lockedSeats.add(seat);
+            } else {
+                // All-or-nothing rollback: release any partially locked seats
+                for (ShowSeat s : lockedSeats) {
+                    s.release(token);
+                }
+                return null;
+            }
+        }
+        return token;
+    }
+
+    public boolean confirm(Show show, List<String> seatIds, String token) {
+        return seatIds.stream().allMatch(sid -> {
+            ShowSeat seat = show.getShowSeats().get(sid);
+            return seat != null && seat.confirm(token);
+        });
+    }
+
+    public void release(Show show, List<String> seatIds, String token) {
+        for (String sid : seatIds) {
+            ShowSeat seat = show.getShowSeats().get(sid);
+            if (seat != null) {
+                seat.release(token);
+            }
+        }
+    }
+}
+
+public record User(String userId, String name) {}
+
+public record Payment(double amount, String method, String status) {}
+
+public record Booking(
+    String bookingId,
+    User user,
+    Show show,
+    List<String> seatIds,
+    Payment payment,
+    String status
+) {}
+
+public interface PaymentStrategy {
+    Payment pay(double amount);
+}
+
+public class CreditCardPaymentStrategy implements PaymentStrategy {
+    @Override
+    public Payment pay(double amount) {
+        return new Payment(amount, "CARD", "PAID");
+    }
+}
+
+public class BookingService {
+    private final SeatLockManager lockManager;
+    private final PaymentStrategy paymentStrategy;
+
+    public BookingService(SeatLockManager lockManager, PaymentStrategy paymentStrategy) {
+        this.lockManager = lockManager;
+        this.paymentStrategy = paymentStrategy;
+    }
+
+    public Booking bookSeats(User user, Show show, List<String> seatIds, double pricePerSeat) {
+        String token = lockManager.lock(show, seatIds);
+        if (token == null) {
+            throw new IllegalStateException("One or more seats are no longer available");
         }
 
-    def available_seats(self) -> List[ShowSeat]:
-        return [s for s in self.show_seats.values() if s.status == SeatStatus.AVAILABLE]
-
-
-@dataclass
-class Movie:
-    movie_id: str
-    title: str
-    duration_minutes: int
-
-
-@dataclass
-class Screen:
-    screen_id: str
-    seats: List[Seat]
-
-
-@dataclass
-class Theatre:
-    theatre_id: str
-    name: str
-    screens: List[Screen]
-
-
-class SeatLockManager:
-    """Coordinates all-or-nothing locking across multiple ShowSeats for one request."""
-    DEFAULT_TTL_SECONDS = 600
-
-    def lock(self, show: Show, seat_ids: List[str]) -> Optional[str]:
-        token = str(uuid.uuid4())
-        locked: List[ShowSeat] = []
-        for sid in seat_ids:
-            show_seat = show.show_seats[sid]
-            if show_seat.try_lock(token, self.DEFAULT_TTL_SECONDS):
-                locked.append(show_seat)
-            else:
-                # All-or-nothing: roll back any seats we already locked
-                for s in locked:
-                    s.release(token)
-                return None
-        return token
-
-    def confirm(self, show: Show, seat_ids: List[str], token: str) -> bool:
-        return all(show.show_seats[sid].confirm(token) for sid in seat_ids)
-
-    def release(self, show: Show, seat_ids: List[str], token: str) -> None:
-        for sid in seat_ids:
-            show.show_seats[sid].release(token)
-
-
-@dataclass
-class User:
-    user_id: str
-    name: str
-
-
-@dataclass
-class Payment:
-    amount: float
-    method: str
-    status: str = "PENDING"
-
-
-@dataclass
-class Booking:
-    booking_id: str
-    user: User
-    show: Show
-    seat_ids: List[str]
-    payment: Optional[Payment] = None
-    status: str = "PENDING"
-
-
-class PaymentStrategy:
-    def pay(self, amount: float) -> Payment:
-        raise NotImplementedError
-
-
-class CreditCardPayment(PaymentStrategy):
-    def pay(self, amount: float) -> Payment:
-        return Payment(amount=amount, method="CARD", status="PAID")
-
-
-class BookingService:
-    """Facade orchestrating search -> lock -> pay -> confirm."""
-    def __init__(self, lock_manager: SeatLockManager, payment_strategy: PaymentStrategy):
-        self.lock_manager = lock_manager
-        self.payment_strategy = payment_strategy
-
-    def book_seats(self, user: User, show: Show, seat_ids: List[str], price_per_seat: float) -> Booking:
-        token = self.lock_manager.lock(show, seat_ids)
-        if token is None:
-            raise RuntimeError("One or more seats are no longer available")
-        try:
-            payment = self.payment_strategy.pay(price_per_seat * len(seat_ids))
-            if payment.status != "PAID":
-                raise RuntimeError("Payment failed")
-            self.lock_manager.confirm(show, seat_ids, token)
-            return Booking(
-                booking_id=str(uuid.uuid4()), user=user, show=show,
-                seat_ids=seat_ids, payment=payment, status="CONFIRMED",
-            )
-        except Exception:
-            self.lock_manager.release(show, seat_ids, token)
-            raise
+        try {
+            Payment payment = paymentStrategy.pay(pricePerSeat * seatIds.size());
+            if (!"PAID".equalsIgnoreCase(payment.status())) {
+                throw new IllegalStateException("Payment failed");
+            }
+            lockManager.confirm(show, seatIds, token);
+            return new Booking(
+                UUID.randomUUID().toString(), user, show, seatIds, payment, "CONFIRMED"
+            );
+        } catch (Exception e) {
+            lockManager.release(show, seatIds, token);
+            throw e;
+        }
+    }
+}
 ```
 
 ---

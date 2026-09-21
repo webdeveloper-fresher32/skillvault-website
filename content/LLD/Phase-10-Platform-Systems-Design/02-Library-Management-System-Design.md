@@ -111,34 +111,49 @@ interview mistake — resist it.
 
 ### Strategy — Fine Calculation
 
-```python
-from abc import ABC, abstractmethod
-from datetime import date
+```java
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 
+public interface FineCalculator {
+    double calculate(IssueRecord issueRecord);
+}
 
-class FineCalculator(ABC):
-    @abstractmethod
-    def calculate(self, issue_record: "IssueRecord") -> float: ...
+public class PerDayFineCalculator implements FineCalculator {
+    private final double ratePerDay;
+    private final int graceDays;
 
+    public PerDayFineCalculator(double ratePerDay, int graceDays) {
+        this.ratePerDay = ratePerDay;
+        this.graceDays = graceDays;
+    }
 
-class PerDayFineCalculator(FineCalculator):
-    def __init__(self, rate_per_day: float = 0.50, grace_days: int = 0):
-        self.rate_per_day = rate_per_day
-        self.grace_days = grace_days
+    public PerDayFineCalculator() {
+        this(0.50, 0);
+    }
 
-    def calculate(self, issue_record: "IssueRecord") -> float:
-        days_late = issue_record.days_overdue()
-        billable_days = max(0, days_late - self.grace_days)
-        return round(billable_days * self.rate_per_day, 2)
+    @Override
+    public double calculate(IssueRecord issueRecord) {
+        long daysLate = issueRecord.daysOverdue();
+        long billableDays = Math.max(0, daysLate - graceDays);
+        return Math.round(billableDays * ratePerDay * 100.0) / 100.0;
+    }
+}
 
+public class CappedFineCalculator implements FineCalculator {
+    private final FineCalculator inner;
+    private final double maxFine;
 
-class CappedFineCalculator(FineCalculator):
-    def __init__(self, inner: FineCalculator, max_fine: float):
-        self.inner = inner
-        self.max_fine = max_fine
+    public CappedFineCalculator(FineCalculator inner, double maxFine) {
+        this.inner = inner;
+        this.maxFine = maxFine;
+    }
 
-    def calculate(self, issue_record: "IssueRecord") -> float:
-        return min(self.inner.calculate(issue_record), self.max_fine)
+    @Override
+    public double calculate(IssueRecord issueRecord) {
+        return Math.min(inner.calculate(issueRecord), maxFine);
+    }
+}
 ```
 
 `CappedFineCalculator` wraps another `FineCalculator` — a small Decorator-flavored
@@ -146,81 +161,133 @@ composition that lets you cap *any* underlying policy without editing it.
 
 ### Simple State Modeling — BookItem / IssueRecord
 
-```python
-from enum import Enum, auto
-from datetime import date, timedelta
+```java
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 
+public enum BookItemStatus {
+    AVAILABLE,
+    LOANED,
+    RESERVED,
+    LOST
+}
 
-class BookItemStatus(Enum):
-    AVAILABLE = auto()
-    LOANED = auto()
-    RESERVED = auto()
-    LOST = auto()
+public class BookItem {
+    private final String barcode;
+    private final Book book;
+    private BookItemStatus status;
 
+    public BookItem(String barcode, Book book) {
+        this.barcode = barcode;
+        this.book = book;
+        this.status = BookItemStatus.AVAILABLE;
+    }
 
-class BookItem:
-    def __init__(self, barcode: str, book: "Book"):
-        self.barcode = barcode
-        self.book = book
-        self.status = BookItemStatus.AVAILABLE
+    public synchronized void checkout() {
+        if (this.status != BookItemStatus.AVAILABLE) {
+            throw new IllegalStateException("Item " + barcode + " is not available");
+        }
+        this.status = BookItemStatus.LOANED;
+    }
 
-    def checkout(self) -> None:
-        if self.status != BookItemStatus.AVAILABLE:
-            raise ValueError(f"Item {self.barcode} is not available")
-        self.status = BookItemStatus.LOANED
+    public synchronized void checkIn() {
+        this.status = BookItemStatus.AVAILABLE;
+    }
 
-    def check_in(self) -> None:
-        self.status = BookItemStatus.AVAILABLE
+    public String getBarcode() { return barcode; }
+    public Book getBook() { return book; }
+    public BookItemStatus getStatus() { return status; }
+    public void setStatus(BookItemStatus status) { this.status = status; }
+}
 
+public class IssueRecord {
+    public static final int LOAN_PERIOD_DAYS = 14;
 
-class IssueRecord:
-    LOAN_PERIOD_DAYS = 14
+    private final Member member;
+    private final BookItem item;
+    private final LocalDate issueDate;
+    private final LocalDate dueDate;
+    private LocalDate returnDate;
 
-    def __init__(self, member: "Member", item: BookItem, issue_date: date):
-        self.member = member
-        self.item = item
-        self.issue_date = issue_date
-        self.due_date = issue_date + timedelta(days=self.LOAN_PERIOD_DAYS)
-        self.return_date: date | None = None
+    public IssueRecord(Member member, BookItem item, LocalDate issueDate) {
+        this.member = member;
+        this.item = item;
+        this.issueDate = issueDate;
+        this.dueDate = issueDate.plusDays(LOAN_PERIOD_DAYS);
+    }
 
-    def days_overdue(self, as_of: date | None = None) -> int:
-        reference = self.return_date or as_of or date.today()
-        return max(0, (reference - self.due_date).days)
+    public long daysOverdue() {
+        return daysOverdue(null);
+    }
 
-    def is_overdue(self, as_of: date | None = None) -> bool:
-        return self.days_overdue(as_of) > 0
+    public long daysOverdue(LocalDate asOf) {
+        LocalDate reference = (returnDate != null) ? returnDate : (asOf != null ? asOf : LocalDate.now());
+        long days = ChronoUnit.DAYS.between(dueDate, reference);
+        return Math.max(0, days);
+    }
+
+    public boolean isOverdue(LocalDate asOf) {
+        return daysOverdue(asOf) > 0;
+    }
+
+    public Member getMember() { return member; }
+    public BookItem getItem() { return item; }
+    public LocalDate getIssueDate() { return issueDate; }
+    public LocalDate getDueDate() { return dueDate; }
+    public LocalDate getReturnDate() { return returnDate; }
+    public void setReturnDate(LocalDate returnDate) { this.returnDate = returnDate; }
+}
 ```
 
 ### LibraryService — Orchestration (Facade-flavored)
 
-```python
-class LibraryService:
-    def __init__(self, catalog: "Catalog", fine_calculator: FineCalculator):
-        self.catalog = catalog
-        self.fine_calculator = fine_calculator
-        self._active_loans: dict[str, IssueRecord] = {}   # barcode -> IssueRecord
+```java
+import java.time.LocalDate;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
-    def issue_book(self, member: "Member", item: BookItem) -> IssueRecord:
-        item.checkout()
-        record = IssueRecord(member, item, date.today())
-        self._active_loans[item.barcode] = record
-        member.loans.append(record)
-        return record
+public class LibraryService {
+    private final Catalog catalog;
+    private final FineCalculator fineCalculator;
+    private final Map<String, IssueRecord> activeLoans = new ConcurrentHashMap<>(); // barcode -> IssueRecord
 
-    def return_book(self, item: BookItem) -> float:
-        record = self._active_loans.pop(item.barcode)
-        record.return_date = date.today()
-        item.check_in()
-        fine_amount = self.fine_calculator.calculate(record)
-        if fine_amount > 0:
-            record.member.fines.append(Fine(record, fine_amount))
-        self._promote_next_reservation(item.book)
-        return fine_amount
+    public LibraryService(Catalog catalog, FineCalculator fineCalculator) {
+        this.catalog = catalog;
+        this.fineCalculator = fineCalculator;
+    }
 
-    def _promote_next_reservation(self, book: "Book") -> None:
-        if book.reservation_queue:
-            next_reservation = book.reservation_queue.pop(0)
-            next_reservation.notify_available()
+    public synchronized IssueRecord issueBook(Member member, BookItem item) {
+        item.checkout();
+        IssueRecord record = new IssueRecord(member, item, LocalDate.now());
+        activeLoans.put(item.getBarcode(), record);
+        member.getLoans().add(record);
+        return record;
+    }
+
+    public synchronized double returnBook(BookItem item) {
+        IssueRecord record = activeLoans.remove(item.getBarcode());
+        if (record == null) {
+            throw new IllegalArgumentException("No active loan found for barcode: " + item.getBarcode());
+        }
+        record.setReturnDate(LocalDate.now());
+        item.checkIn();
+        double fineAmount = fineCalculator.calculate(record);
+        if (fineAmount > 0) {
+            record.getMember().getFines().add(new Fine(record, fineAmount));
+        }
+        promoteNextReservation(item.getBook());
+        return fineAmount;
+    }
+
+    private void promoteNextReservation(Book book) {
+        if (!book.getReservationQueue().isEmpty()) {
+            Reservation nextReservation = book.getReservationQueue().poll();
+            if (nextReservation != null) {
+                nextReservation.notifyAvailable();
+            }
+        }
+    }
+}
 ```
 
 ---

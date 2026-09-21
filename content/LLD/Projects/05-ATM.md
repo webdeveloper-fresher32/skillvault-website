@@ -55,295 +55,371 @@
 
 ## 3. Full Implementation
 
-```python
-"""
-ATM — single-file runnable LLD reference implementation (State pattern).
-"""
-
-from __future__ import annotations
-
-from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from enum import Enum, auto
-from typing import Dict, List, Optional
-
-
-# ---------------------------------------------------------------------------
-# Domain entities
-# ---------------------------------------------------------------------------
-
-class BankAccount:
-    def __init__(self, account_id: str, balance: float):
-        self.account_id = account_id
-        self.balance = balance
-
-    def withdraw(self, amount: float) -> None:
-        if amount > self.balance:
-            raise ValueError("Insufficient account balance")
-        self.balance -= amount
-
-    def deposit(self, amount: float) -> None:
-        self.balance += amount
-
-
-@dataclass
-class Card:
-    card_number: str
-    pin: str
-    account: BankAccount
-
-
-class CashDispenser:
-    """Tracks the ATM's physical cash inventory and computes note breakdowns."""
-
-    def __init__(self, denominations: Dict[int, int]):
-        # denominations: {note_value: count}, e.g. {100: 5, 50: 10, 20: 20}
-        self.denominations = dict(denominations)
-
-    def total_cash(self) -> int:
-        return sum(note * count for note, count in self.denominations.items())
-
-    def can_dispense(self, amount: int) -> bool:
-        return self._breakdown(amount) is not None
-
-    def _breakdown(self, amount: int) -> Optional[Dict[int, int]]:
-        remaining = amount
-        plan: Dict[int, int] = {}
-        for note in sorted(self.denominations.keys(), reverse=True):
-            available = self.denominations[note]
-            if available <= 0:
-                continue
-            needed = min(remaining // note, available)
-            if needed > 0:
-                plan[note] = needed
-                remaining -= needed * note
-        return plan if remaining == 0 else None
-
-    def dispense(self, amount: int) -> Dict[int, int]:
-        plan = self._breakdown(amount)
-        if plan is None:
-            raise ValueError("Cannot dispense exact amount with available denominations")
-        for note, count in plan.items():
-            self.denominations[note] -= count
-        return plan
-
-
-class CardReader:
-    """Minimal stand-in for physical card read/eject hardware."""
-
-    def eject(self) -> None:
-        pass  # in real hardware this would trigger the mechanism
-
-
-# ---------------------------------------------------------------------------
-# Transaction record (kept simple for this exercise)
-# ---------------------------------------------------------------------------
-
-class TransactionType(Enum):
-    BALANCE_INQUIRY = auto()
-    WITHDRAWAL = auto()
-    DEPOSIT = auto()
-
-
-@dataclass
-class Transaction:
-    type: TransactionType
-    amount: float = 0.0
-    resulting_balance: float = 0.0
-
-
-# ---------------------------------------------------------------------------
-# State pattern: ATMState hierarchy
-# ---------------------------------------------------------------------------
-
-class ATMState(ABC):
-    """Base state. Default implementations raise — each concrete state
-    overrides only the operations that are legal for it."""
-
-    def __init__(self, atm: "ATM"):
-        self.atm = atm
-
-    def insert_card(self, card: Card) -> None:
-        raise InvalidOperationError(f"Cannot insert card in {self.name} state")
-
-    def enter_pin(self, pin: str) -> None:
-        raise InvalidOperationError(f"Cannot enter PIN in {self.name} state")
-
-    def select_transaction(
-        self, transaction_type: TransactionType, amount: float = 0.0
-    ) -> Optional[Transaction]:
-        raise InvalidOperationError(f"Cannot select transaction in {self.name} state")
-
-    def eject_card(self) -> None:
-        raise InvalidOperationError(f"Cannot eject card in {self.name} state")
-
-    @property
-    def name(self) -> str:
-        return self.__class__.__name__
-
-
-class InvalidOperationError(Exception):
-    pass
-
-
-class IdleState(ATMState):
-    def insert_card(self, card: Card) -> None:
-        self.atm.current_card = card
-        self.atm.pin_attempts = 0
-        self.atm.set_state(HasCardState(self.atm))
-        print("Card inserted. Please enter your PIN.")
-
-
-class HasCardState(ATMState):
-    MAX_PIN_ATTEMPTS = 3
-
-    def enter_pin(self, pin: str) -> None:
-        card = self.atm.current_card
-        assert card is not None
-        if pin == card.pin:
-            self.atm.set_state(AuthenticatedState(self.atm))
-            print("PIN correct. Please select a transaction.")
-        else:
-            self.atm.pin_attempts += 1
-            remaining = self.MAX_PIN_ATTEMPTS - self.atm.pin_attempts
-            if remaining <= 0:
-                print("Too many incorrect attempts. Ejecting card.")
-                self.eject_card()
-            else:
-                print(f"Incorrect PIN. {remaining} attempt(s) remaining.")
-
-    def eject_card(self) -> None:
-        self.atm.current_card = None
-        self.atm.set_state(IdleState(self.atm))
-        print("Card ejected.")
-
-
-class AuthenticatedState(ATMState):
-    def select_transaction(
-        self, transaction_type: TransactionType, amount: float = 0.0
-    ) -> Optional[Transaction]:
-        self.atm.set_state(TransactionState(self.atm))
-        return self.atm.state.select_transaction(transaction_type, amount)
-
-    def eject_card(self) -> None:
-        self.atm.current_card = None
-        self.atm.set_state(IdleState(self.atm))
-        print("Card ejected.")
-
-
-class TransactionState(ATMState):
-    def select_transaction(
-        self, transaction_type: TransactionType, amount: float = 0.0
-    ) -> Optional[Transaction]:
-        card = self.atm.current_card
-        assert card is not None
-        account = card.account
-
-        if transaction_type == TransactionType.BALANCE_INQUIRY:
-            txn = Transaction(TransactionType.BALANCE_INQUIRY, resulting_balance=account.balance)
-            print(f"Current balance: ${account.balance:.2f}")
-
-        elif transaction_type == TransactionType.WITHDRAWAL:
-            amount_int = int(amount)
-            if amount_int > account.balance:
-                print("Transaction declined: insufficient account balance.")
-                self._return_to_authenticated()
-                return None
-            if not self.atm.cash_dispenser.can_dispense(amount_int):
-                print("Transaction declined: ATM cannot dispense this exact amount.")
-                self._return_to_authenticated()
-                return None
-
-            notes = self.atm.cash_dispenser.dispense(amount_int)
-            account.withdraw(amount_int)
-            note_summary = ", ".join(f"{count}x${note}" for note, count in sorted(notes.items(), reverse=True))
-            print(f"Dispensing ${amount_int}: {note_summary}")
-            txn = Transaction(TransactionType.WITHDRAWAL, amount=amount_int, resulting_balance=account.balance)
-
-        elif transaction_type == TransactionType.DEPOSIT:
-            account.deposit(amount)
-            print(f"Deposited ${amount:.2f}. New balance: ${account.balance:.2f}")
-            txn = Transaction(TransactionType.DEPOSIT, amount=amount, resulting_balance=account.balance)
-
-        else:
-            raise ValueError(f"Unknown transaction type: {transaction_type}")
-
-        self._return_to_authenticated()
-        return txn
-
-    def _return_to_authenticated(self) -> None:
-        self.atm.set_state(AuthenticatedState(self.atm))
-
-    def eject_card(self) -> None:
-        # Allow cancelling mid-transaction-selection.
-        self.atm.current_card = None
-        self.atm.set_state(IdleState(self.atm))
-        print("Transaction cancelled. Card ejected.")
-
-
-# ---------------------------------------------------------------------------
-# ATM: the State pattern's context object
-# ---------------------------------------------------------------------------
-
-class ATM:
-    def __init__(self, cash_dispenser: CashDispenser):
-        self.cash_dispenser = cash_dispenser
-        self.card_reader = CardReader()
-        self.current_card: Optional[Card] = None
-        self.pin_attempts = 0
-        self.state: ATMState = IdleState(self)
-
-    def set_state(self, state: ATMState) -> None:
-        self.state = state
-
-    # Delegate every public operation to the current state.
-    def insert_card(self, card: Card) -> None:
-        self.state.insert_card(card)
-
-    def enter_pin(self, pin: str) -> None:
-        self.state.enter_pin(pin)
-
-    def select_transaction(
-        self, transaction_type: TransactionType, amount: float = 0.0
-    ) -> Optional[Transaction]:
-        return self.state.select_transaction(transaction_type, amount)
-
-    def eject_card(self) -> None:
-        self.state.eject_card()
-
-
-if __name__ == "__main__":
-    dispenser = CashDispenser({100: 5, 50: 10, 20: 20, 10: 20})
-    atm = ATM(dispenser)
-
-    account = BankAccount("ACC-001", balance=500.0)
-    card = Card(card_number="4111-XXXX", pin="1234", account=account)
-
-    print("--- Wrong PIN then correct PIN ---")
-    atm.insert_card(card)
-    atm.enter_pin("0000")          # wrong
-    atm.enter_pin("1234")          # correct
-
-    print("\n--- Balance inquiry ---")
-    atm.select_transaction(TransactionType.BALANCE_INQUIRY)
-
-    print("\n--- Withdraw $270 ---")
-    atm.select_transaction(TransactionType.WITHDRAWAL, amount=270)
-
-    print("\n--- Attempt an invalid operation: insert card mid-session ---")
-    try:
-        atm.insert_card(card)
-    except InvalidOperationError as e:
-        print(f"Rejected as expected: {e}")
-
-    print("\n--- Deposit $150 ---")
-    atm.select_transaction(TransactionType.DEPOSIT, amount=150)
-
-    print("\n--- Eject card ---")
-    atm.eject_card()
-
-    print(f"\nFinal account balance: ${account.balance:.2f}")
-    print(f"Remaining cash in ATM: ${dispenser.total_cash()}")
+```java
+/**
+ * ATM — single-file runnable LLD reference implementation (State pattern) in Java.
+ * Run directly with: java ATMDemo.java
+ */
+
+import java.util.*;
+
+// ---------------------------------------------------------------------------
+// Domain entities
+// ---------------------------------------------------------------------------
+
+class BankAccount {
+    private final String accountId;
+    private double balance;
+
+    public BankAccount(String accountId, double balance) {
+        this.accountId = accountId;
+        this.balance = balance;
+    }
+
+    public synchronized void withdraw(double amount) {
+        if (amount > balance) {
+            throw new IllegalArgumentException("Insufficient account balance");
+        }
+        this.balance -= amount;
+    }
+
+    public synchronized void deposit(double amount) {
+        this.balance += amount;
+    }
+
+    public String getAccountId() { return accountId; }
+    public synchronized double getBalance() { return balance; }
+}
+
+record Card(String cardNumber, String pin, BankAccount account) {}
+
+/** Tracks the ATM's physical cash inventory and computes note breakdowns. */
+class CashDispenser {
+    // denominations: {note_value: count}, e.g. {100: 5, 50: 10, 20: 20}
+    private final Map<Integer, Integer> denominations = new TreeMap<>(Comparator.reverseOrder());
+
+    public CashDispenser(Map<Integer, Integer> initialStock) {
+        this.denominations.putAll(initialStock);
+    }
+
+    public synchronized int totalCash() {
+        return denominations.entrySet().stream()
+            .mapToInt(e -> e.getKey() * e.getValue())
+            .sum();
+    }
+
+    public synchronized boolean canDispense(int amount) {
+        return breakdown(amount).isPresent();
+    }
+
+    public synchronized Optional<Map<Integer, Integer>> breakdown(int amount) {
+        int remaining = amount;
+        Map<Integer, Integer> plan = new LinkedHashMap<>();
+        for (Map.Entry<Integer, Integer> entry : denominations.entrySet()) {
+            int note = entry.getKey();
+            int available = entry.getValue();
+            if (available <= 0) continue;
+
+            int needed = Math.min(remaining / note, available);
+            if (needed > 0) {
+                plan.put(note, needed);
+                remaining -= needed * note;
+            }
+        }
+        return remaining == 0 ? Optional.of(plan) : Optional.empty();
+    }
+
+    public synchronized Map<Integer, Integer> dispense(int amount) {
+        Map<Integer, Integer> plan = breakdown(amount)
+            .orElseThrow(() -> new IllegalStateException("Cannot dispense exact amount with available denominations"));
+
+        for (Map.Entry<Integer, Integer> entry : plan.entrySet()) {
+            denominations.put(entry.getKey(), denominations.get(entry.getKey()) - entry.getValue());
+        }
+        return plan;
+    }
+}
+
+class CardReader {
+    public void eject() {
+        // stand-in for hardware eject
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Transaction record
+// ---------------------------------------------------------------------------
+
+enum TransactionType {
+    BALANCE_INQUIRY,
+    WITHDRAWAL,
+    DEPOSIT
+}
+
+record Transaction(TransactionType type, double amount, double resultingBalance) {
+    public Transaction(TransactionType type, double resultingBalance) {
+        this(type, 0.0, resultingBalance);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// State pattern: ATMState hierarchy
+// ---------------------------------------------------------------------------
+
+class InvalidOperationException extends RuntimeException {
+    public InvalidOperationException(String message) {
+        super(message);
+    }
+}
+
+abstract class ATMState {
+    protected final ATM atm;
+
+    public ATMState(ATM atm) {
+        this.atm = atm;
+    }
+
+    public void insertCard(Card card) {
+        throw new InvalidOperationException("Cannot insert card in " + getName() + " state");
+    }
+
+    public void enterPin(String pin) {
+        throw new InvalidOperationException("Cannot enter PIN in " + getName() + " state");
+    }
+
+    public Optional<Transaction> selectTransaction(TransactionType transactionType, double amount) {
+        throw new InvalidOperationException("Cannot select transaction in " + getName() + " state");
+    }
+
+    public void ejectCard() {
+        throw new InvalidOperationException("Cannot eject card in " + getName() + " state");
+    }
+
+    public String getName() {
+        return getClass().getSimpleName();
+    }
+}
+
+class IdleState extends ATMState {
+    public IdleState(ATM atm) { super(atm); }
+
+    @Override
+    public void insertCard(Card card) {
+        atm.setCurrentCard(card);
+        atm.setPinAttempts(0);
+        atm.setState(new HasCardState(atm));
+        System.out.println("Card inserted. Please enter your PIN.");
+    }
+}
+
+class HasCardState extends ATMState {
+    public static final int MAX_PIN_ATTEMPTS = 3;
+
+    public HasCardState(ATM atm) { super(atm); }
+
+    @Override
+    public void enterPin(String pin) {
+        Card card = atm.getCurrentCard();
+        if (card == null) return;
+
+        if (pin.equals(card.pin())) {
+            atm.setState(new AuthenticatedState(atm));
+            System.out.println("PIN correct. Please select a transaction.");
+        } else {
+            atm.setPinAttempts(atm.getPinAttempts() + 1);
+            int remaining = MAX_PIN_ATTEMPTS - atm.getPinAttempts();
+            if (remaining <= 0) {
+                System.out.println("Too many incorrect attempts. Ejecting card.");
+                ejectCard();
+            } else {
+                System.out.println("Incorrect PIN. " + remaining + " attempt(s) remaining.");
+            }
+        }
+    }
+
+    @Override
+    public void ejectCard() {
+        atm.setCurrentCard(null);
+        atm.setState(new IdleState(atm));
+        System.out.println("Card ejected.");
+    }
+}
+
+class AuthenticatedState extends ATMState {
+    public AuthenticatedState(ATM atm) { super(atm); }
+
+    @Override
+    public Optional<Transaction> selectTransaction(TransactionType transactionType, double amount) {
+        atm.setState(new TransactionState(atm));
+        return atm.getState().selectTransaction(transactionType, amount);
+    }
+
+    @Override
+    public void ejectCard() {
+        atm.setCurrentCard(null);
+        atm.setState(new IdleState(atm));
+        System.out.println("Card ejected.");
+    }
+}
+
+class TransactionState extends ATMState {
+    public TransactionState(ATM atm) { super(atm); }
+
+    @Override
+    public Optional<Transaction> selectTransaction(TransactionType transactionType, double amount) {
+        Card card = atm.getCurrentCard();
+        if (card == null) return Optional.empty();
+        BankAccount account = card.account();
+
+        Transaction txn;
+        switch (transactionType) {
+            case BALANCE_INQUIRY -> {
+                txn = new Transaction(TransactionType.BALANCE_INQUIRY, account.getBalance());
+                System.out.printf("Current balance: $%.2f
+", account.getBalance());
+            }
+            case WITHDRAWAL -> {
+                int amountInt = (int) amount;
+                if (amountInt > account.getBalance()) {
+                    System.out.println("Transaction declined: insufficient account balance.");
+                    returnToAuthenticated();
+                    return Optional.empty();
+                }
+                if (!atm.getCashDispenser().canDispense(amountInt)) {
+                    System.out.println("Transaction declined: ATM cannot dispense this exact amount.");
+                    returnToAuthenticated();
+                    return Optional.empty();
+                }
+
+                Map<Integer, Integer> notes = atm.getCashDispenser().dispense(amountInt);
+                account.withdraw(amountInt);
+                List<String> noteSummary = notes.entrySet().stream()
+                    .map(e -> e.getValue() + "x$" + e.getKey())
+                    .toList();
+                System.out.println("Dispensing $" + amountInt + ": " + String.join(", ", noteSummary));
+                txn = new Transaction(TransactionType.WITHDRAWAL, amountInt, account.getBalance());
+            }
+            case DEPOSIT -> {
+                account.deposit(amount);
+                System.out.printf("Deposited $%.2f. New balance: $%.2f
+", amount, account.getBalance());
+                txn = new Transaction(TransactionType.DEPOSIT, amount, account.getBalance());
+            }
+            default -> throw new IllegalArgumentException("Unknown transaction type: " + transactionType);
+        }
+
+        returnToAuthenticated();
+        return Optional.of(txn);
+    }
+
+    private void returnToAuthenticated() {
+        atm.setState(new AuthenticatedState(atm));
+    }
+
+    @Override
+    public void ejectCard() {
+        // Allow cancelling mid-transaction
+        atm.setCurrentCard(null);
+        atm.setState(new IdleState(atm));
+        System.out.println("Transaction cancelled. Card ejected.");
+    }
+}
+
+// ---------------------------------------------------------------------------
+// ATM: Context Object
+// ---------------------------------------------------------------------------
+
+class ATM {
+    private final CashDispenser cashDispenser;
+    private final CardReader cardReader = new CardReader();
+    private Card currentCard;
+    private int pinAttempts = 0;
+    private ATMState state;
+
+    public ATM(CashDispenser cashDispenser) {
+        this.cashDispenser = cashDispenser;
+        this.state = new IdleState(this);
+    }
+
+    public synchronized void setState(ATMState state) {
+        this.state = state;
+    }
+
+    public synchronized void insertCard(Card card) {
+        state.insertCard(card);
+    }
+
+    public synchronized void enterPin(String pin) {
+        state.enterPin(pin);
+    }
+
+    public synchronized Optional<Transaction> selectTransaction(TransactionType type, double amount) {
+        return state.selectTransaction(type, amount);
+    }
+
+    public synchronized Optional<Transaction> selectTransaction(TransactionType type) {
+        return selectTransaction(type, 0.0);
+    }
+
+    public synchronized void ejectCard() {
+        state.ejectCard();
+    }
+
+    public CashDispenser getCashDispenser() { return cashDispenser; }
+    public Card getCurrentCard() { return currentCard; }
+    public void setCurrentCard(Card card) { this.currentCard = card; }
+    public int getPinAttempts() { return pinAttempts; }
+    public void setPinAttempts(int attempts) { this.pinAttempts = attempts; }
+    public ATMState getState() { return state; }
+}
+
+// ---------------------------------------------------------------------------
+// Demo
+// ---------------------------------------------------------------------------
+
+public class ATMDemo {
+    public static void main(String[] args) {
+        CashDispenser dispenser = new CashDispenser(Map.of(100, 5, 50, 10, 20, 20, 10, 20));
+        ATM atm = new ATM(dispenser);
+
+        BankAccount account = new BankAccount("ACC-001", 500.0);
+        Card card = new Card("4111-XXXX", "1234", account);
+
+        System.out.println("--- Wrong PIN then correct PIN ---");
+        atm.insertCard(card);
+        atm.enterPin("0000"); // wrong
+        atm.enterPin("1234"); // correct
+
+        System.out.println("
+--- Balance inquiry ---");
+        atm.selectTransaction(TransactionType.BALANCE_INQUIRY);
+
+        System.out.println("
+--- Withdraw $270 ---");
+        atm.selectTransaction(TransactionType.WITHDRAWAL, 270);
+
+        System.out.println("
+--- Attempt an invalid operation: insert card mid-session ---");
+        try {
+            atm.insertCard(card);
+        } catch (InvalidOperationException e) {
+            System.out.println("Rejected as expected: " + e.getMessage());
+        }
+
+        System.out.println("
+--- Deposit $150 ---");
+        atm.selectTransaction(TransactionType.DEPOSIT, 150);
+
+        System.out.println("
+--- Eject card ---");
+        atm.ejectCard();
+
+        System.out.printf("
+Final account balance: $%.2f
+", account.getBalance());
+        System.out.println("Remaining cash in ATM: $" + dispenser.totalCash());
+    }
+}
 ```
 
 **Expected output:**

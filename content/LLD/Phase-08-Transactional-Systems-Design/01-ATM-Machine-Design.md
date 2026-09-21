@@ -201,223 +201,261 @@ This is the payoff of steps 4–6: the design absorbs new requirements as *addit
 
 ---
 
-## 8. Class Skeletons (Python)
+## 8. Class Skeletons (Java)
 
 > These are **design skeletons** — signatures and the logic that matters for the design conversation, not a full runnable implementation. A complete, tested implementation lives in `LLD/Projects/`.
 
-```python
-from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from enum import Enum
-from uuid import uuid4
+```java
+import java.util.*;
+import java.util.concurrent.locks.ReentrantLock;
 
+// ---------- Domain data ----------
 
-# ---------- Domain data ----------
+public class BankAccount {
+    private final String accountId;
+    private final String ownerName;
+    private double balance;
+    private final String pinHash;
+    private final ReentrantLock accountLock = new ReentrantLock();
 
-@dataclass
-class BankAccount:
-    """A customer's account at the bank. The single source of truth for balance."""
-    account_id: str
-    owner_name: str
-    balance: float
-    pin_hash: str
+    public BankAccount(String accountId, String ownerName, double balance, String pinHash) {
+        this.accountId = accountId;
+        this.ownerName = ownerName;
+        this.balance = balance;
+        this.pinHash = pinHash;
+    }
 
-    def debit(self, amount: float) -> None:
-        """Atomically reduce balance. Raises if funds are insufficient.
-        In production this call is wrapped in a DB transaction / row lock
-        to make it safe under concurrent withdrawals (see Follow-ups).
-        """
-        if amount > self.balance:
-            raise ValueError("Insufficient funds")
-        self.balance -= amount
+    public void debit(double amount) {
+        accountLock.lock();
+        try {
+            if (amount > balance) {
+                throw new IllegalArgumentException("Insufficient funds");
+            }
+            this.balance -= amount;
+        } finally {
+            accountLock.unlock();
+        }
+    }
 
-    def credit(self, amount: float) -> None:
-        """Atomically increase balance (deposit)."""
-        self.balance += amount
+    public void credit(double amount) {
+        accountLock.lock();
+        try {
+            this.balance += amount;
+        } finally {
+            accountLock.unlock();
+        }
+    }
 
+    public String getAccountId() { return accountId; }
+    public String getOwnerName() { return ownerName; }
+    public double getBalance() { return balance; }
+    public String getPinHash() { return pinHash; }
+}
 
-@dataclass
-class Card:
-    """Physical/virtual card linked to one account."""
-    card_number: str
-    account_id: str
+public record Card(String cardNumber, String accountId) {}
 
+public enum TransactionType {
+    WITHDRAW, DEPOSIT, CHECK_BALANCE
+}
 
-class TransactionType(Enum):
-    WITHDRAW = "WITHDRAW"
-    DEPOSIT = "DEPOSIT"
-    CHECK_BALANCE = "CHECK_BALANCE"
+public record Transaction(
+    String id,
+    String accountId,
+    TransactionType type,
+    double amount,
+    String status
+) {
+    public static Transaction of(String accountId, TransactionType type, double amount, String status) {
+        return new Transaction(UUID.randomUUID().toString(), accountId, type, amount, status);
+    }
+}
 
+// ---------- Strategy: transaction types ----------
 
-@dataclass
-class Transaction:
-    """Immutable record of a single transaction attempt."""
-    account_id: str
-    type: TransactionType
-    amount: float
-    status: str = "PENDING"
-    id: str = field(default_factory=lambda: str(uuid4()))
+public interface TransactionStrategy {
+    Transaction execute(BankAccount account, double amount);
+}
 
+public class WithdrawStrategy implements TransactionStrategy {
+    private final CashDispenser dispenser;
 
-# ---------- Strategy: transaction types ----------
+    public WithdrawStrategy(CashDispenser dispenser) {
+        this.dispenser = dispenser;
+    }
 
-class TransactionStrategy(ABC):
-    """Encapsulates the steps to execute one kind of transaction."""
+    @Override
+    public Transaction execute(BankAccount account, double amount) {
+        if (!dispenser.hasSufficientCash(amount)) {
+            throw new IllegalStateException("ATM cannot dispense requested amount");
+        }
+        account.debit(amount);
+        dispenser.dispense(amount);
+        return Transaction.of(account.getAccountId(), TransactionType.WITHDRAW, amount, "SUCCESS");
+    }
+}
 
-    @abstractmethod
-    def execute(self, account: BankAccount, amount: float) -> Transaction:
-        ...
+public class DepositStrategy implements TransactionStrategy {
+    @Override
+    public Transaction execute(BankAccount account, double amount) {
+        account.credit(amount);
+        return Transaction.of(account.getAccountId(), TransactionType.DEPOSIT, amount, "SUCCESS");
+    }
+}
 
+public class CheckBalanceStrategy implements TransactionStrategy {
+    @Override
+    public Transaction execute(BankAccount account, double amount) {
+        return Transaction.of(account.getAccountId(), TransactionType.CHECK_BALANCE, account.getBalance(), "SUCCESS");
+    }
+}
 
-class WithdrawStrategy(TransactionStrategy):
-    def __init__(self, dispenser: "CashDispenser"):
-        self.dispenser = dispenser
+// ---------- Cash dispenser ----------
 
-    def execute(self, account: BankAccount, amount: float) -> Transaction:
-        """Debit first (source of truth), then physically dispense.
-        If dispensing fails after debit, the caller must reverse the debit —
-        this ordering is a key point to call out to the interviewer.
-        """
-        if not self.dispenser.has_sufficient_cash(amount):
-            raise ValueError("ATM cannot dispense requested amount")
-        account.debit(amount)
-        self.dispenser.dispense(amount)
-        return Transaction(account.account_id, TransactionType.WITHDRAW, amount, status="SUCCESS")
+public class CashDispenser {
+    private final Map<Integer, Integer> notes = new HashMap<>();
 
+    public CashDispenser(Map<Integer, Integer> initialNotes) {
+        this.notes.putAll(initialNotes);
+    }
 
-class DepositStrategy(TransactionStrategy):
-    def execute(self, account: BankAccount, amount: float) -> Transaction:
-        account.credit(amount)
-        return Transaction(account.account_id, TransactionType.DEPOSIT, amount, status="SUCCESS")
+    public synchronized boolean hasSufficientCash(double amount) {
+        // Validation across available denominations (100, 50, 20)
+        double total = notes.entrySet().stream()
+            .mapToDouble(e -> e.getKey() * e.getValue()).sum();
+        return total >= amount;
+    }
 
+    public synchronized Map<Integer, Integer> dispense(double amount) {
+        // Greedily break amount into denominations and decrement inventory
+        Map<Integer, Integer> dispensed = new LinkedHashMap<>();
+        int remaining = (int) amount;
+        int[] denoms = {100, 50, 20};
 
-class CheckBalanceStrategy(TransactionStrategy):
-    def execute(self, account: BankAccount, amount: float = 0) -> Transaction:
-        return Transaction(account.account_id, TransactionType.CHECK_BALANCE, account.balance, status="SUCCESS")
+        for (int d : denoms) {
+            int available = notes.getOrDefault(d, 0);
+            int needed = remaining / d;
+            int count = Math.min(needed, available);
+            if (count > 0) {
+                dispensed.put(d, count);
+                notes.put(d, available - count);
+                remaining -= d * count;
+            }
+        }
+        if (remaining > 0) {
+            throw new IllegalStateException("Cannot dispense exact change");
+        }
+        return dispensed;
+    }
+}
 
+// ---------- State pattern: ATM lifecycle ----------
 
-# ---------- Cash dispenser ----------
+public interface ATMState {
+    default void insertCard(ATM atm, Card card) {
+        throw new IllegalStateException("Cannot insert card in current state");
+    }
+    default void enterPin(ATM atm, String pin) {
+        throw new IllegalStateException("Cannot enter PIN in current state");
+    }
+    default void selectTransaction(ATM atm, TransactionStrategy strategy, double amount) {
+        throw new IllegalStateException("Cannot select transaction in current state");
+    }
+    default void ejectCard(ATM atm) {
+        throw new IllegalStateException("No card to eject");
+    }
+}
 
-class CashDispenser:
-    """Owns physical note inventory. Knows nothing about accounts or business rules."""
+public class IdleState implements ATMState {
+    @Override
+    public void insertCard(ATM atm, Card card) {
+        atm.setCurrentCard(card);
+        atm.setState(new HasCardState());
+    }
+}
 
-    def __init__(self, notes: dict[int, int]):
-        # e.g. {100: 20, 50: 10, 20: 50} -> denomination: count
-        self.notes = notes
+public class HasCardState implements ATMState {
+    @Override
+    public void enterPin(ATM atm, String pin) {
+        if (atm.getBankServer().authenticate(atm.getCurrentCard(), pin)) {
+            atm.setState(new AuthenticatedState());
+        } else {
+            atm.registerFailedPinAttempt();
+        }
+    }
 
-    def has_sufficient_cash(self, amount: float) -> bool:
-        """Check total cash AND that amount is representable by available denominations."""
-        ...
+    @Override
+    public void ejectCard(ATM atm) {
+        atm.setCurrentCard(null);
+        atm.setState(new IdleState());
+    }
+}
 
-    def dispense(self, amount: float) -> dict[int, int]:
-        """Greedily break `amount` into denominations and decrement inventory.
-        Returns the note breakdown dispensed.
-        """
-        ...
+public class AuthenticatedState implements ATMState {
+    @Override
+    public void selectTransaction(ATM atm, TransactionStrategy strategy, double amount) {
+        atm.setState(new DispensingState());
+        atm.runTransaction(strategy, amount);
+        atm.setState(new AuthenticatedState());
+    }
 
+    @Override
+    public void ejectCard(ATM atm) {
+        atm.setCurrentCard(null);
+        atm.setState(new IdleState());
+    }
+}
 
-# ---------- State pattern: ATM lifecycle ----------
+public class DispensingState implements ATMState {}
 
-class ATMState(ABC):
-    """Base state. Each concrete state overrides only the actions legal in it;
-    others raise/ignore by default.
-    """
+// ---------- Orchestrator & Server ----------
 
-    def insert_card(self, atm: "ATM", card: Card) -> None:
-        raise InvalidOperationError("Cannot insert card in this state")
+public interface BankServer {
+    boolean authenticate(Card card, String pin);
+    BankAccount getAccount(String accountId);
+}
 
-    def enter_pin(self, atm: "ATM", pin: str) -> None:
-        raise InvalidOperationError("Cannot enter PIN in this state")
+public class ATM {
+    private ATMState state = new IdleState();
+    private final CashDispenser cashDispenser;
+    private final BankServer bankServer;
+    private Card currentCard;
+    private int failedPinAttempts = 0;
+    private final List<Transaction> transactions = new ArrayList<>();
 
-    def select_transaction(self, atm: "ATM", strategy: TransactionStrategy, amount: float) -> None:
-        raise InvalidOperationError("Cannot select transaction in this state")
+    public ATM(CashDispenser dispenser, BankServer bankServer) {
+        this.cashDispenser = dispenser;
+        this.bankServer = bankServer;
+    }
 
-    def eject_card(self, atm: "ATM") -> None:
-        raise InvalidOperationError("No card to eject")
+    public void setState(ATMState state) { this.state = state; }
+    public ATMState getState() { return state; }
+    public void setCurrentCard(Card card) { this.currentCard = card; }
+    public Card getCurrentCard() { return currentCard; }
+    public CashDispenser getCashDispenser() { return cashDispenser; }
+    public BankServer getBankServer() { return bankServer; }
 
+    public void insertCard(Card card) { state.insertCard(this, card); }
+    public void enterPin(String pin) { state.enterPin(this, pin); }
+    public void selectTransaction(TransactionStrategy strategy, double amount) {
+        state.selectTransaction(this, strategy, amount);
+    }
+    public void ejectCard() { state.ejectCard(this); }
 
-class InvalidOperationError(Exception):
-    pass
+    public Transaction runTransaction(TransactionStrategy strategy, double amount) {
+        BankAccount account = bankServer.getAccount(currentCard.accountId());
+        Transaction txn = strategy.execute(account, amount);
+        transactions.add(txn);
+        return txn;
+    }
 
-
-class IdleState(ATMState):
-    def insert_card(self, atm: "ATM", card: Card) -> None:
-        atm.current_card = card
-        atm.set_state(HasCardState())
-
-
-class HasCardState(ATMState):
-    def enter_pin(self, atm: "ATM", pin: str) -> None:
-        if atm.bank_server.authenticate(atm.current_card, pin):
-            atm.set_state(AuthenticatedState())
-        else:
-            atm.register_failed_pin_attempt()  # after 3 -> retain card
-
-    def eject_card(self, atm: "ATM") -> None:
-        atm.current_card = None
-        atm.set_state(IdleState())
-
-
-class AuthenticatedState(ATMState):
-    def select_transaction(self, atm: "ATM", strategy: TransactionStrategy, amount: float) -> None:
-        atm.set_state(DispensingState())
-        atm.run_transaction(strategy, amount)
-        atm.set_state(AuthenticatedState())  # back to menu after completion
-
-    def eject_card(self, atm: "ATM") -> None:
-        atm.current_card = None
-        atm.set_state(IdleState())
-
-
-class DispensingState(ATMState):
-    """Transient state — no user-triggerable actions while mid-dispense."""
-    pass
-
-
-# ---------- Orchestrator ----------
-
-class BankServer(ABC):
-    """Boundary interface to the bank's ledger/auth system (DIP: ATM depends on this, not a concrete bank)."""
-
-    @abstractmethod
-    def authenticate(self, card: Card, pin: str) -> bool: ...
-
-    @abstractmethod
-    def get_account(self, account_id: str) -> BankAccount: ...
-
-
-class ATM:
-    def __init__(self, dispenser: CashDispenser, bank_server: BankServer):
-        self.state: ATMState = IdleState()
-        self.cash_dispenser = dispenser
-        self.bank_server = bank_server
-        self.current_card: Card | None = None
-        self.failed_pin_attempts = 0
-        self.transactions: list[Transaction] = []
-
-    def set_state(self, state: ATMState) -> None:
-        self.state = state
-
-    def insert_card(self, card: Card) -> None:
-        self.state.insert_card(self, card)
-
-    def enter_pin(self, pin: str) -> None:
-        self.state.enter_pin(self, pin)
-
-    def select_transaction(self, strategy: TransactionStrategy, amount: float) -> None:
-        self.state.select_transaction(self, strategy, amount)
-
-    def run_transaction(self, strategy: TransactionStrategy, amount: float) -> Transaction:
-        account = self.bank_server.get_account(self.current_card.account_id)
-        txn = strategy.execute(account, amount)
-        self.transactions.append(txn)
-        return txn
-
-    def register_failed_pin_attempt(self) -> None:
-        self.failed_pin_attempts += 1
-        if self.failed_pin_attempts >= 3:
-            self.current_card = None  # card retained
-            self.set_state(IdleState())
+    public void registerFailedPinAttempt() {
+        failedPinAttempts++;
+        if (failedPinAttempts >= 3) {
+            currentCard = null; // Retain card
+            setState(new IdleState());
+        }
+    }
+}
 ```
 
 ---

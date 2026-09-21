@@ -101,97 +101,134 @@ doing — you can't open the door while moving, and you shouldn't accept a new i
 floor request while the door is open at the wrong floor. Without State, this becomes a
 tangle of boolean flags (`is_moving`, `is_door_open`, ...) and nested `if`s.
 
-```python
-from abc import ABC, abstractmethod
-from enum import Enum, auto
+```java
+import java.util.*;
+import java.util.concurrent.ConcurrentSkipListSet;
 
+public enum Direction {
+    UP,
+    DOWN,
+    IDLE
+}
 
-class Direction(Enum):
-    UP = auto()
-    DOWN = auto()
-    IDLE = auto()
+public interface ElevatorState {
+    void step(Elevator elevator);
+    void addRequest(Elevator elevator, int floor);
+}
 
+public class IdleState implements ElevatorState {
+    @Override
+    public void step(Elevator elevator) {
+        // Nothing to do until a request arrives
+    }
 
-class ElevatorState(ABC):
-    @abstractmethod
-    def step(self, elevator: "Elevator") -> None: ...
+    @Override
+    public void addRequest(Elevator elevator, int floor) {
+        elevator.getStopQueue().add(floor);
+        if (floor != elevator.getCurrentFloor()) {
+            elevator.setDirection(floor > elevator.getCurrentFloor() ? Direction.UP : Direction.DOWN);
+            elevator.setState(new MovingState());
+        } else {
+            elevator.setState(new DoorOpenState());
+        }
+    }
+}
 
-    @abstractmethod
-    def add_request(self, elevator: "Elevator", floor: int) -> None: ...
+public class MovingState implements ElevatorState {
+    @Override
+    public void step(Elevator elevator) {
+        int nextFloor = elevator.getCurrentFloor() + (elevator.getDirection() == Direction.UP ? 1 : -1);
+        elevator.setCurrentFloor(nextFloor);
+        if (elevator.getStopQueue().contains(nextFloor)) {
+            elevator.setState(new DoorOpenState());
+        }
+    }
 
+    @Override
+    public void addRequest(Elevator elevator, int floor) {
+        elevator.getStopQueue().add(floor); // just enqueue; scheduling decides execution
+    }
+}
 
-class IdleState(ElevatorState):
-    def step(self, elevator: "Elevator") -> None:
-        pass  # nothing to do until a request arrives
+public class DoorOpenState implements ElevatorState {
+    @Override
+    public void step(Elevator elevator) {
+        elevator.getStopQueue().remove(elevator.getCurrentFloor());
+        elevator.getDoor().close();
+        if (!elevator.getStopQueue().isEmpty()) {
+            int current = elevator.getCurrentFloor();
+            int nextFloor = elevator.getStopQueue().stream()
+                .min(Comparator.comparingInt(f -> Math.abs(f - current)))
+                .orElse(current);
+            elevator.setDirection(nextFloor > current ? Direction.UP : Direction.DOWN);
+            elevator.setState(new MovingState());
+        } else {
+            elevator.setDirection(Direction.IDLE);
+            elevator.setState(new IdleState());
+        }
+    }
 
-    def add_request(self, elevator: "Elevator", floor: int) -> None:
-        elevator.stop_queue.add(floor)
-        if floor != elevator.current_floor:
-            elevator.direction = Direction.UP if floor > elevator.current_floor else Direction.DOWN
-            elevator.set_state(MovingState())
-        else:
-            elevator.set_state(DoorOpenState())
+    @Override
+    public void addRequest(Elevator elevator, int floor) {
+        elevator.getStopQueue().add(floor);
+    }
+}
 
+public class Door {
+    private boolean isOpen = false;
 
-class MovingState(ElevatorState):
-    def step(self, elevator: "Elevator") -> None:
-        elevator.current_floor += 1 if elevator.direction == Direction.UP else -1
-        if elevator.current_floor in elevator.stop_queue:
-            elevator.set_state(DoorOpenState())
+    public void open() {
+        this.isOpen = true;
+    }
 
-    def add_request(self, elevator: "Elevator", floor: int) -> None:
-        elevator.stop_queue.add(floor)   # just enqueue; scheduling decides insertion order
+    public void close() {
+        this.isOpen = false;
+    }
 
+    public boolean isOpen() {
+        return isOpen;
+    }
+}
 
-class DoorOpenState(ElevatorState):
-    def step(self, elevator: "Elevator") -> None:
-        elevator.stop_queue.discard(elevator.current_floor)
-        elevator.door.close()
-        if elevator.stop_queue:
-            next_floor = min(
-                elevator.stop_queue,
-                key=lambda f: abs(f - elevator.current_floor),
-            )
-            elevator.direction = Direction.UP if next_floor > elevator.current_floor else Direction.DOWN
-            elevator.set_state(MovingState())
-        else:
-            elevator.direction = Direction.IDLE
-            elevator.set_state(IdleState())
+public class Elevator {
+    private final String id;
+    private final int totalFloors;
+    private int currentFloor = 0;
+    private Direction direction = Direction.IDLE;
+    private final Door door = new Door();
+    private final Set<Integer> stopQueue = new TreeSet<>();
+    private ElevatorState state = new IdleState();
 
-    def add_request(self, elevator: "Elevator", floor: int) -> None:
-        elevator.stop_queue.add(floor)
+    public Elevator(String id, int totalFloors) {
+        this.id = id;
+        this.totalFloors = totalFloors;
+    }
 
+    public synchronized void setState(ElevatorState state) {
+        this.state = state;
+        if (state instanceof DoorOpenState) {
+            this.door.open();
+        }
+    }
 
-class Elevator:
-    def __init__(self, elevator_id: str, total_floors: int):
-        self.id = elevator_id
-        self.current_floor = 0
-        self.direction = Direction.IDLE
-        self.door = Door()
-        self.stop_queue: set[int] = set()
-        self._state: ElevatorState = IdleState()
+    public synchronized void addRequest(int floor) {
+        state.addRequest(this, floor);
+    }
 
-    def set_state(self, state: ElevatorState) -> None:
-        self._state = state
-        if isinstance(state, DoorOpenState):
-            self.door.open()
+    public synchronized void step() {
+        state.step(this);
+    }
 
-    def add_request(self, floor: int) -> None:
-        self._state.add_request(self, floor)
-
-    def step(self) -> None:
-        self._state.step(self)
-
-
-class Door:
-    def __init__(self):
-        self.is_open = False
-
-    def open(self) -> None:
-        self.is_open = True
-
-    def close(self) -> None:
-        self.is_open = False
+    public String getId() { return id; }
+    public int getTotalFloors() { return totalFloors; }
+    public int getCurrentFloor() { return currentFloor; }
+    public void setCurrentFloor(int floor) { this.currentFloor = floor; }
+    public Direction getDirection() { return direction; }
+    public void setDirection(Direction direction) { this.direction = direction; }
+    public Door getDoor() { return door; }
+    public Set<Integer> getStopQueue() { return stopQueue; }
+    public ElevatorState getState() { return state; }
+}
 ```
 
 ### Strategy — Scheduling Algorithm
@@ -200,64 +237,105 @@ class Door:
 request is a genuinely swappable policy question — naive FCFS is simple but wasteful; a
 SCAN/LOOK-informed choice reduces total wait time.
 
-```python
-class SchedulingStrategy(ABC):
-    @abstractmethod
-    def select_elevator(self, request: "Request", elevators: list[Elevator]) -> Elevator: ...
+```java
+import java.util.*;
 
+public record Request(int floor, Direction direction) {}
 
-class FCFSSchedulingStrategy(SchedulingStrategy):
-    """Naive: always assign to whichever elevator is currently idle first,
-    or the first elevator found if none are idle. Simple but ignores distance
-    entirely, so it can send a far, busy elevator while a near, idle one exists."""
+public interface SchedulingStrategy {
+    Elevator selectElevator(Request request, List<Elevator> elevators);
+}
 
-    def select_elevator(self, request, elevators):
-        for elevator in elevators:
-            if elevator.direction == Direction.IDLE:
-                return elevator
-        return elevators[0]
+/**
+ * Naive: always assign to whichever elevator is currently idle first,
+ * or the first elevator found if none are idle. Simple but ignores distance
+ * entirely, so it can send a far, busy elevator while a near, idle one exists.
+ */
+public class FCFSSchedulingStrategy implements SchedulingStrategy {
+    @Override
+    public Elevator selectElevator(Request request, List<Elevator> elevators) {
+        if (elevators == null || elevators.isEmpty()) {
+            throw new IllegalArgumentException("Elevator list cannot be empty");
+        }
+        for (Elevator elevator : elevators) {
+            if (elevator.getDirection() == Direction.IDLE) {
+                return elevator;
+            }
+        }
+        return elevators.get(0);
+    }
+}
 
+/**
+ * SCAN/LOOK-informed: prefer an elevator already moving toward the
+ * request in the same direction (it can pick up the request 'on the way'),
+ * falling back to the nearest idle elevator, falling back to nearest overall.
+ */
+public class LookSchedulingStrategy implements SchedulingStrategy {
+    @Override
+    public Elevator selectElevator(Request request, List<Elevator> elevators) {
+        if (elevators == null || elevators.isEmpty()) {
+            throw new IllegalArgumentException("Elevator list cannot be empty");
+        }
 
-class LookSchedulingStrategy(SchedulingStrategy):
-    """SCAN/LOOK-informed: prefer an elevator already moving toward the
-    request in the same direction (it can pick up the request 'on the way'),
-    falling back to the nearest idle elevator, falling back to nearest overall."""
+        // 1. Same direction and on the way
+        Optional<Elevator> sameDirectionCandidate = elevators.stream()
+            .filter(e -> e.getDirection() == request.direction() && isOnTheWay(e, request))
+            .min(Comparator.comparingInt(e -> Math.abs(e.getCurrentFloor() - request.floor())));
 
-    def select_elevator(self, request: "Request", elevators: list[Elevator]) -> Elevator:
-        same_direction_candidates = [
-            e for e in elevators
-            if e.direction == request.direction
-            and self._is_on_the_way(e, request)
-        ]
-        if same_direction_candidates:
-            return min(same_direction_candidates, key=lambda e: abs(e.current_floor - request.floor))
+        if (sameDirectionCandidate.isPresent()) {
+            return sameDirectionCandidate.get();
+        }
 
-        idle_candidates = [e for e in elevators if e.direction == Direction.IDLE]
-        if idle_candidates:
-            return min(idle_candidates, key=lambda e: abs(e.current_floor - request.floor))
+        // 2. Idle elevators
+        Optional<Elevator> idleCandidate = elevators.stream()
+            .filter(e -> e.getDirection() == Direction.IDLE)
+            .min(Comparator.comparingInt(e -> Math.abs(e.getCurrentFloor() - request.floor())));
 
-        return min(elevators, key=lambda e: abs(e.current_floor - request.floor))
+        if (idleCandidate.isPresent()) {
+            return idleCandidate.get();
+        }
 
-    def _is_on_the_way(self, elevator: Elevator, request: "Request") -> bool:
-        if elevator.direction == Direction.UP:
-            return elevator.current_floor <= request.floor
-        if elevator.direction == Direction.DOWN:
-            return elevator.current_floor >= request.floor
-        return False
+        // 3. Nearest overall
+        return elevators.stream()
+            .min(Comparator.comparingInt(e -> Math.abs(e.getCurrentFloor() - request.floor())))
+            .orElse(elevators.get(0));
+    }
 
+    private boolean isOnTheWay(Elevator elevator, Request request) {
+        if (elevator.getDirection() == Direction.UP) {
+            return elevator.getCurrentFloor() <= request.floor();
+        }
+        if (elevator.getDirection() == Direction.DOWN) {
+            return elevator.getCurrentFloor() >= request.floor();
+        }
+        return false;
+    }
+}
 
-class ElevatorController:
-    def __init__(self, elevators: list[Elevator], strategy: SchedulingStrategy):
-        self.elevators = elevators
-        self.strategy = strategy   # injected — swappable at runtime (DIP)
+public class ElevatorController {
+    private final List<Elevator> elevators;
+    private final SchedulingStrategy strategy; // injected — swappable at runtime (DIP)
 
-    def dispatch(self, request: "Request") -> None:
-        chosen = self.strategy.select_elevator(request, self.elevators)
-        chosen.add_request(request.floor)
+    public ElevatorController(List<Elevator> elevators, SchedulingStrategy strategy) {
+        this.elevators = elevators;
+        this.strategy = strategy;
+    }
 
-    def tick(self) -> None:
-        for elevator in self.elevators:
-            elevator.step()
+    public synchronized void dispatch(Request request) {
+        Elevator chosen = strategy.selectElevator(request, elevators);
+        chosen.addRequest(request.floor());
+    }
+
+    public synchronized void tick() {
+        for (Elevator elevator : elevators) {
+            elevator.step();
+        }
+    }
+
+    public List<Elevator> getElevators() { return elevators; }
+    public SchedulingStrategy getStrategy() { return strategy; }
+}
 ```
 
 ### FCFS vs. SCAN/LOOK — Why It Matters

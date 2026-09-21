@@ -1,38 +1,38 @@
 # 30-Day LLD Study Plan
 
-A day-by-day plan for a ~3-years-experience Python full-stack engineer preparing for LLD (Low-Level Design) interviews. Each day lists a goal and concrete actions. Phase folder names are fixed and used for mapping instead of exact lesson filenames.
+A day-by-day plan for software engineers preparing for Java Low-Level Design (LLD) interviews. Each day lists a goal and concrete actions. Phase folder names are fixed and used for mapping instead of exact lesson filenames.
 
 ---
 
-## Week 1 (Days 1–7): Python OOP — Phase-01-OOP-Foundations
+## Week 1 (Days 1–7): Java OOP Foundations — Phase-01-OOP-Foundations
 
 **Day 1**
 Goal: Classes, objects, and constructors.
-Do: Read the first 1–2 lessons of `Phase-01-OOP-Foundations`. Implement a `Book` and `Library` class from scratch without looking at the lesson, using `__init__` correctly. Explain out loud what happens in memory when you instantiate an object.
+Do: Read the first 1–2 lessons of `Phase-01-OOP-Foundations`. Implement a `Book` and `Library` class from scratch without looking at the lesson, using constructors and access modifiers correctly. Explain out loud what happens in the JVM heap and stack when you instantiate an object.
 
 **Day 2**
 Goal: Encapsulation and access control conventions.
-Do: Read the encapsulation lesson(s) in `Phase-01-OOP-Foundations`. Rewrite Day 1's `Book`/`Library` classes to use `_protected`/`__private` attributes and properties (`@property`/`@x.setter`) for controlled access. Explain out loud why Python doesn't have true `private` like Java.
+Do: Read the encapsulation lesson(s) in `Phase-01-OOP-Foundations`. Rewrite Day 1's `Book`/`Library` classes to use private fields with getter/setter methods and immutable records where appropriate. Explain encapsulation and data hiding out loud.
 
 **Day 3**
 Goal: Inheritance and the "is-a" relationship.
-Do: Read the inheritance lesson(s). From scratch, model a small `Employee -> Manager, Engineer` hierarchy with shared and overridden behavior. Explain method resolution order (MRO) out loud.
+Do: Read the inheritance lesson(s). From scratch, model a small `Employee -> Manager, Engineer` hierarchy with shared and overridden behavior. Explain dynamic method dispatch and runtime polymorphism in the JVM out loud.
 
 **Day 4**
 Goal: Polymorphism and abstraction.
-Do: Read the polymorphism/abstraction lesson(s). Implement an abstract `Shape` (using `abc.ABC` + `@abstractmethod`) with `Circle`, `Square`, `Triangle` subclasses, each with a working `area()`. Write a function that loops over a list of mixed shapes and calls `.area()` polymorphically. Explain out loud why this satisfies OCP.
+Do: Read the polymorphism/abstraction lesson(s). Implement an abstract `Shape` (or interface) with `Circle`, `Square`, `Triangle` subclasses, each with a working `area()`. Write a function that loops over a list of mixed shapes and calls `.area()` polymorphically. Explain out loud why this satisfies OCP.
 
 **Day 5**
 Goal: Static/class methods, magic methods.
-Do: Read the remaining `Phase-01-OOP-Foundations` lessons covering static/class methods and dunder methods. From scratch, implement a `Money` class with `__eq__`, `__add__`, `__repr__`, and a `@classmethod from_string()` alternate constructor. Explain when you'd choose `@staticmethod` vs `@classmethod` out loud.
+Do: Read the remaining `Phase-01-OOP-Foundations` lessons covering static/class methods and dunder methods. From scratch, implement an immutable `Money` class or record with `equals()`, `hashCode()`, `toString()`, and static factory methods. Explain out loud why overriding equals/hashCode together is essential.
 
 **Day 6**
 Goal: Dataclasses and composition vs inheritance.
-Do: Read any remaining `Phase-01-OOP-Foundations` material on dataclasses/composition. Refactor Day 3's hierarchy to use composition where appropriate (e.g. `Employee` has-a `Address`, has-a `Salary`). Rewrite one class as a `@dataclass`. Explain out loud the trade-off between inheritance and composition using this example.
+Do: Read any remaining `Phase-01-OOP-Foundations` material on dataclasses/composition. Refactor Day 3's hierarchy to use composition where appropriate (e.g. `Employee` has-a `Address`, has-a `Salary`). Rewrite one class as a Java `record`. Explain out loud the trade-off between inheritance and composition using this example.
 
 **Day 7**
 Goal: Consolidate Week 1.
-Do: Without looking at any notes, implement a small end-to-end OOP mini-model (pick something new, e.g. a `Zoo` with `Animal` subclasses) covering encapsulation, inheritance, polymorphism, and at least one magic method. Explain the whole design out loud in under 5 minutes as if to an interviewer. Review the OOP section of `Quick-Reference/Cheatsheet.md` and confirm you can define every term without looking.
+Do: Without looking at any notes, implement a small end-to-end OOP mini-model (pick something new, e.g. a `Zoo` with `Animal` subclasses) covering encapsulation, inheritance, polymorphism, and proper `equals()` and `hashCode()` contracts. Explain the whole design out loud in under 5 minutes as if to an interviewer. Review the OOP section of `Quick-Reference/Cheatsheet.md` and confirm you can define every term without looking.
 
 ---
 
@@ -52,7 +52,7 @@ Do: Finish Phase-02-SOLID-Principles (DIP lesson). Implement a `NotificationServ
 
 **Day 11**
 Goal: UML relationships and object modeling.
-Do: Study Phase-03-UML-and-Object-Modeling (association, aggregation, composition lessons). Without looking, sketch a UML class diagram (on paper) for a `School` domain (`School`, `Classroom`, `Student`, `Teacher`) and label each relationship type. Implement the Python classes matching your diagram.
+Do: Study Phase-03-UML-and-Object-Modeling (association, aggregation, composition lessons). Without looking, sketch a UML class diagram (on paper) for a `School` domain (`School`, `Classroom`, `Student`, `Teacher`) and label each relationship type. Implement the Java classes matching your diagram.
 
 **Day 12**
 Goal: UML for full systems + review.
@@ -60,15 +60,15 @@ Do: Finish Phase-03-UML-and-Object-Modeling. Pick one real-world problem name fr
 
 **Day 13**
 Goal: Creational patterns part 1 — Singleton, Factory Method.
-Do: Study the Singleton and Factory Method lessons in Phase-04-Creational-Patterns. Implement both from scratch (including the thread-safe Singleton with a lock). Explain out loud when each is appropriate and the "many if/elif" smell that Factory Method fixes.
+Do: Study the Singleton and Factory Method lessons in Phase-04-Creational-Patterns. Implement both from scratch (including the Bill Pugh / Enum thread-safe Singleton). Explain out loud when each is appropriate and the "many if/elif" smell that Factory Method fixes.
 
 **Day 14**
 Goal: Creational patterns part 2 — Abstract Factory, Builder, Prototype.
-Do: Finish Phase-04-Creational-Patterns. Implement all three from scratch with your own example (e.g. a UI theme Abstract Factory, a `PizzaBuilder`, and a `deepcopy`-based Prototype). Explain the Factory Method vs Abstract Factory distinction out loud. Review the Creational section of the Cheatsheet without looking at your code.
+Do: Finish Phase-04-Creational-Patterns. Implement all three from scratch with your own example (e.g. a UI theme Abstract Factory, a `PizzaBuilder`, and a copy-constructor or Cloneable Prototype). Explain the Factory Method vs Abstract Factory distinction out loud. Review the Creational section of the Cheatsheet without looking at your code.
 
 ---
 
-## Week 3 (Days 15–21): Structural + Behavioral Patterns + Python Features
+## Week 3 (Days 15–21): Structural + Behavioral Patterns + Java Concurrency
 
 **Day 15**
 Goal: Structural patterns part 1 — Adapter, Facade.
@@ -92,11 +92,11 @@ Do: Finish Phase-06-Behavioral-Patterns. Implement a chat-room Mediator, a suppo
 
 **Day 20**
 Goal: Python features for LLD — ABCs, enums, dataclasses recap, context managers.
-Do: Study Phase-07-Python-Features-for-LLD. From scratch, implement an abstract base class enforcing a contract, an `Enum`-backed status field, and a custom context manager (`__enter__`/`__exit__`) for a resource-hold scenario (e.g. acquiring a parking spot). Explain out loud why each is idiomatic Python for LLD.
+Do: Study Phase-07-Java-Features-and-Concurrency-for-LLD. From scratch, implement an abstract base class enforcing a contract, an `Enum`-backed status field, and a custom context manager (`__enter__`/`__exit__`) for a resource-hold scenario (e.g. acquiring a parking spot). Explain out loud why each is idiomatic Python for LLD.
 
 **Day 21**
 Goal: Python features for LLD — singledispatch, operator overloading, consolidation.
-Do: Finish Phase-07-Python-Features-for-LLD. Implement `functools.singledispatch` for a `render()` function over multiple shape types, and add `__lt__`/`__eq__` to a `Task` class so it works in a `heapq`. Review the full Structural/Behavioral/Decision-table sections of the Cheatsheet without looking at your own code, and quiz yourself on the "Symptom -> Pattern" table.
+Do: Finish Phase-07-Java-Features-and-Concurrency-for-LLD. Implement `functools.singledispatch` for a `render()` function over multiple shape types, and add `__lt__`/`__eq__` to a `Task` class so it works in a `heapq`. Review the full Structural/Behavioral/Decision-table sections of the Cheatsheet without looking at your own code, and quiz yourself on the "Symptom -> Pattern" table.
 
 ---
 

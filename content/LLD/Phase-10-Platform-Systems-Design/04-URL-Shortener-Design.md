@@ -103,95 +103,124 @@ This is the heart of the problem. Three real approaches, each with genuine trade
 naming all three and picking one with justification is what separates a strong answer
 from a shallow one.
 
-```python
-from abc import ABC, abstractmethod
-import hashlib
-import random
-import string
+```java
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
+import java.util.concurrent.atomic.AtomicLong;
 
+public interface ShortCodeGenerator {
+    String generate(String longUrl, UrlRepository repository);
+}
 
-BASE62_ALPHABET = string.digits + string.ascii_lowercase + string.ascii_uppercase  # 62 chars
+public class Base62CounterGenerator implements ShortCodeGenerator {
+    private static final String BASE62_ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    private final AtomicLong counter;
 
+    public Base62CounterGenerator(long start) {
+        this.counter = new AtomicLong(start);
+    }
 
-class ShortCodeGenerator(ABC):
-    @abstractmethod
-    def generate(self, long_url: str, repository: "UrlRepository") -> str: ...
+    public Base62CounterGenerator() {
+        this(1);
+    }
 
+    @Override
+    public String generate(String longUrl, UrlRepository repository) {
+        long current = counter.getAndIncrement();
+        return encode(current);
+    }
 
-class Base62CounterGenerator(ShortCodeGenerator):
-    """Maintains a global auto-incrementing counter and encodes it in base62.
-    Guaranteed unique with zero collision checks. Downside: sequential and
-    guessable (code N+1 is trivially derivable from code N), and requires a
-    centrally coordinated counter (a single point of contention at very high
-    write throughput, though writes are the rare path here)."""
+    private static String encode(long number) {
+        if (number == 0) {
+            return String.valueOf(BASE62_ALPHABET.charAt(0));
+        }
+        StringBuilder sb = new StringBuilder();
+        int base = BASE62_ALPHABET.length();
+        while (number > 0) {
+            int remainder = (int) (number % base);
+            sb.append(BASE62_ALPHABET.charAt(remainder));
+            number /= base;
+        }
+        return sb.reverse().toString();
+    }
+}
 
-    def __init__(self, start: int = 1):
-        self._counter = start
+public class HashBasedGenerator implements ShortCodeGenerator {
+    private static final String BASE62_ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    private final int codeLength;
+    private final int maxRetries;
 
-    def generate(self, long_url: str, repository: "UrlRepository") -> str:
-        code = self._encode(self._counter)
-        self._counter += 1
-        return code
+    public HashBasedGenerator(int codeLength, int maxRetries) {
+        this.codeLength = codeLength;
+        this.maxRetries = maxRetries;
+    }
 
-    @staticmethod
-    def _encode(number: int) -> str:
-        if number == 0:
-            return BASE62_ALPHABET[0]
-        digits = []
-        base = len(BASE62_ALPHABET)
-        while number > 0:
-            number, remainder = divmod(number, base)
-            digits.append(BASE62_ALPHABET[remainder])
-        return "".join(reversed(digits))
+    public HashBasedGenerator() {
+        this(7, 5);
+    }
 
+    @Override
+    public String generate(String longUrl, UrlRepository repository) {
+        String salt = "";
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            for (int attempt = 0; attempt < maxRetries; attempt++) {
+                byte[] hash = digest.digest((longUrl + salt).getBytes(StandardCharsets.UTF_8));
+                String code = toBase62Prefix(hash, codeLength);
+                if (!repository.exists(code)) {
+                    return code;
+                }
+                salt = "retry-" + attempt; // perturb input on collision
+            }
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException("SHA-256 algorithm unavailable", e);
+        }
+        throw new IllegalStateException("Failed to generate a unique code after " + maxRetries + " retries");
+    }
 
-class HashBasedGenerator(ShortCodeGenerator):
-    """Hashes the long URL (+ a salt/timestamp to allow the same URL to be
-    shortened multiple times) and takes the first N base62 characters.
-    Deterministic-ish and doesn't need a shared counter, but hash collisions
-    on a truncated hash ARE possible at scale, so it must retry on collision."""
+    private static String toBase62Prefix(byte[] hash, int length) {
+        StringBuilder sb = new StringBuilder();
+        int base = BASE62_ALPHABET.length();
+        for (int i = 0; i < length; i++) {
+            int index = (hash[i % hash.length] & 0xFF) % base;
+            sb.append(BASE62_ALPHABET.charAt(index));
+        }
+        return sb.toString();
+    }
+}
 
-    def __init__(self, code_length: int = 7, max_retries: int = 5):
-        self.code_length = code_length
-        self.max_retries = max_retries
+public class RandomWithCollisionCheckGenerator implements ShortCodeGenerator {
+    private static final String BASE62_ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    private static final SecureRandom RANDOM = new SecureRandom();
+    private final int codeLength;
+    private final int maxRetries;
 
-    def generate(self, long_url: str, repository: "UrlRepository") -> str:
-        salt = ""
-        for attempt in range(self.max_retries):
-            digest = hashlib.sha256((long_url + salt).encode()).hexdigest()
-            code = self._to_base62_prefix(digest, self.code_length)
-            if not repository.exists(code):
-                return code
-            salt = f"retry-{attempt}"   # perturb the input and rehash
-        raise RuntimeError("Failed to generate a unique code after retries")
+    public RandomWithCollisionCheckGenerator(int codeLength, int maxRetries) {
+        this.codeLength = codeLength;
+        this.maxRetries = maxRetries;
+    }
 
-    @staticmethod
-    def _to_base62_prefix(hex_digest: str, length: int) -> str:
-        number = int(hex_digest, 16)
-        chars = []
-        base = len(BASE62_ALPHABET)
-        for _ in range(length):
-            number, remainder = divmod(number, base)
-            chars.append(BASE62_ALPHABET[remainder])
-        return "".join(chars)
+    public RandomWithCollisionCheckGenerator() {
+        this(7, 5);
+    }
 
-
-class RandomWithCollisionCheckGenerator(ShortCodeGenerator):
-    """Generates a random base62 string and checks the repository for a
-    collision, retrying if needed. Not guessable/sequential (good for
-    privacy), but requires a repository round-trip per attempt, and at very
-    high fill-rates collision probability rises (birthday paradox)."""
-
-    def __init__(self, code_length: int = 7, max_retries: int = 5):
-        self.code_length = code_length
-        self.max_retries = max_retries
-
-    def generate(self, long_url: str, repository: "UrlRepository") -> str:
-        for _ in range(self.max_retries):
-            code = "".join(random.choices(BASE62_ALPHABET, k=self.code_length))
-            if not repository.exists(code):
-                return code
-        raise RuntimeError("Failed to generate a unique code after retries")
+    @Override
+    public String generate(String longUrl, UrlRepository repository) {
+        for (int i = 0; i < maxRetries; i++) {
+            StringBuilder sb = new StringBuilder(codeLength);
+            for (int j = 0; j < codeLength; j++) {
+                sb.append(BASE62_ALPHABET.charAt(RANDOM.nextInt(BASE62_ALPHABET.length())));
+            }
+            String code = sb.toString();
+            if (!repository.exists(code)) {
+                return code;
+            }
+        }
+        throw new IllegalStateException("Failed to generate a unique code after " + maxRetries + " retries");
+    }
+}
 ```
 
 ### Trade-off Comparison
@@ -209,44 +238,56 @@ rather than baked in, to keep the core design simple.
 
 ### Custom Aliases as a Special Case
 
-```python
-class UrlShortenerService:
-    def __init__(
-        self,
-        generator: ShortCodeGenerator,
-        repository: "UrlRepository",
-        analytics: "AnalyticsService",
-    ):
-        self.generator = generator
-        self.repository = repository
-        self.analytics = analytics
+```java
+import java.time.Instant;
+import java.util.Optional;
 
-    def shorten(
-        self,
-        long_url: str,
-        owner: "User",
-        custom_alias: str | None = None,
-        expires_at: "datetime | None" = None,
-    ) -> "Url":
-        if custom_alias:
-            if self.repository.exists(custom_alias):
-                raise ValueError(f"Alias '{custom_alias}' is already taken")
-            code = custom_alias
-        else:
-            code = self.generator.generate(long_url, self.repository)
+public class UrlShortenerService {
+    private final ShortCodeGenerator generator;
+    private final UrlRepository repository;
+    private final AnalyticsService analytics;
 
-        url = Url(code=code, long_url=long_url, owner=owner, expires_at=expires_at)
-        self.repository.save(url)
-        return url
+    public UrlShortenerService(
+        ShortCodeGenerator generator,
+        UrlRepository repository,
+        AnalyticsService analytics
+    ) {
+        this.generator = generator;
+        this.repository = repository;
+        this.analytics = analytics;
+    }
 
-    def resolve(self, code: str) -> str:
-        url = self.repository.find_by_code(code)
-        if url is None:
-            raise KeyError(f"No URL found for code '{code}'")
-        if url.is_expired():
-            raise ValueError(f"Short URL '{code}' has expired")
-        self.analytics.record_click(url)
-        return url.long_url
+    public Url shorten(
+        String longUrl,
+        User owner,
+        String customAlias,
+        Instant expiresAt
+    ) {
+        String code;
+        if (customAlias != null && !customAlias.isBlank()) {
+            if (repository.exists(customAlias)) {
+                throw new IllegalArgumentException("Alias '" + customAlias + "' is already taken");
+            }
+            code = customAlias;
+        } else {
+            code = generator.generate(longUrl, repository);
+        }
+
+        Url url = new Url(code, longUrl, owner, expiresAt);
+        repository.save(url);
+        return url;
+    }
+
+    public String resolve(String code) {
+        Url url = repository.findByCode(code)
+            .orElseThrow(() -> new IllegalArgumentException("No URL found for code '" + code + "'"));
+        if (url.isExpired()) {
+            throw new IllegalStateException("Short URL '" + code + "' has expired");
+        }
+        analytics.recordClick(url);
+        return url.getLongUrl();
+    }
+}
 ```
 
 Custom alias handling deliberately bypasses `ShortCodeGenerator` entirely — it's a

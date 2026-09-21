@@ -61,26 +61,31 @@ Two competing high-level approaches, and the trade-off between them is the actua
 
 Model the document not as a single mutable blob, but as a base snapshot plus an append-only log of operations — this gives you undo/redo (replay up to operation N), version history (any earlier operation index is a valid historical state), and is exactly the substrate OT/CRDT operate on. This is the one piece worth sketching as a lightweight class:
 
-```python
-class Operation:
-    def __init__(self, op_type: str, position: int, content: str, user_id: str, timestamp: float):
-        self.op_type = op_type      # "insert" | "delete" | "format"
-        self.position = position
-        self.content = content
-        self.user_id = user_id
-        self.timestamp = timestamp
+```java
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 
+public record Operation(String opType, int position, String content, String userId, Instant timestamp) {}
 
-class Document:
-    def __init__(self, doc_id: str):
-        self.doc_id = doc_id
-        self.operations: list[Operation] = []   # append-only log
+public class Document {
+    private final String docId;
+    private final List<Operation> operations = new ArrayList<>(); // append-only log
 
-    def apply(self, op: Operation) -> None:
-        # In a real system: transform `op` against any concurrent ops
-        # received out of order (OT), or merge via CRDT ordering rules,
-        # before appending. Full transform logic is out of scope here.
-        self.operations.append(op)
+    public Document(String docId) {
+        this.docId = docId;
+    }
+
+    public synchronized void apply(Operation op) {
+        // In a real system: transform `op` against any concurrent ops
+        // received out of order (OT), or merge via CRDT ordering rules,
+        // before appending. Full transform logic is out of scope here.
+        operations.add(op);
+    }
+
+    public String getDocId() { return docId; }
+    public List<Operation> getOperations() { return List.copyOf(operations); }
+}
 ```
 
 ### Why Full Code Isn't the Point
@@ -114,27 +119,28 @@ StreamingQualityStrategy (interface — chooses rendition based on network condi
 
 The player continuously measures available bandwidth and picks the best `VideoRendition` to fetch next — this is a clean, concrete Strategy pattern to sketch:
 
-```python
-from abc import ABC, abstractmethod
+```java
+import java.util.*;
 
+public record VideoRendition(String resolution, int bitrateKbps, String url) {}
 
-class VideoRendition:
-    def __init__(self, resolution: str, bitrate_kbps: int, url: str):
-        self.resolution = resolution
-        self.bitrate_kbps = bitrate_kbps
-        self.url = url
+public interface StreamingQualityStrategy {
+    VideoRendition selectRendition(List<VideoRendition> renditions, int availableBandwidthKbps);
+}
 
+public class HighestQualityUnderBandwidth implements StreamingQualityStrategy {
+    @Override
+    public VideoRendition selectRendition(List<VideoRendition> renditions, int availableBandwidthKbps) {
+        List<VideoRendition> eligible = renditions.stream()
+            .filter(r -> r.bitrateKbps() <= availableBandwidthKbps)
+            .toList();
 
-class StreamingQualityStrategy(ABC):
-    @abstractmethod
-    def select_rendition(self, renditions: list[VideoRendition], available_bandwidth_kbps: int) -> VideoRendition:
-        ...
-
-
-class HighestQualityUnderBandwidth(StreamingQualityStrategy):
-    def select_rendition(self, renditions, available_bandwidth_kbps):
-        eligible = [r for r in renditions if r.bitrate_kbps <= available_bandwidth_kbps]
-        return max(eligible, key=lambda r: r.bitrate_kbps) if eligible else min(renditions, key=lambda r: r.bitrate_kbps)
+        if (!eligible.isEmpty()) {
+            return Collections.max(eligible, Comparator.comparingInt(VideoRendition::bitrateKbps));
+        }
+        return Collections.min(renditions, Comparator.comparingInt(VideoRendition::bitrateKbps));
+    }
+}
 ```
 
 Swapping this strategy (e.g., "prefer stability over quality" for mobile data) requires zero changes to the player class — the exact justification for why Strategy fits.
@@ -173,47 +179,65 @@ Status (enum-like: TODO, IN_PROGRESS, IN_REVIEW, DONE — configurable per proje
 
 The naive version lets any issue jump to any status (`issue.status = Status.DONE`), which allows invalid transitions (e.g., TODO → DONE skipping review). Model it as a `Workflow` that defines a transition table, and have `Issue.transition_to()` consult it:
 
-```python
-from enum import Enum
+```java
+import java.util.*;
 
+public enum Status {
+    TODO,
+    IN_PROGRESS,
+    IN_REVIEW,
+    DONE
+}
 
-class Status(Enum):
-    TODO = "todo"
-    IN_PROGRESS = "in_progress"
-    IN_REVIEW = "in_review"
-    DONE = "done"
+public class InvalidTransitionException extends RuntimeException {
+    public InvalidTransitionException(String message) {
+        super(message);
+    }
+}
 
+public class Workflow {
+    private final Map<Status, Set<Status>> allowedTransitions;
 
-class InvalidTransitionError(Exception):
-    pass
+    public Workflow(Map<Status, Set<Status>> allowedTransitions) {
+        this.allowedTransitions = allowedTransitions;
+    }
 
+    public boolean canTransition(Status current, Status target) {
+        return allowedTransitions.getOrDefault(current, Collections.emptySet()).contains(target);
+    }
 
-class Workflow:
-    def __init__(self, allowed_transitions: dict[Status, set[Status]]):
-        self.allowed_transitions = allowed_transitions
+    public static final Workflow DEFAULT_WORKFLOW = new Workflow(Map.of(
+        Status.TODO, Set.of(Status.IN_PROGRESS),
+        Status.IN_PROGRESS, Set.of(Status.IN_REVIEW, Status.TODO),
+        Status.IN_REVIEW, Set.of(Status.DONE, Status.IN_PROGRESS),
+        Status.DONE, Set.of()
+    ));
+}
 
-    def can_transition(self, current: Status, target: Status) -> bool:
-        return target in self.allowed_transitions.get(current, set())
+public class Issue {
+    private final String title;
+    private Status status = Status.TODO;
+    private final Workflow workflow;
 
+    public Issue(String title, Workflow workflow) {
+        this.title = title;
+        this.workflow = workflow;
+    }
 
-DEFAULT_WORKFLOW = Workflow({
-    Status.TODO: {Status.IN_PROGRESS},
-    Status.IN_PROGRESS: {Status.IN_REVIEW, Status.TODO},
-    Status.IN_REVIEW: {Status.DONE, Status.IN_PROGRESS},
-    Status.DONE: set(),
-})
+    public Issue(String title) {
+        this(title, Workflow.DEFAULT_WORKFLOW);
+    }
 
+    public synchronized void transitionTo(Status target) {
+        if (!workflow.canTransition(this.status, target)) {
+            throw new InvalidTransitionException(status + " -> " + target + " not allowed");
+        }
+        this.status = target;
+    }
 
-class Issue:
-    def __init__(self, title: str, workflow: Workflow = DEFAULT_WORKFLOW):
-        self.title = title
-        self.status = Status.TODO
-        self.workflow = workflow
-
-    def transition_to(self, target: Status) -> None:
-        if not self.workflow.can_transition(self.status, target):
-            raise InvalidTransitionError(f"{self.status} -> {target} not allowed")
-        self.status = target
+    public String getTitle() { return title; }
+    public Status getStatus() { return status; }
+}
 ```
 
 Different projects wanting different workflows (e.g., a project with no review step) is then just a different `Workflow` instance — no changes to `Issue`.
@@ -269,28 +293,47 @@ feature ──▶ C2
 
 `PullRequest.status` (e.g., "mergeable," "changes requested") should typically be *computed* from the current set of `Review`s rather than stored as an independent field that can drift out of sync — this is a good discussion point about avoiding duplicated/derivable state:
 
-```python
-from enum import Enum
+```java
+import java.util.*;
 
+public enum ReviewVerdict {
+    APPROVE,
+    REQUEST_CHANGES,
+    COMMENT
+}
 
-class ReviewVerdict(Enum):
-    APPROVE = "approve"
-    REQUEST_CHANGES = "request_changes"
-    COMMENT = "comment"
+public record Review(String reviewer, ReviewVerdict verdict, String comment) {}
 
+public class PullRequest {
+    private final String sourceBranch;
+    private final String targetBranch;
+    private final List<Review> reviews = new ArrayList<>();
 
-class PullRequest:
-    def __init__(self, source_branch: str, target_branch: str):
-        self.source_branch = source_branch
-        self.target_branch = target_branch
-        self.reviews: list["Review"] = []
+    public PullRequest(String sourceBranch, String targetBranch) {
+        this.sourceBranch = sourceBranch;
+        this.targetBranch = targetBranch;
+    }
 
-    def is_mergeable(self) -> bool:
-        # Derived, not stored — avoids two sources of truth going stale.
-        if not self.reviews:
-            return False
-        return not any(r.verdict == ReviewVerdict.REQUEST_CHANGES for r in self.reviews) and \
-            any(r.verdict == ReviewVerdict.APPROVE for r in self.reviews)
+    public synchronized void addReview(Review review) {
+        reviews.add(review);
+    }
+
+    public synchronized boolean isMergeable() {
+        // Derived, not stored — avoids two sources of truth going stale.
+        if (reviews.isEmpty()) {
+            return false;
+        }
+        boolean hasChangesRequested = reviews.stream()
+            .anyMatch(r -> r.verdict() == ReviewVerdict.REQUEST_CHANGES);
+        boolean hasApproval = reviews.stream()
+            .anyMatch(r -> r.verdict() == ReviewVerdict.APPROVE);
+        return !hasChangesRequested && hasApproval;
+    }
+
+    public String getSourceBranch() { return sourceBranch; }
+    public String getTargetBranch() { return targetBranch; }
+    public List<Review> getReviews() { return List.copyOf(reviews); }
+}
 ```
 
 ### Why Full Code Isn't the Point
@@ -323,28 +366,41 @@ NotificationDispatcher (Observer subject — channel members subscribe)
 
 When a `Message` is posted to a `Channel`, every currently-connected member's client needs to be notified without polling. Model this as an Observer relationship: `Channel` (subject) holds a list of subscribed `Connection`s (one per online client), and `post_message()` notifies all of them. The actual transport (WebSocket push, long-polling, or a message broker like Kafka/Redis pub-sub fanning out across multiple server instances) is an infrastructure concern layered underneath this same conceptual pattern — worth naming but not implementing.
 
-```python
-from abc import ABC, abstractmethod
+```java
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
+public record Message(String author, String content, long timestamp) {}
 
-class MessageObserver(ABC):
-    @abstractmethod
-    def on_new_message(self, message: "Message") -> None:
-        ...
+public interface MessageObserver {
+    void onNewMessage(Message message);
+}
 
+public class Channel {
+    private final String name;
+    private final List<MessageObserver> observers = new CopyOnWriteArrayList<>(); // e.g. one per connected client
 
-class Channel:
-    def __init__(self, name: str):
-        self.name = name
-        self._observers: list[MessageObserver] = []   # e.g., one per connected client
+    public Channel(String name) {
+        this.name = name;
+    }
 
-    def subscribe(self, observer: MessageObserver) -> None:
-        self._observers.append(observer)
+    public void subscribe(MessageObserver observer) {
+        observers.add(observer);
+    }
 
-    def post_message(self, message: "Message") -> None:
-        for observer in self._observers:
-            observer.on_new_message(message)   # in production: push over an
-                                                 # open connection, not a direct call
+    public void unsubscribe(MessageObserver observer) {
+        observers.remove(observer);
+    }
+
+    public void postMessage(Message message) {
+        for (MessageObserver observer : observers) {
+            // in production: push over an open connection, not a direct call
+            observer.onNewMessage(message);
+        }
+    }
+
+    public String getName() { return name; }
+}
 ```
 
 **2. Threads as a relationship on Message, not a separate parallel data structure.**

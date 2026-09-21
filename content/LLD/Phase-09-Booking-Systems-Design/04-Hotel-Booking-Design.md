@@ -155,20 +155,19 @@ HotelBookingService ─── 1 AvailabilityChecker  (dependency)
 
 **Core rule:** two date ranges `[startA, endA)` and `[startB, endB)` overlap **if and only if** `startA < endB AND startB < endA`. Using half-open intervals (`endA` exclusive — checkout day) correctly allows a guest to check in on the same day another guest checks out.
 
-```python
-def ranges_overlap(start_a: date, end_a: date, start_b: date, end_b: date) -> bool:
-    return start_a < end_b and start_b < end_a
+```java
+public static boolean rangesOverlap(LocalDate startA, LocalDate endA, LocalDate startB, LocalDate endB) {
+    return startA.isBefore(endB) && startB.isBefore(endA);
+}
 ```
 
 A `Room` is available for a requested `[start, end)` if **none** of its existing (non-cancelled) reservations overlap that range:
 
-```python
-def is_room_available(room: "Room", start: date, end: date) -> bool:
-    return not any(
-        ranges_overlap(start, end, r.start_date, r.end_date)
-        for r in room.existing_reservations()
-        if r.status != "CANCELLED"
-    )
+```java
+public static boolean isRoomAvailable(Room room, LocalDate start, LocalDate end) {
+    return room.existingReservations().stream()
+        .noneMatch(r -> rangesOverlap(start, end, r.getStartDate(), r.getEndDate()));
+}
 ```
 
 **Why not just check "is the room reserved on any single day in the range"?** A day-by-day loop is O(days) and easy to get off-by-one wrong at boundaries; the interval-overlap formula is O(1) per existing reservation and handles boundary days (checkout morning = checkin evening) correctly by construction, since `end` is exclusive.
@@ -177,161 +176,198 @@ def is_room_available(room: "Room", start: date, end: date) -> bool:
 
 ---
 
-## 10. Python Skeleton
+## 10. Java Skeleton
 
-```python
-from dataclasses import dataclass, field
-from datetime import date
-from enum import Enum, auto
-from threading import Lock
-from typing import List, Optional
-import uuid
+```java
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
+import java.util.*;
+import java.util.concurrent.locks.ReentrantLock;
 
+public record RoomType(String typeId, String name, double basePrice, int capacity) {}
 
-@dataclass
-class RoomType:
-    type_id: str
-    name: str  # STANDARD / DELUXE / SUITE
-    base_price: float
-    capacity: int
+public enum ReservationStatus {
+    CONFIRMED, CANCELLED
+}
 
+public class Reservation {
+    private final String reservationId;
+    private final Room room;
+    private final Guest guest;
+    private final LocalDate startDate;
+    private final LocalDate endDate;
+    private ReservationStatus status = ReservationStatus.CONFIRMED;
+    private Payment payment;
 
-class ReservationStatus(Enum):
-    CONFIRMED = auto()
-    CANCELLED = auto()
+    public Reservation(String reservationId, Room room, Guest guest,
+                       LocalDate startDate, LocalDate endDate, Payment payment) {
+        this.reservationId = reservationId;
+        this.room = room;
+        this.guest = guest;
+        this.startDate = startDate;
+        this.endDate = endDate;
+        this.payment = payment;
+    }
 
+    public boolean overlaps(LocalDate start, LocalDate end) {
+        return this.startDate.isBefore(end) && start.isBefore(this.endDate);
+    }
 
-@dataclass
-class Reservation:
-    reservation_id: str
-    room: "Room"
-    guest: "Guest"
-    start_date: date
-    end_date: date
-    status: ReservationStatus = ReservationStatus.CONFIRMED
-    payment: Optional["Payment"] = None
+    public void cancel() { this.status = ReservationStatus.CANCELLED; }
 
-    def overlaps(self, start: date, end: date) -> bool:
-        return self.start_date < end and start < self.end_date
+    public String getReservationId() { return reservationId; }
+    public Room getRoom() { return room; }
+    public Guest getGuest() { return guest; }
+    public LocalDate getStartDate() { return startDate; }
+    public LocalDate getEndDate() { return endDate; }
+    public ReservationStatus getStatus() { return status; }
+    public Payment getPayment() { return payment; }
+}
 
-    def cancel(self) -> None:
-        self.status = ReservationStatus.CANCELLED
+public class Room {
+    private final String roomNumber;
+    private final RoomType roomType;
+    private final List<Reservation> reservations = new ArrayList<>();
+    private final ReentrantLock lock = new ReentrantLock();
 
+    public Room(String roomNumber, RoomType roomType) {
+        this.roomNumber = roomNumber;
+        this.roomType = roomType;
+    }
 
-class Room:
-    def __init__(self, room_number: str, room_type: RoomType):
-        self.room_number = room_number
-        self.room_type = room_type
-        self._reservations: List[Reservation] = []
-        self._lock = Lock()
+    public List<Reservation> existingReservations() {
+        return reservations.stream()
+            .filter(r -> r.getStatus() == ReservationStatus.CONFIRMED)
+            .toList();
+    }
 
-    def existing_reservations(self) -> List[Reservation]:
-        return [r for r in self._reservations if r.status == ReservationStatus.CONFIRMED]
+    public boolean isAvailable(LocalDate start, LocalDate end) {
+        return existingReservations().stream().noneMatch(r -> r.overlaps(start, end));
+    }
 
-    def is_available(self, start: date, end: date) -> bool:
-        return not any(r.overlaps(start, end) for r in self.existing_reservations())
+    public boolean addReservation(Reservation reservation) {
+        lock.lock();
+        try {
+            if (!isAvailable(reservation.getStartDate(), reservation.getEndDate())) {
+                return false;
+            }
+            reservations.add(reservation);
+            return true;
+        } finally {
+            lock.unlock();
+        }
+    }
 
-    def add_reservation(self, reservation: Reservation) -> bool:
-        """Atomically re-check availability and add — closes the check-then-act race."""
-        with self._lock:
-            if not self.is_available(reservation.start_date, reservation.end_date):
-                return False
-            self._reservations.append(reservation)
-            return True
+    public String getRoomNumber() { return roomNumber; }
+    public RoomType getRoomType() { return roomType; }
+}
 
+public class AvailabilityChecker {
+    public boolean isAvailable(Room room, LocalDate start, LocalDate end) {
+        return room.isAvailable(start, end);
+    }
 
-class AvailabilityChecker:
-    def is_available(self, room: Room, start: date, end: date) -> bool:
-        return room.is_available(start, end)
+    public List<Room> filterAvailable(List<Room> rooms, LocalDate start, LocalDate end) {
+        return rooms.stream().filter(r -> isAvailable(r, start, end)).toList();
+    }
+}
 
-    def filter_available(self, rooms: List[Room], start: date, end: date) -> List[Room]:
-        return [r for r in rooms if self.is_available(r, start, end)]
+public class Hotel {
+    private final String hotelId;
+    private final String name;
+    private final List<Room> rooms;
 
+    public Hotel(String hotelId, String name, List<Room> rooms) {
+        this.hotelId = hotelId;
+        this.name = name;
+        this.rooms = new ArrayList<>(rooms);
+    }
 
-class Hotel:
-    def __init__(self, hotel_id: str, name: str, rooms: List[Room]):
-        self.hotel_id = hotel_id
-        self.name = name
-        self.rooms = rooms
+    public List<Room> searchAvailableRooms(LocalDate start, LocalDate end,
+                                           AvailabilityChecker checker, String roomTypeName) {
+        return rooms.stream()
+            .filter(r -> roomTypeName == null || r.getRoomType().name().equalsIgnoreCase(roomTypeName))
+            .filter(r -> checker.isAvailable(r, start, end))
+            .toList();
+    }
 
-    def search_available_rooms(self, start: date, end: date,
-                                checker: AvailabilityChecker,
-                                room_type_name: Optional[str] = None) -> List[Room]:
-        candidates = self.rooms
-        if room_type_name:
-            candidates = [r for r in candidates if r.room_type.name == room_type_name]
-        return checker.filter_available(candidates, start, end)
+    public List<Room> getRooms() { return Collections.unmodifiableList(rooms); }
+}
 
+public record Guest(String guestId, String name) {}
 
-@dataclass
-class Guest:
-    guest_id: str
-    name: str
+public record Payment(double amount, String method, String status) {}
 
+public interface PaymentStrategy {
+    Payment pay(double amount);
+}
 
-@dataclass
-class Payment:
-    amount: float
-    method: str
-    status: str = "PENDING"
+public class CreditCardPaymentStrategy implements PaymentStrategy {
+    @Override
+    public Payment pay(double amount) {
+        return new Payment(amount, "CARD", "PAID");
+    }
+}
 
+public interface CancellationPolicy {
+    double refundAmount(Reservation reservation, LocalDate cancelDate);
+}
 
-class PaymentStrategy:
-    def pay(self, amount: float) -> Payment:
-        raise NotImplementedError
+public class FreeCancellationPolicy implements CancellationPolicy {
+    @Override
+    public double refundAmount(Reservation reservation, LocalDate cancelDate) {
+        return (reservation.getPayment() != null) ? reservation.getPayment().amount() : 0.0;
+    }
+}
 
+public class TieredCancellationPolicy implements CancellationPolicy {
+    @Override
+    public double refundAmount(Reservation reservation, LocalDate cancelDate) {
+        double paid = (reservation.getPayment() != null) ? reservation.getPayment().amount() : 0.0;
+        long daysBefore = ChronoUnit.DAYS.between(cancelDate, reservation.getStartDate());
+        return (daysBefore >= 3) ? paid : paid * 0.50;
+    }
+}
 
-class CreditCardPayment(PaymentStrategy):
-    def pay(self, amount: float) -> Payment:
-        return Payment(amount=amount, method="CARD", status="PAID")
+public class HotelBookingService {
+    private final AvailabilityChecker checker;
+    private final PaymentStrategy paymentStrategy;
+    private final CancellationPolicy cancellationPolicy;
 
+    public HotelBookingService(AvailabilityChecker checker,
+                               PaymentStrategy paymentStrategy,
+                               CancellationPolicy cancellationPolicy) {
+        this.checker = checker;
+        this.paymentStrategy = paymentStrategy;
+        this.cancellationPolicy = cancellationPolicy;
+    }
 
-class CancellationPolicy:
-    def refund_amount(self, reservation: Reservation, cancel_date: date) -> float:
-        raise NotImplementedError
+    public Reservation bookRoom(Hotel hotel, Guest guest, Room room,
+                                LocalDate start, LocalDate end, double nightlyRate) {
+        long nights = ChronoUnit.DAYS.between(start, end);
+        double total = nightlyRate * nights;
 
+        Payment payment = paymentStrategy.pay(total);
+        if (!"PAID".equalsIgnoreCase(payment.status())) {
+            throw new IllegalStateException("Payment failed");
+        }
 
-class FreeCancellationPolicy(CancellationPolicy):
-    def refund_amount(self, reservation: Reservation, cancel_date: date) -> float:
-        paid = reservation.payment.amount if reservation.payment else 0.0
-        return paid  # full refund regardless of timing
+        Reservation reservation = new Reservation(
+            UUID.randomUUID().toString(), room, guest, start, end, payment
+        );
 
+        if (!room.addReservation(reservation)) {
+            throw new IllegalStateException("Room is no longer available for the requested dates");
+        }
+        return reservation;
+    }
 
-class TieredCancellationPolicy(CancellationPolicy):
-    """Full refund if cancelled 3+ days before check-in, else 50%."""
-    def refund_amount(self, reservation: Reservation, cancel_date: date) -> float:
-        paid = reservation.payment.amount if reservation.payment else 0.0
-        days_before = (reservation.start_date - cancel_date).days
-        return paid if days_before >= 3 else paid * 0.5
-
-
-class HotelBookingService:
-    def __init__(self, checker: AvailabilityChecker, payment_strategy: PaymentStrategy,
-                 cancellation_policy: CancellationPolicy):
-        self.checker = checker
-        self.payment_strategy = payment_strategy
-        self.cancellation_policy = cancellation_policy
-
-    def book_room(self, hotel: Hotel, guest: Guest, room: Room,
-                   start: date, end: date, nightly_rate: float) -> Reservation:
-        nights = (end - start).days
-        amount = nightly_rate * nights
-        payment = self.payment_strategy.pay(amount)
-        if payment.status != "PAID":
-            raise RuntimeError("Payment failed")
-
-        reservation = Reservation(
-            reservation_id=str(uuid.uuid4()), room=room, guest=guest,
-            start_date=start, end_date=end, payment=payment,
-        )
-        if not room.add_reservation(reservation):
-            raise RuntimeError("Room no longer available for these dates")
-        return reservation
-
-    def cancel_reservation(self, reservation: Reservation, cancel_date: date) -> float:
-        refund = self.cancellation_policy.refund_amount(reservation, cancel_date)
-        reservation.cancel()
-        return refund
+    public double cancelReservation(Reservation reservation, LocalDate cancelDate) {
+        double refund = cancellationPolicy.refundAmount(reservation, cancelDate);
+        reservation.cancel();
+        return refund;
+    }
+}
 ```
 
 ---

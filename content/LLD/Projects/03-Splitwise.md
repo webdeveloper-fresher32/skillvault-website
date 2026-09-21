@@ -67,249 +67,315 @@
 
 ## 3. Full Implementation
 
-```python
-"""
-Splitwise — single-file runnable LLD reference implementation.
-"""
+```java
+/**
+ * Splitwise — single-file runnable LLD reference implementation in Java.
+ * Run directly with: java SplitwiseDemo.java
+ */
 
-from __future__ import annotations
+import java.util.*;
 
-import heapq
-from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from typing import Dict, List, Tuple
+// ---------------------------------------------------------------------------
+// Core entities
+// ---------------------------------------------------------------------------
 
-CENTS = 100  # work in integer cents internally to avoid float drift
+record User(String userId, String name) {
+    @Override
+    public String toString() {
+        return name;
+    }
+}
 
+class Group {
+    private final String name;
+    private final List<User> members;
+    private final List<Expense> expenses = new ArrayList<>();
 
-# ---------------------------------------------------------------------------
-# Core entities
-# ---------------------------------------------------------------------------
+    public Group(String name, List<User> members) {
+        this.name = name;
+        this.members = List.copyOf(members);
+    }
 
-@dataclass(frozen=True)
-class User:
-    user_id: str
-    name: str
+    public String getName() { return name; }
+    public List<User> getMembers() { return members; }
+    public List<Expense> getExpenses() { return expenses; }
+}
 
-    def __repr__(self) -> str:
-        return self.name
+// ---------------------------------------------------------------------------
+// Strategy: how an expense's total is divided among participants
+// ---------------------------------------------------------------------------
 
+interface Split {
+    /** Returns {user: amount_owed_in_cents} for the participants, summing to totalCents. */
+    Map<User, Integer> computeShares(int totalCents, List<User> participants, Map<String, Object> params);
+}
 
-class Group:
-    def __init__(self, name: str, members: List[User]):
-        self.name = name
-        self.members = members
-        self.expenses: List["Expense"] = []
+class EqualSplit implements Split {
+    @Override
+    public Map<User, Integer> computeShares(int totalCents, List<User> participants, Map<String, Object> params) {
+        int n = participants.size();
+        int base = totalCents / n;
+        int remainder = totalCents - (base * n);
 
+        Map<User, Integer> shares = new LinkedHashMap<>();
+        for (int i = 0; i < n; i++) {
+            shares.put(participants.get(i), base + (i < remainder ? 1 : 0));
+        }
+        return shares;
+    }
+}
 
-# ---------------------------------------------------------------------------
-# Strategy: how an expense's total is divided among participants
-# ---------------------------------------------------------------------------
+class ExactSplit implements Split {
+    @Override
+    @SuppressWarnings("unchecked")
+    public Map<User, Integer> computeShares(int totalCents, List<User> participants, Map<String, Object> params) {
+        Map<User, Integer> amounts = (Map<User, Integer>) params.get("amountsCents");
+        int sum = amounts.values().stream().mapToInt(Integer::intValue).sum();
+        if (sum != totalCents) {
+            throw new IllegalArgumentException("Exact split amounts must sum to the total expense");
+        }
+        return new LinkedHashMap<>(amounts);
+    }
+}
 
-class Split(ABC):
-    """Returns {user: amount_owed_in_cents} for the participants, summing to total_cents."""
+class PercentSplit implements Split {
+    @Override
+    @SuppressWarnings("unchecked")
+    public Map<User, Integer> computeShares(int totalCents, List<User> participants, Map<String, Object> params) {
+        Map<User, Double> percentages = (Map<User, Double>) params.get("percentages");
+        double sumPct = percentages.values().stream().mapToDouble(Double::doubleValue).sum();
+        if (Math.abs(sumPct - 100.0) > 1e-6) {
+            throw new IllegalArgumentException("Percentages must sum to 100");
+        }
 
-    @abstractmethod
-    def compute_shares(
-        self, total_cents: int, participants: List[User], **kwargs
-    ) -> Dict[User, int]:
-        ...
+        Map<User, Integer> shares = new LinkedHashMap<>();
+        int computedSum = 0;
+        User biggest = null;
+        int maxShare = -1;
 
+        for (Map.Entry<User, Double> entry : percentages.entrySet()) {
+            int share = (int) Math.round(totalCents * entry.getValue() / 100.0);
+            shares.put(entry.getKey(), share);
+            computedSum += share;
+            if (share > maxShare) {
+                maxShare = share;
+                biggest = entry.getKey();
+            }
+        }
 
-class EqualSplit(Split):
-    def compute_shares(self, total_cents: int, participants: List[User], **kwargs) -> Dict[User, int]:
-        n = len(participants)
-        base = total_cents // n
-        remainder = total_cents - base * n
-        shares = {u: base for u in participants}
-        # distribute the leftover cents (from integer division) one at a time
-        for u in participants[:remainder]:
-            shares[u] += 1
-        return shares
+        // correct rounding drift by adjusting the largest share
+        int drift = totalCents - computedSum;
+        if (drift != 0 && biggest != null) {
+            shares.put(biggest, shares.get(biggest) + drift);
+        }
+        return shares;
+    }
+}
 
+// ---------------------------------------------------------------------------
+// Expense
+// ---------------------------------------------------------------------------
 
-class ExactSplit(Split):
-    def compute_shares(
-        self, total_cents: int, participants: List[User], amounts_cents: Dict[User, int], **kwargs
-    ) -> Dict[User, int]:
-        if sum(amounts_cents.values()) != total_cents:
-            raise ValueError("Exact split amounts must sum to the total expense")
-        return dict(amounts_cents)
+class Expense {
+    private final User paidBy;
+    private final int amountCents;
+    private final List<User> participants;
+    private final Split splitStrategy;
+    private final Map<String, Object> splitParams;
 
+    public Expense(User paidBy, int amountCents, List<User> participants, Split splitStrategy, Map<String, Object> splitParams) {
+        this.paidBy = paidBy;
+        this.amountCents = amountCents;
+        this.participants = List.copyOf(participants);
+        this.splitStrategy = splitStrategy;
+        this.splitParams = splitParams != null ? splitParams : Collections.emptyMap();
+    }
 
-class PercentSplit(Split):
-    def compute_shares(
-        self, total_cents: int, participants: List[User], percentages: Dict[User, float], **kwargs
-    ) -> Dict[User, int]:
-        if abs(sum(percentages.values()) - 100.0) > 1e-6:
-            raise ValueError("Percentages must sum to 100")
-        shares = {u: round(total_cents * pct / 100.0) for u, pct in percentages.items()}
-        # correct rounding drift by adjusting the largest share
-        drift = total_cents - sum(shares.values())
-        if drift != 0:
-            biggest = max(shares, key=lambda u: shares[u])
-            shares[biggest] += drift
-        return shares
+    public Map<User, Integer> getShares() {
+        return splitStrategy.computeShares(amountCents, participants, splitParams);
+    }
 
+    public User getPaidBy() { return paidBy; }
+    public int getAmountCents() { return amountCents; }
+    public List<User> getParticipants() { return participants; }
+}
 
-# ---------------------------------------------------------------------------
-# Expense
-# ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// ExpenseManager: tracks pairwise balances and simplifies debts
+// ---------------------------------------------------------------------------
 
-@dataclass
-class Expense:
-    paid_by: User
-    amount_cents: int
-    participants: List[User]
-    split_strategy: Split
-    split_kwargs: dict = field(default_factory=dict)
+record Transaction(User payer, User receiver, int amountCents) {}
 
-    def shares(self) -> Dict[User, int]:
-        return self.split_strategy.compute_shares(
-            self.amount_cents, self.participants, **self.split_kwargs
-        )
+class ExpenseManager {
+    public static final int CENTS = 100;
+    // balances[a][b] = cents that b owes a (positive means b owes a)
+    private final Map<User, Map<User, Integer>> balances = new HashMap<>();
 
+    private void adjust(User creditor, User debtor, int cents) {
+        if (cents == 0 || creditor.equals(debtor)) {
+            return;
+        }
+        balances.computeIfAbsent(creditor, k -> new HashMap<>()).merge(debtor, cents, Integer::sum);
+        balances.computeIfAbsent(debtor, k -> new HashMap<>()).merge(creditor, -cents, Integer::sum);
+    }
 
-# ---------------------------------------------------------------------------
-# ExpenseManager: tracks pairwise balances and simplifies debts
-# ---------------------------------------------------------------------------
+    public void addExpense(Expense expense) {
+        Map<User, Integer> shares = expense.getShares();
+        for (Map.Entry<User, Integer> entry : shares.entrySet()) {
+            User participant = entry.getKey();
+            int owedCents = entry.getValue();
+            if (participant.equals(expense.getPaidBy())) {
+                continue;
+            }
+            adjust(expense.getPaidBy(), participant, owedCents);
+        }
+    }
 
-class ExpenseManager:
-    def __init__(self):
-        # balances[a][b] = cents that b owes a (positive means b owes a)
-        self.balances: Dict[User, Dict[User, int]] = {}
+    public Map<User, Integer> netBalances() {
+        Map<User, Integer> net = new LinkedHashMap<>();
+        for (Map.Entry<User, Map<User, Integer>> entry : balances.entrySet()) {
+            User creditor = entry.getKey();
+            int sum = entry.getValue().values().stream().mapToInt(Integer::intValue).sum();
+            net.put(creditor, sum);
+        }
+        return net;
+    }
 
-    def _adjust(self, creditor: User, debtor: User, cents: int) -> None:
-        if cents == 0 or creditor == debtor:
-            return
-        self.balances.setdefault(creditor, {}).setdefault(debtor, 0)
-        self.balances.setdefault(debtor, {}).setdefault(creditor, 0)
-        self.balances[creditor][debtor] += cents
-        self.balances[debtor][creditor] -= cents
+    public void printPairwiseBalances() {
+        Set<Set<User>> seen = new HashSet<>();
+        for (Map.Entry<User, Map<User, Integer>> entryA : balances.entrySet()) {
+            User a = entryA.getKey();
+            for (Map.Entry<User, Integer> entryB : entryA.getValue().entrySet()) {
+                User b = entryB.getKey();
+                int cents = entryB.getValue();
+                Set<User> pair = Set.of(a, b);
+                if (seen.contains(pair) || cents == 0) {
+                    continue;
+                }
+                seen.add(pair);
+                if (cents > 0) {
+                    System.out.printf("  %s owes %s: $%.2f
+", b, a, cents / (double) CENTS);
+                } else {
+                    System.out.printf("  %s owes %s: $%.2f
+", a, b, -cents / (double) CENTS);
+                }
+            }
+        }
+    }
 
-    def add_expense(self, expense: Expense) -> None:
-        shares = expense.shares()
-        for participant, owed_cents in shares.items():
-            if participant == expense.paid_by:
-                continue
-            # participant owes paid_by their share
-            self._adjust(creditor=expense.paid_by, debtor=participant, cents=owed_cents)
+    record BalanceNode(User user, int amount) {}
 
-    def net_balances(self) -> Dict[User, int]:
-        """Positive = this user is owed money overall; negative = this user owes money."""
-        net: Dict[User, int] = {}
-        for creditor, debtors in self.balances.items():
-            net[creditor] = net.get(creditor, 0) + sum(debtors.values())
-        return net
+    public List<Transaction> simplifyDebts() {
+        Map<User, Integer> net = netBalances();
+        PriorityQueue<BalanceNode> creditors = new PriorityQueue<>((a, b) -> Integer.compare(b.amount(), a.amount()));
+        PriorityQueue<BalanceNode> debtors = new PriorityQueue<>((a, b) -> Integer.compare(a.amount(), b.amount()));
 
-    def print_pairwise_balances(self) -> None:
-        seen: set = set()
-        for a, debtors in self.balances.items():
-            for b, cents in debtors.items():
-                pair = frozenset((a, b))
-                if pair in seen or cents == 0:
-                    continue
-                seen.add(pair)
-                if cents > 0:
-                    print(f"  {b} owes {a}: ${cents / CENTS:.2f}")
-                else:
-                    print(f"  {a} owes {b}: ${-cents / CENTS:.2f}")
+        for (Map.Entry<User, Integer> entry : net.entrySet()) {
+            if (entry.getValue() > 0) {
+                creditors.add(new BalanceNode(entry.getKey(), entry.getValue()));
+            } else if (entry.getValue() < 0) {
+                debtors.add(new BalanceNode(entry.getKey(), entry.getValue()));
+            }
+        }
 
-    def simplify_debts(self) -> List[Tuple[User, User, int]]:
-        """
-        Greedy min-cash-flow settlement: repeatedly match the biggest debtor
-        with the biggest creditor until everyone nets to zero.
-        Returns a list of (payer, receiver, amount_cents) transactions.
-        """
-        net = {u: bal for u, bal in self.net_balances().items() if bal != 0}
+        List<Transaction> transactions = new ArrayList<>();
+        while (!creditors.isEmpty() && !debtors.isEmpty()) {
+            BalanceNode creditor = creditors.poll();
+            BalanceNode debtor = debtors.poll();
 
-        creditors = [(-bal, u) for u, bal in net.items() if bal > 0]  # max-heap via negation
-        debtors = [(bal, u) for u, bal in net.items() if bal < 0]     # min-heap (most negative first)
-        heapq.heapify(creditors)
-        heapq.heapify(debtors)
+            int credit = creditor.amount();
+            int owe = -debtor.amount();
 
-        transactions: List[Tuple[User, User, int]] = []
+            int settled = Math.min(credit, owe);
+            transactions.add(new Transaction(debtor.user(), creditor.user(), settled));
 
-        while creditors and debtors:
-            neg_credit, creditor = heapq.heappop(creditors)
-            debt, debtor = heapq.heappop(debtors)
-            credit = -neg_credit
-            owe = -debt
+            int remainingCredit = credit - settled;
+            int remainingDebt = owe - settled;
 
-            settled = min(credit, owe)
-            transactions.append((debtor, creditor, settled))
+            if (remainingCredit > 0) {
+                creditors.add(new BalanceNode(creditor.user(), remainingCredit));
+            }
+            if (remainingDebt > 0) {
+                debtors.add(new BalanceNode(debtor.user(), -remainingDebt));
+            }
+        }
 
-            remaining_credit = credit - settled
-            remaining_debt = owe - settled
+        return transactions;
+    }
+}
 
-            if remaining_credit > 0:
-                heapq.heappush(creditors, (-remaining_credit, creditor))
-            if remaining_debt > 0:
-                heapq.heappush(debtors, (-remaining_debt, debtor))
+// ---------------------------------------------------------------------------
+// Demo
+// ---------------------------------------------------------------------------
 
-        return transactions
+public class SplitwiseDemo {
+    public static int dollarsToCents(double amount) {
+        return (int) Math.round(amount * ExpenseManager.CENTS);
+    }
 
+    public static void main(String[] args) {
+        User alice = new User("u1", "Alice");
+        User bob = new User("u2", "Bob");
+        User carol = new User("u3", "Carol");
+        User dave = new User("u4", "Dave");
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+        Group trip = new Group("Goa Trip", List.of(alice, bob, carol, dave));
+        ExpenseManager manager = new ExpenseManager();
 
-def dollars_to_cents(amount: float) -> int:
-    return round(amount * CENTS)
+        // 1. Alice pays $400 for hotel, split equally among all 4
+        Expense e1 = new Expense(
+            alice,
+            dollarsToCents(400.00),
+            List.of(alice, bob, carol, dave),
+            new EqualSplit(),
+            null
+        );
+        manager.addExpense(e1);
 
+        // 2. Bob pays $150 for dinner, split exactly (Bob 50, Carol 60, Dave 40)
+        Expense e2 = new Expense(
+            bob,
+            dollarsToCents(150.00),
+            List.of(bob, carol, dave),
+            new ExactSplit(),
+            Map.of("amountsCents", Map.of(
+                bob, dollarsToCents(50.00),
+                carol, dollarsToCents(60.00),
+                dave, dollarsToCents(40.00)
+            ))
+        );
+        manager.addExpense(e2);
 
-if __name__ == "__main__":
-    alice = User("u1", "Alice")
-    bob = User("u2", "Bob")
-    carol = User("u3", "Carol")
-    dave = User("u4", "Dave")
+        // 3. Carol pays $100 for cab rides, split by percent (Alice 20%, Bob 30%, Carol 50%)
+        Expense e3 = new Expense(
+            carol,
+            dollarsToCents(100.00),
+            List.of(alice, bob, carol),
+            new PercentSplit(),
+            Map.of("percentages", Map.of(alice, 20.0, bob, 30.0, carol, 50.0))
+        );
+        manager.addExpense(e3);
 
-    trip = Group("Goa Trip", [alice, bob, carol, dave])
-    manager = ExpenseManager()
+        System.out.println("Pairwise balances after all expenses:");
+        manager.printPairwiseBalances();
 
-    # 1. Alice pays $400 for the hotel, split equally among all 4
-    e1 = Expense(
-        paid_by=alice,
-        amount_cents=dollars_to_cents(400.00),
-        participants=[alice, bob, carol, dave],
-        split_strategy=EqualSplit(),
-    )
-    manager.add_expense(e1)
+        System.out.println("
+Net balance per user (+ means owed money, - means owes money):");
+        for (Map.Entry<User, Integer> entry : manager.netBalances().entrySet()) {
+            int cents = entry.getValue();
+            System.out.printf("  %s: %s$%.2f
+", entry.getKey(), cents >= 0 ? "+" : "-", Math.abs(cents) / (double) ExpenseManager.CENTS);
+        }
 
-    # 2. Bob pays $150 for dinner, split exactly (Bob 50, Carol 60, Dave 40)
-    e2 = Expense(
-        paid_by=bob,
-        amount_cents=dollars_to_cents(150.00),
-        participants=[bob, carol, dave],
-        split_strategy=ExactSplit(),
-        split_kwargs={"amounts_cents": {
-            bob: dollars_to_cents(50.00),
-            carol: dollars_to_cents(60.00),
-            dave: dollars_to_cents(40.00),
-        }},
-    )
-    manager.add_expense(e2)
-
-    # 3. Carol pays $100 for cab rides, split by percent (Alice 20%, Bob 30%, Carol 50%)
-    e3 = Expense(
-        paid_by=carol,
-        amount_cents=dollars_to_cents(100.00),
-        participants=[alice, bob, carol],
-        split_strategy=PercentSplit(),
-        split_kwargs={"percentages": {alice: 20.0, bob: 30.0, carol: 50.0}},
-    )
-    manager.add_expense(e3)
-
-    print("Pairwise balances after all expenses:")
-    manager.print_pairwise_balances()
-
-    print("\nNet balance per user (+ means owed money, - means owes money):")
-    for user, cents in manager.net_balances().items():
-        print(f"  {user}: {'+' if cents >= 0 else '-'}${abs(cents) / CENTS:.2f}")
-
-    print("\nSimplified settlement plan:")
-    for payer, receiver, cents in manager.simplify_debts():
-        print(f"  {payer} pays {receiver}: ${cents / CENTS:.2f}")
+        System.out.println("
+Simplified settlement plan:");
+        for (Transaction tx : manager.simplifyDebts()) {
+            System.out.printf("  %s pays %s: $%.2f
+", tx.payer(), tx.receiver(), tx.amountCents() / (double) ExpenseManager.CENTS);
+        }
+    }
+}
 ```
 
 **Expected output:**

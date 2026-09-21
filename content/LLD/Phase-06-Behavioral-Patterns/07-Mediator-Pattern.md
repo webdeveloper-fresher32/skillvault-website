@@ -1,251 +1,329 @@
-# Mediator Pattern — Complete Guide
+# 🧠 The Ultimate Guide to Mediator Pattern (LLD)
 
-## Table of Contents
-1. [The Problem Mediator Solves](#1-the-problem-mediator-solves)
-2. [The Bad Example](#2-the-bad-example)
-3. [The Good Example](#3-the-good-example)
-4. [Real-World Tie-In](#4-real-world-tie-in)
-5. [Complete Runnable Code](#5-complete-runnable-code)
-6. [When to Use / Trade-offs](#6-when-to-use--trade-offs)
-7. [Interview Q&A](#7-interview-qa)
+> **Core Philosophy:** *Define an object that encapsulates how a set of objects interact. Mediator promotes loose coupling by keeping objects from referring to each other explicitly, and it lets you vary their interaction independently.*
 
 ---
 
-## 1. The Problem Mediator Solves
-
-In a chat room, every `User` could hold direct references to every other `User` and call `other_user.receive(message)` on each one. With 3 users this is manageable; with 30 users, every `User` class ends up holding a list of 29 peers, and adding a "muted users" or "moderator" feature means touching every single `User` object's logic. This is the classic **many-to-many spaghetti** problem — N objects each referencing N-1 others.
-
-```
-Without Mediator:
-  UserA.send("hi") -> UserA loops over [UserB, UserC, UserD, ...] and calls .receive()
-  UserB.send("hi") -> UserB loops over [UserA, UserC, UserD, ...] and calls .receive()
-  # every user object needs a reference to every other user object
-  # adding a moderation rule means editing the send logic in EVERY user
-```
-
-**Mediator Pattern**: define an object that encapsulates how a set of objects interact, so those objects don't reference each other directly — they only talk to the mediator, which centralizes and controls the communication.
-
----
-
-## 2. The Bad Example
-
-```python
-class User:
-    def __init__(self, name: str) -> None:
-        self.name = name
-        self.peers: list["User"] = []  # every user must know every other user
-
-    def send(self, message: str) -> None:
-        print(f"{self.name} sends: {message}")
-        for peer in self.peers:
-            peer.receive(self.name, message)
-
-    def receive(self, sender: str, message: str) -> None:
-        print(f"{self.name} received from {sender}: {message}")
-
-
-alice, bob, carol = User("Alice"), User("Bob"), User("Carol")
-alice.peers = [bob, carol]
-bob.peers = [alice, carol]
-carol.peers = [alice, bob]
-# manually wiring N*(N-1) relationships -- doesn't scale, and logic like
-# "muted users don't receive messages" would need to be added to every User
-```
-
-Problems:
-- O(N²) relationships to wire manually — adding a new user means updating everyone else's `peers` list.
-- Cross-cutting rules (muting, logging, rate-limiting) must be duplicated inside every `User`.
-- Users are tightly coupled to each other's concrete class and `receive()` signature.
+## 📌 Table of Contents
+1. [The Problem: Why Do We Need It?](#1-the-problem-why-do-we-need-it)
+2. [The Spaghetti Communication Mesh ($O(N^2)$ Problem)](#2-the-spaghetti-communication-mesh-on2-problem)
+3. [The Core Architecture (The 4 Participants)](#3-the-core-architecture-the-4-participants)
+4. [Step-by-Step Implementation (Java)](#4-step-by-step-implementation-java)
+5. [UML Class Diagram & Relationships](#5-uml-class-diagram--relationships)
+6. [Execution Flow: Star Topology Dispatch](#6-execution-flow-star-topology-dispatch)
+7. [Side-by-Side Comparison: Direct Peer-to-Peer vs Mediator](#7-side-by-side-comparison-direct-peer-to-peer-vs-mediator)
+8. [When to Use & When NOT to Use](#8-when-to-use--when-not-to-use)
+9. [Pros & Cons Trade-off Analysis](#9-pros--cons-trade-off-analysis)
+10. [Real-World Everyday Examples](#10-real-world-everyday-examples)
+11. [The Ultimate Checklist & Mental Formula](#11-the-ultimate-checklist--mental-formula)
 
 ---
 
-## 3. The Good Example
+## 1. The Problem: Why Do We Need It?
+
+### Real-World Domain Example: Airport Air Traffic Control (ATC) Tower ✈️ 🛬
+Imagine an international airport with multiple commercial flights:
+* Flight Boeing 777
+* Flight Airbus A380
+* Flight Cargo 747
+
+Each plane needs to coordinate runway landings, takeoffs, and altitude holding patterns to prevent catastrophic mid-air collisions.
 
 ```
-┌─────────────────────┐        ┌───────────┐
-│    «interface»      │◆──────│   User     │
-│    ChatMediator       │ used  │(Colleague) │
-│ + send(msg, from)     │  by   └───────────┘
-│ + add_user(user)       │            ▲
-└─────────────────────┘            │ (implements same base)
-          ▲                   ┌────┴─────┬─────────┐
-┌───────────────────┐   Alice     Bob      Carol
-│   ChatRoom         │
-│ (ConcreteMediator) │
-└───────────────────┘
+                          DIRECT PLANE-TO-PLANE MESH ❌
+                               (Disaster waiting to happen!)
+                                   Flight 777
+                                  ▲    │    ▲
+                                 ╱     │     ╲
+                                ╱      │      ╲
+                               ▼       ▼       ▼
+                          Flight A380 ◄──────► Cargo 747
 ```
 
-Every `User` only holds a reference to the `ChatMediator` interface, never to other users. `ChatRoom` centralizes routing, muting, logging — one place to change behavior.
+### The $O(N^2)$ Communication Nightmare
+If airplanes talk directly to each other:
+* Every airplane must maintain a radio connection to every other plane in the airspace.
+* Adding 1 new aircraft requires connecting to all existing aircraft.
+* Conflicting instructions: Who lands first if two planes negotiate at the same time?
 
 ---
 
-## 4. Real-World Tie-In
+## 2. The Spaghetti Communication Mesh ($O(N^2)$ Problem)
 
-This is how an air-traffic-control tower coordinates planes (pilots never talk directly to each other — everything routes through the tower, which enforces separation rules), and how UI frameworks coordinate widgets (a dialog box's "mediator" enables/disables the Submit button based on multiple field validations, instead of every field widget knowing about every other widget).
+```
+MESH TOPOLOGY (Without Mediator)         STAR TOPOLOGY (With Mediator)
+        A ────── B                               A        B
+       ╱ ╲      ╱ ╲                               ╲      ╱
+      ╱   ╲    ╱   ╲                               ▼    ▼
+     C ──── D ──── E                             [ ATC TOWER ]
+                                                   ▲    ▲
+                                                  ╱      ╲
+                                                 C        D
+  Connections = N(N - 1) / 2 = O(N²)          Connections = N = O(N)
+```
+
+By introducing an **Air Traffic Controller (ATC)**, planes never talk to each other directly. They report to the Tower, and the Tower coordinates the entire airspace!
 
 ---
 
-## 5. Complete Runnable Code
+## 3. The Core Architecture (The 4 Participants)
 
-```python
-from abc import ABC, abstractmethod
-
-
-class ChatMediator(ABC):
-    @abstractmethod
-    def send(self, message: str, sender: "User") -> None:
-        raise NotImplementedError
-
-    @abstractmethod
-    def add_user(self, user: "User") -> None:
-        raise NotImplementedError
-
-
-class User(ABC):
-    """Colleague: only knows the mediator, never other users directly."""
-
-    def __init__(self, name: str, mediator: ChatMediator) -> None:
-        self.name = name
-        self.mediator = mediator
-        mediator.add_user(self)
-
-    def send(self, message: str) -> None:
-        print(f"{self.name} sends: {message}")
-        self.mediator.send(message, self)
-
-    @abstractmethod
-    def receive(self, sender_name: str, message: str) -> None:
-        raise NotImplementedError
-
-
-class ChatRoom(ChatMediator):
-    """Concrete mediator: centralizes routing, muting, logging."""
-
-    def __init__(self) -> None:
-        self._users: list[User] = []
-        self._muted: set[str] = set()
-
-    def add_user(self, user: User) -> None:
-        self._users.append(user)
-
-    def mute(self, name: str) -> None:
-        self._muted.add(name)
-
-    def send(self, message: str, sender: User) -> None:
-        if sender.name in self._muted:
-            print(f"[ChatRoom] {sender.name} is muted -- message blocked")
-            return
-        for user in self._users:
-            if user is not sender:
-                user.receive(sender.name, message)
-
-
-class ChatUser(User):
-    def receive(self, sender_name: str, message: str) -> None:
-        print(f"  {self.name} received from {sender_name}: {message}")
-
-
-if __name__ == "__main__":
-    chat_room = ChatRoom()
-    alice = ChatUser("Alice", chat_room)
-    bob = ChatUser("Bob", chat_room)
-    carol = ChatUser("Carol", chat_room)
-
-    alice.send("Hey everyone!")
-    chat_room.mute("Bob")
-    bob.send("Can anyone hear me?")  # blocked centrally, no User code changes needed
 ```
-
-Expected output:
-```
-Alice sends: Hey everyone!
-  Bob received from Alice: Hey everyone!
-  Carol received from Alice: Hey everyone!
-Bob sends: Can anyone hear me?
-[ChatRoom] Bob is muted -- message blocked
+┌──────────────────────────────────────┐       ┌──────────────────────────────────────┐
+│        <<interface>> AtcMediator     │       │       <<abstract>> Airplane          │
+├──────────────────────────────────────┤       ├──────────────────────────────────────┤
+│ + registerFlight(plane: Airplane)    │       │ # mediator : AtcMediator             │
+│ + notifyLand(sender: Airplane)       │       │ - flightNumber : String              │
+│ + notifyTakeoff(sender: Airplane)    │       ├──────────────────────────────────────┤
+└──────────────────▲───────────────────┘       │ + requestLanding()                   │
+                   │ implements                │ + receiveNotification(msg: String)   │
+┌──────────────────┴───────────────────┐       └──────────────────▲───────────────────┘
+│ Concrete Mediator (AirTrafficControl)│                          │ extends
+│ - runwayOccupied : boolean           │                          │
+│ - planesInAirspace : List<Airplane>  │       ┌──────────────────┴───────────────────┐
+└──────────────────────────────────────┘       ▼                                      ▼
+                                        ┌──────────────┐                       ┌──────────────┐
+                                        │ BoeingFlight │                       │ AirbusFlight │
+                                        └──────────────┘                       └──────────────┘
 ```
 
 ---
 
-## 6. When to Use / Trade-offs
+## 4. Step-by-Step Implementation (Java)
 
-**Use Mediator when:**
-- Many objects need to communicate in complex ways, and direct references between them create a tangled, hard-to-change web (chat systems, air-traffic control, form/dialog widget coordination, matchmaking lobbies).
-- You want to centralize a cross-cutting interaction rule (muting, rate limiting, logging, validation across multiple fields) in one place instead of duplicating it across every participant.
+### Step 1: The Mediator Interface
 
-**Trade-offs:**
-- The mediator itself can become a "god object" that knows too much and grows unmanageably complex if it absorbs too much business logic — keep it focused on *coordination*, not business rules.
-- Adds an extra indirection hop for every interaction, which can slightly complicate debugging ("who actually sent this message?" requires looking at the mediator's routing logic).
-- For a small, fixed, stable set of collaborators (2-3 objects with simple interaction), direct references may be simpler than introducing a mediator.
-
-| Aspect | Without Mediator | With Mediator |
-|--------|-------------------|----------------|
-| Relationships to wire | O(N²) direct references | O(N) — each object only knows the mediator |
-| Adding a cross-cutting rule (e.g. mute) | Edit every participant | Edit the mediator once |
-| Coupling | Objects coupled to each other's concrete classes | Objects coupled only to the mediator interface |
+```java
+public interface AtcMediator {
+    void registerFlight(Airplane plane);
+    void requestLanding(Airplane sender);
+    void requestTakeoff(Airplane sender);
+}
+```
 
 ---
 
-## 7. Interview Q&A
+### Step 2: The Colleague Base Class (Airplane)
 
-**Q: What problem does the Mediator pattern solve?**
-Answer: It reduces chaotic many-to-many coupling between a set of collaborating objects by introducing a central object (the mediator) that all of them talk to instead of each other. Objects only need a reference to the mediator interface, not to every peer, which turns O(N²) relationships into O(N) and centralizes cross-cutting coordination logic in one place.
+```java
+public abstract class Airplane {
+    protected final AtcMediator mediator;
+    protected final String flightCode;
 
-**Q: How is Mediator different from Observer?**
-Answer: Observer is one-directional and one-to-many: a subject notifies its observers when *its own* state changes, and observers don't talk back through the subject. Mediator is about *many-to-many* coordination between peers of roughly equal standing (all `User`s can send and receive) — the mediator actively routes, filters, and can transform interactions between them, not just broadcast a single subject's state change. In practice a Mediator implementation often uses Observer internally (colleagues could "subscribe" to the mediator), but the intents differ: Observer = notify dependents of a change; Mediator = decouple peers that need to collaborate.
+    public Airplane(AtcMediator mediator, String flightCode) {
+        this.mediator = mediator;
+        this.flightCode = flightCode;
+    }
 
-**Q: Doesn't the Mediator just become a god object with all the complexity moved into it?**
-Answer: It can, if you're not careful — that's the main risk/criticism of this pattern. The mitigation is to keep the mediator focused purely on *coordination and routing* (who talks to whom, under what constraints) and keep actual business logic inside the colleague objects themselves. If the mediator starts implementing domain logic that belongs to a `User` or a `Plane`, it's grown beyond its intended scope and should be split up (e.g. extract a separate `ModerationPolicy` object the mediator delegates to).
+    public String getFlightCode() { return flightCode; }
 
-**Q: Implement the Mediator pattern from scratch for an air-traffic-control tower that lets planes request landing and prevents two planes from landing on the same runway simultaneously.**
-Answer:
-```python
-from abc import ABC, abstractmethod
+    public void requestLanding() {
+        System.out.println("🛫 [" + flightCode + "]: Requesting landing clearance...");
+        mediator.requestLanding(this);
+    }
 
+    public void requestTakeoff() {
+        System.out.println("🛬 [" + flightCode + "]: Requesting takeoff clearance...");
+        mediator.requestTakeoff(this);
+    }
 
-class ControlTower(ABC):
-    @abstractmethod
-    def request_landing(self, plane: "Plane") -> bool: ...
-    @abstractmethod
-    def notify_landed(self, plane: "Plane") -> None: ...
-
-
-class Plane:
-    def __init__(self, callsign: str, tower: ControlTower) -> None:
-        self.callsign = callsign
-        self.tower = tower
-
-    def request_landing(self) -> None:
-        if self.tower.request_landing(self):
-            print(f"{self.callsign}: cleared to land")
-            self.tower.notify_landed(self)
-        else:
-            print(f"{self.callsign}: holding pattern, runway busy")
-
-
-class AirTrafficControlTower(ControlTower):
-    def __init__(self) -> None:
-        self._runway_occupied = False
-
-    def request_landing(self, plane: Plane) -> bool:
-        if self._runway_occupied:
-            return False
-        self._runway_occupied = True
-        return True
-
-    def notify_landed(self, plane: Plane) -> None:
-        print(f"[Tower] {plane.callsign} has landed, freeing runway")
-        self._runway_occupied = False
-
-
-tower = AirTrafficControlTower()
-plane_a, plane_b = Plane("AI101", tower), Plane("BA202", tower)
-plane_a.request_landing()
-plane_b.request_landing()  # will succeed since plane_a already freed the runway in notify_landed
+    public abstract void receiveNotice(String message);
+}
 ```
 
-**Q: Can Mediator and Facade be confused? What's the distinction?**
-Answer: Both introduce an intermediary object, but Facade (Phase 05) provides a *simplified one-way interface* over a subsystem the client doesn't need to know the internals of — it doesn't add new communication behavior, just hides complexity. Mediator centralizes *bidirectional collaboration* between peer objects that would otherwise need to know about each other — it actively participates in and controls the interaction, not just simplifying access to it.
+---
 
-**Q: What's a downside of introducing Mediator too early?**
-Answer: If there are only two or three collaborators with a simple, stable interaction, adding a mediator interface plus a concrete mediator class is unnecessary indirection — direct method calls are simpler to read and trace. Mediator earns its complexity once you have many collaborators or interaction rules that would otherwise be duplicated across every participant.
+### Step 3: Concrete Colleagues
+
+```java
+public class CommercialFlight extends Airplane {
+    public CommercialFlight(AtcMediator mediator, String flightCode) {
+        super(mediator, flightCode);
+    }
+
+    @Override
+    public void receiveNotice(String message) {
+        System.out.println("📢 Radio to [" + flightCode + "]: " + message);
+    }
+}
+```
+
+---
+
+### Step 4: The Concrete Mediator (The Air Traffic Control Tower)
+
+```java
+import java.util.ArrayList;
+import java.util.List;
+
+public class AirportControlTower implements AtcMediator {
+    private final List<Airplane> flights = new ArrayList<>();
+    private boolean isRunwayFree = true;
+
+    @Override
+    public void registerFlight(Airplane plane) {
+        flights.add(plane);
+        System.out.println("📡 Radar: Flight " + plane.getFlightCode() + " entered airspace.");
+    }
+
+    @Override
+    public void requestLanding(Airplane sender) {
+        if (isRunwayFree) {
+            isRunwayFree = false; // Lock runway
+            sender.receiveNotice("CLEAR TO LAND on Runway 09L.");
+            
+            // Broadcast to other planes to hold patterns
+            for (Airplane plane : flights) {
+                if (plane != sender) {
+                    plane.receiveNotice("ALERT: Runway occupied by " + sender.getFlightCode() + ". Maintain holding orbit.");
+                }
+            }
+        } else {
+            sender.receiveNotice("DENIED: Runway currently occupied. Enter 3000ft holding orbit!");
+        }
+    }
+
+    @Override
+    public void requestTakeoff(Airplane sender) {
+        if (isRunwayFree) {
+            sender.receiveNotice("CLEAR FOR TAKEOFF Runway 09R. Safe skies!");
+        } else {
+            sender.receiveNotice("HOLD SHORT: Runway is busy with an arriving aircraft.");
+        }
+    }
+
+    public void vacateRunway(Airplane sender) {
+        isRunwayFree = true;
+        System.out.println("✅ Runway cleared by " + sender.getFlightCode() + "!");
+    }
+}
+```
+
+---
+
+### Step 5: Client Usage
+
+```java
+public class Main {
+    public static void main(String[] args) {
+        AirportControlTower tower = new AirportControlTower();
+
+        Airplane flight1 = new CommercialFlight(tower, "Emirates-EK202");
+        Airplane flight2 = new CommercialFlight(tower, "Delta-DL404");
+
+        tower.registerFlight(flight1);
+        tower.registerFlight(flight2);
+
+        System.out.println("\n--- Event 1: Emirates Requests Landing ---");
+        flight1.requestLanding(); // Granted! Delta is notified to hold.
+
+        System.out.println("\n--- Event 2: Delta Attempts Landing at Same Time ---");
+        flight2.requestLanding(); // Denied by tower!
+
+        System.out.println("\n--- Event 3: Emirates Finishes Taxiing ---");
+        tower.vacateRunway(flight1);
+
+        System.out.println("\n--- Event 4: Delta Re-attempts Landing ---");
+        flight2.requestLanding(); // Now granted!
+    }
+}
+```
+
+---
+
+## 5. UML Class Diagram & Relationships
+
+```
+┌──────────────────────────────────────────────┐
+│           <<interface>> AtcMediator          │
+├──────────────────────────────────────────────┤
+│ + registerFlight(plane: Airplane)            │
+│ + requestLanding(sender: Airplane)           │
+│ + requestTakeoff(sender: Airplane)           │
+└──────────────────────▲───────────────────────┘
+                       │ implements
+┌──────────────────────┴───────────────────────┐       ┌──────────────────────────────────────┐
+│             AirportControlTower              │       │        <<abstract>> Airplane         │
+├──────────────────────────────────────────────┤       ├──────────────────────────────────────┤
+│ - isRunwayFree : boolean                     │◄──────┤ # mediator : AtcMediator             │
+│ - flights : List<Airplane>                   │HAS-A  │ - flightCode : String                │
+├──────────────────────────────────────────────┤       ├──────────────────────────────────────┤
+│ + requestLanding(sender)                     │       │ + requestLanding()                   │
+└──────────────────────┬───────────────────────┘       │ + receiveNotice(msg: String)         │
+                       │ coordinates                   └──────────────────▲───────────────────┘
+                       ▼                                                  │ extends
+               Airplane Colleague                      ┌──────────────────┴───────────────────┐
+                                                       │           CommercialFlight           │
+                                                       └──────────────────────────────────────┘
+```
+
+---
+
+## 6. Execution Flow: Star Topology Dispatch
+
+```
+Flight1 (Emirates) calls requestLanding()
+   │
+   ├─► Delegates to mediator.requestLanding(this)
+   │
+AirportControlTower (Mediator)
+   │
+   ├─► Checks isRunwayFree == true
+   ├─► Locks runway (isRunwayFree = false)
+   ├─► Tells Emirates: "CLEAR TO LAND"
+   │
+   └─► Loops through colleagues:
+          └─► Tells Delta: "HOLD ORBIT: Runway occupied!"
+```
+
+---
+
+## 7. Side-by-Side Comparison: Direct Peer-to-Peer vs Mediator
+
+| Metric | ❌ Direct Mesh Communication | ✅ With Mediator Pattern |
+| :--- | :--- | :--- |
+| **Complexity** | $O(N^2)$ exponential connection lines. | $O(N)$ clean star topology. |
+| **Coupling** | Every class has hard references to 10 other classes. | Classes only know the single mediator interface. |
+| **Reusability** | Impossible to reuse an airplane in a different airport. | Highly reusable; colleague classes have zero peer dependencies. |
+
+---
+
+## 8. When to Use & When NOT to Use
+
+### ✅ When to USE
+* It's hard to change some of the classes because they are tightly coupled to a dozen of other classes.
+* You can't reuse a component in a different program because it's too dependent on other components.
+* Complex UI dialog forms with interdependent fields (changing dropdown X disables checkbox Y and validates textfield Z).
+
+### ❌ When NOT to USE
+* When you only have two or three components that communicate simply.
+* Avoid letting the Mediator become a massive, omnipotent **God Object** that contains all application logic.
+
+---
+
+## 9. Pros & Cons Trade-off Analysis
+
+### 🟢 Advantages
+* **Single Responsibility Principle:** Extracts communications between various components into a single place.
+* **Open/Closed Principle:** Introduce new mediators without having to change the actual components.
+* Reduces coupling between a set of colleagues.
+
+### 🔴 Disadvantages
+* Over time, a mediator can evolve into an unmaintainable **God Object**.
+
+---
+
+## 10. Real-World Everyday Examples
+
+| Domain | Mediator | Colleagues Coordinated |
+| :--- | :--- | :--- |
+| 🪟 **UI Form Dialogs** | `RegistrationDialogMediator` | Submit Button, Password Field, Terms Checkbox |
+| 💬 **Group Chat Rooms** | `ChatRoomServer` | Chat Users (Alice, Bob, Charlie) |
+| ✈️ **Aviation** | `AirTrafficControlTower` | Passenger Jets, Cargo Planes, Helicopters |
+
+---
+
+## 11. The Ultimate Checklist & Mental Formula
+
+### The Mental Formula
+$$\text{Colleagues (Planes)} \xrightarrow{\text{communicate only through}} \text{Mediator (ATC Tower)} = \mathbf{Mediator\ Pattern}$$

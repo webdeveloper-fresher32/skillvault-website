@@ -1,8 +1,8 @@
-# LLD (Low-Level Design) — Complete Interview Prep Course
+# LLD (Low-Level Design) — Complete Java Masterclass & Interview Prep Course
 
-A self-contained, Python-first Low-Level Design course built for interview prep at the **~3 years experience** level (Python full-stack — React + Node/Python roles). Every lesson is written so you never need to leave this repo to prepare: concepts, bad-vs-good code, real-world domain examples, class diagrams, and interview Q&A are all inline.
+A self-contained, production-grade **Java-first Low-Level Design course** built for software engineers preparing for top-tier product and enterprise LLD interviews (SDE-1, SDE-2, SDE-3 / Senior Backend roles). Every lesson is crafted with idiomatic, thread-safe Java: core principles, before-and-after refactorings, GoF design patterns (all 23), concurrent multi-threading patterns, UML diagrams, real-world domain architectures, and exhaustive interview Q&A.
 
-This course does not assume staff-level system design depth. It targets what most product companies actually ask at 2-5 YOE: clean OOP, SOLID, the common design patterns, and the ability to design a handful of classic systems (Parking Lot, Splitwise, Cab Booking, ATM, etc.) end-to-end on a whiteboard.
+This masterclass targets what leading tech companies (Amazon, Google, Microsoft, Uber, Flipkart, Swiggy) evaluate: clean object-oriented architecture, SOLID compliance, thread safety & concurrency handling, memory-conscious data structures, and the ability to design and live-code end-to-end platforms on a whiteboard or pair-programming screen.
 
 ---
 
@@ -10,59 +10,60 @@ This course does not assume staff-level system design depth. It targets what mos
 
 ```
 LLD/
-├── Phase-01-OOP-Foundations/            → Classes, inheritance, polymorphism, composition, dataclasses, magic methods
-├── Phase-02-SOLID-Principles/           → SRP, OCP, LSP, ISP, DIP with bad/good refactors
-├── Phase-03-UML-and-Object-Modeling/    → Class diagrams, relationships, noun-extraction technique
-├── Phase-04-Creational-Patterns/        → Singleton, Factory Method, Abstract Factory, Builder, Prototype
-├── Phase-05-Structural-Patterns/        → Adapter, Decorator, Facade, Proxy, Composite
-├── Phase-06-Behavioral-Patterns/        → Strategy, Observer, Command, State, Template Method, Iterator, Mediator, Chain of Responsibility, Memento
-├── Phase-07-Python-Features-for-LLD/    → ABCs, Protocols, Enums, Generics, Context Managers, Dependency Injection
-├── Phase-08-Transactional-Systems-Design/ → ATM, Vending Machine, Splitwise (design walkthroughs)
-├── Phase-09-Booking-Systems-Design/     → Parking Lot, Movie Booking, Cab Booking, Hotel Booking (design walkthroughs)
-├── Phase-10-Platform-Systems-Design/    → Food Delivery, Library System, Elevator, URL Shortener (design walkthroughs)
-├── Phase-11-Social-Media-Systems-Design/→ WhatsApp, Spotify, Amazon Cart (design walkthroughs)
-├── Phase-12-Interview-Process-and-Advanced/ → How to run the interview live, drill problems, staff-level discussion designs
-├── Projects/                            → 5 fully coded, runnable reference implementations (Parking Lot, Movie Booking, Splitwise, Cab Booking, ATM)
-├── Quick-Reference/                     → Cheatsheet, 50 Interview Q&A, 30-Day Study Plan
-├── Reference-Code/                      → Original standalone .py scripts (bad_example.py / good_example.py per pattern) — one folder per topic, runnable independently of the lessons
-└── Design-Patterns-Overview.pdf         → Original slide-deck overview of all pattern categories
+├── Phase-01-OOP-Foundations/             → Classes, Objects, Inheritance, Polymorphism, Encapsulation, Composition, Records
+├── Phase-02-SOLID-Principles/            → SRP, OCP, LSP, ISP, DIP with production Java refactorings & comparisons
+├── Phase-03-UML-and-Object-Modeling/     → Class diagrams, PlantUML/Mermaid, Object identification & responsibilities
+├── Phase-04-Creational-Patterns/         → Singleton, Factory Method, Abstract Factory, Builder, Prototype
+├── Phase-05-Structural-Patterns/         → Adapter, Decorator, Facade, Proxy, Composite, Bridge, Flyweight
+├── Phase-06-Behavioral-Patterns/         → Strategy, Observer, Command, State, Template Method, Iterator, Mediator,
+│                                           Chain of Responsibility, Memento, Visitor, Interpreter
+├── Phase-07-Java-Features-and-Concurrency-for-LLD/ → Interfaces, Generics, Records, Streams, AutoCloseable, DI,
+│                                                     java.util.concurrent (Locks, Semaphores, ExecutorService, Concurrent Collections)
+├── Phase-08-Transactional-Systems-Design/→ ATM, Vending Machine, Splitwise (comprehensive design walkthroughs)
+├── Phase-09-Booking-Systems-Design/      → Parking Lot, Movie Ticket Booking, Cab Booking, Hotel Booking
+├── Phase-10-Platform-Systems-Design/     → Food Delivery (Swiggy/DoorDash), Library Management, Elevator, URL Shortener
+├── Phase-11-Social-Media-Systems-Design/ → WhatsApp, Spotify, Amazon Cart (real-time states, pub-sub & order flows)
+├── Phase-12-Interview-Process-and-Advanced/ → 7-step live interview blueprint, rapid drills, staff-level system discussions
+├── Projects/                             → 5 complete, runnable reference implementations in single-file Java
+│                                           (Parking Lot, Movie Ticket Booking, Splitwise, Cab Booking, ATM)
+├── Quick-Reference/                      → Cheatsheet, 50 Interview Q&A, 30-Day Study Plan
+└── 0.Assets/                             → Diagrams, architecture charts, and visual reference assets
 ```
 
-Phases 8-11 teach the **design process** (requirements → entities → relationships → responsibilities → SOLID → patterns → extensibility) for 14 classic interview problems. `Projects/` holds **fully runnable code** for the 5 most commonly asked of those problems — read the design phase first, then the full implementation.
-
-Each phase folder that has an original PDF companion (e.g. `Phase-04-Creational-Patterns/01-Singleton-Pattern.pdf` next to `01-Singleton-Pattern.md`) keeps it alongside the matching lesson — treat the PDF as a slide-style visual companion to that lesson, not a separate reading. `Reference-Code/` holds the original standalone Python scripts (same patterns, same bad/good structure) if you'd rather run bare `.py` files than copy code out of the markdown.
+Phases 08–11 teach the repeatable **7-step design process** (Requirements → Entities → Relationships → Responsibilities → SOLID → Patterns → Extensibility) across 14 high-frequency interview platforms. `Projects/` provides **complete, self-contained runnable Java applications** for the 5 most critical problems — executable directly with `java <ClassName>.java` (Java 11+ source launch).
 
 ---
 
 ## Learning Path
 
-| Phase | Topic | Difficulty | Time |
-|-------|-------|-----------|------|
-| 01 | OOP Foundations | Beginner | 4 days |
-| 02 | SOLID Principles | Beginner | 3 days |
-| 03 | UML & Object Modeling | Beginner | 2 days |
-| 04 | Creational Patterns | Intermediate | 3 days |
-| 05 | Structural Patterns | Intermediate | 3 days |
-| 06 | Behavioral Patterns | Intermediate | 4 days |
-| 07 | Python Features for LLD | Intermediate | 2 days |
-| 08 | Transactional Systems Design | Advanced | 3 days |
-| 09 | Booking Systems Design | Advanced | 3 days |
-| 10 | Platform Systems Design | Advanced | 3 days |
-| 11 | Social Media Systems Design | Advanced | 2 days |
-| 12 | Interview Process & Advanced | Advanced | 2 days |
+| Phase | Topic | Key Java Focus | Difficulty | Time |
+|---|---|---|---|---|
+| **01** | **OOP Foundations** | Classes, Records, Inheritance, Polymorphism, Composition, Immutability | Beginner | 4 days |
+| **02** | **SOLID Principles** | SRP, OCP, LSP, ISP, DIP with clean interface contracts | Beginner | 3 days |
+| **03** | **UML & Object Modeling** | Class diagrams, Aggregation vs Composition, GRASP principles | Beginner | 2 days |
+| **04** | **Creational Patterns** | Bill Pugh Singleton, Factory, Abstract Factory, Builder, Prototype | Intermediate | 3 days |
+| **05** | **Structural Patterns** | Adapter, Decorator, Facade, Proxy, Composite, Bridge, Flyweight | Intermediate | 4 days |
+| **06** | **Behavioral Patterns** | Strategy, Observer, Command, State, Template, Iterator, Mediator, CoR, Memento, Visitor, Interpreter | Intermediate | 5 days |
+| **07** | **Java & Concurrency in LLD** | Generics, Records, Streams, ReentrantLock, ReadWriteLock, Atomic, ThreadPools | Intermediate | 4 days |
+| **08** | **Transactional Systems** | ATM State Machine, Vending Dispenser, Splitwise Debt Minimization | Advanced | 3 days |
+| **09** | **Booking Systems** | Parking Lot Allocation, Movie Ticket Lock/Book, Cab Dispatch, Hotel Inventory | Advanced | 3 days |
+| **10** | **Platform Systems** | Swiggy/DoorDash, Library Catalog, Elevator Controller, TinyURL Base62 | Advanced | 3 days |
+| **11** | **Social & Media Systems** | WhatsApp Read Receipts, Spotify Audio State, Amazon Cart Discounts | Advanced | 3 days |
+| **12** | **Interview Process & Drills** | 7-Step live coding methodology, Chess, Tic-Tac-Toe, Staff-level discussions | Advanced | 2 days |
 
-**Total estimated time: ~4-5 weeks** — see [Quick-Reference/30-Day-Study-Plan.md](Quick-Reference/30-Day-Study-Plan.md) for a day-by-day schedule.
+**Total estimated time: ~5-6 weeks** — see [Quick-Reference/30-Day-Study-Plan.md](Quick-Reference/30-Day-Study-Plan.md) for a condensed 30-day study sprint.
 
 ---
 
 ## How to Use This Course
 
-1. Work through Phases 01-07 in order — they're cumulative (patterns lean on OOP + SOLID; Python features lean on patterns).
-2. For Phases 08-11, read the design walkthrough first, think through it yourself, then compare against the reasoning given.
-3. For the 5 problems in `Projects/`, actually run the code locally (`python <file>.py` after pasting the code block into a file) before your interview — running it beats reading it.
-4. Use `Quick-Reference/Cheatsheet.md` for last-minute review and `Quick-Reference/Interview-QA.md` for rapid-fire drilling.
+1. **Foundations First**: Master Phases 01–07 in order. Pay special attention to Phase 07 (Concurrency & Thread-Safety) as concurrency questions are standard in Java backend interviews.
+2. **Interactive Design**: For Phases 08–11, read the requirements and pause. Sketch your classes, interfaces, and state transitions before reading the solution.
+3. **Run the Code**: In `Projects/`, run the full single-file implementations directly using `java <ProjectName>Demo.java`. Experiment with edge cases (race conditions, invalid operations).
+4. **Interview Warm-up**: Review `Quick-Reference/Cheatsheet.md` and practice the rapid drills in `Phase-12/02-Object-Identification-Practice-Drills.md`.
 
 ## Prerequisites
 
-- Comfortable writing Python (functions, classes, basic syntax)
-- No prior design pattern or UML knowledge required — Phase-01 through Phase-03 build it from scratch
+- Core Java proficiency (JDK 17 or higher recommended: Records, Pattern Matching, Switch Expressions)
+- Basic understanding of data structures and collections (`List`, `Map`, `Set`, `PriorityQueue`)
+- No prior design pattern or UML experience required — the course builds concepts from ground zero.

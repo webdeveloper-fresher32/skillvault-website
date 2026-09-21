@@ -174,171 +174,199 @@ Unlike the ATM (multiple transaction *types*) or Splitwise (multiple split *algo
 
 ---
 
-## 8. Class Skeletons (Python)
+## 8. Class Skeletons (Java)
 
 > Design skeletons focused on structure and key logic. A full runnable implementation lives in `LLD/Projects/`.
 
-```python
-from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from enum import Enum
+```java
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
+// ---------- Domain data ----------
 
-# ---------- Domain data ----------
+public enum Coin {
+    NICKEL(5), DIME(10), QUARTER(25), DOLLAR(100);
 
-class Coin(Enum):
-    NICKEL = 5
-    DIME = 10
-    QUARTER = 25
-    DOLLAR = 100
+    private final int value;
+    Coin(int value) { this.value = value; }
+    public int getValue() { return value; }
+}
 
+public record Product(String name, int priceCents) {}
 
-@dataclass(frozen=True)
-class Product:
-    """Immutable value object."""
-    name: str
-    price: int  # cents
+public class Inventory {
+    private static class SlotItem {
+        Product product;
+        int quantity;
+        SlotItem(Product product, int quantity) {
+            this.product = product;
+            this.quantity = quantity;
+        }
+    }
 
+    private final Map<String, SlotItem> slots = new ConcurrentHashMap<>();
 
-class Inventory:
-    """Owns slot -> (Product, quantity). Knows nothing about payment or state."""
+    public void addProduct(String slot, Product product, int quantity) {
+        slots.put(slot, new SlotItem(product, quantity));
+    }
 
-    def __init__(self, slots: dict[str, tuple[Product, int]]):
-        self.slots = slots
+    public Product getProduct(String slot) {
+        SlotItem item = slots.get(slot);
+        return (item != null) ? item.product : null;
+    }
 
-    def get_product(self, slot: str) -> Product:
-        return self.slots[slot][0]
+    public boolean hasStock(String slot) {
+        SlotItem item = slots.get(slot);
+        return item != null && item.quantity > 0;
+    }
 
-    def has_stock(self, slot: str) -> bool:
-        return self.slots.get(slot, (None, 0))[1] > 0
+    public synchronized void decrementStock(String slot) {
+        SlotItem item = slots.get(slot);
+        if (item == null || item.quantity <= 0) {
+            throw new IllegalStateException("Out of stock");
+        }
+        item.quantity--;
+    }
 
-    def decrement_stock(self, slot: str) -> None:
-        product, qty = self.slots[slot]
-        self.slots[slot] = (product, qty - 1)
+    public synchronized void restock(String slot, int count) {
+        SlotItem item = slots.get(slot);
+        if (item != null) {
+            item.quantity += count;
+        }
+    }
+}
 
-    def restock(self, slot: str, qty: int) -> None:
-        product, current = self.slots[slot]
-        self.slots[slot] = (product, current + qty)
+public class Payment {
+    private int amountInserted = 0;
 
+    public synchronized void addCoin(Coin coin) {
+        this.amountInserted += coin.getValue();
+    }
 
-class Payment:
-    """Tracks money inserted during the current session."""
+    public synchronized boolean isSufficient(int priceCents) {
+        return amountInserted >= priceCents;
+    }
 
-    def __init__(self):
-        self.amount_inserted = 0
+    public synchronized int changeDue(int priceCents) {
+        return Math.max(0, amountInserted - priceCents);
+    }
 
-    def add_coin(self, coin: Coin) -> None:
-        self.amount_inserted += coin.value
+    public synchronized int reset() {
+        int refunded = amountInserted;
+        this.amountInserted = 0;
+        return refunded;
+    }
 
-    def is_sufficient(self, price: int) -> bool:
-        return self.amount_inserted >= price
+    public synchronized int getAmountInserted() {
+        return amountInserted;
+    }
+}
 
-    def change_due(self, price: int) -> int:
-        return max(0, self.amount_inserted - price)
+public record VendingTransaction(
+    String slot,
+    int amountPaid,
+    int changeReturned,
+    String status
+) {}
 
-    def reset(self) -> None:
-        self.amount_inserted = 0
+// ---------- State pattern ----------
 
+public interface VendingMachineState {
+    default void selectProduct(VendingMachine vm, String slot) {
+        throw new IllegalStateException("Cannot select product in current state");
+    }
+    default void insertCoin(VendingMachine vm, Coin coin) {
+        throw new IllegalStateException("Cannot insert coin in current state");
+    }
+    default void dispense(VendingMachine vm) {
+        throw new IllegalStateException("Cannot dispense in current state");
+    }
+    default void cancel(VendingMachine vm) {
+        throw new IllegalStateException("Nothing to cancel");
+    }
+}
 
-@dataclass
-class Transaction:
-    slot: str
-    amount_paid: int
-    change_returned: int
-    status: str = "SUCCESS"
+public class IdleState implements VendingMachineState {
+    @Override
+    public void selectProduct(VendingMachine vm, String slot) {
+        if (!vm.getInventory().hasStock(slot)) {
+            vm.setSelectedSlot(slot);
+            vm.setState(new OutOfStockState());
+            return;
+        }
+        vm.setSelectedSlot(slot);
+        vm.setState(new HasMoneyState());
+    }
+}
 
+public class HasMoneyState implements VendingMachineState {
+    @Override
+    public void insertCoin(VendingMachine vm, Coin coin) {
+        vm.getPayment().addCoin(coin);
+        Product product = vm.getInventory().getProduct(vm.getSelectedSlot());
+        if (vm.getPayment().isSufficient(product.priceCents())) {
+            vm.setState(new DispensingState());
+            vm.dispense();
+        }
+    }
 
-# ---------- State pattern ----------
+    @Override
+    public void cancel(VendingMachine vm) {
+        vm.refund();
+        vm.setState(new IdleState());
+    }
+}
 
-class InvalidOperationError(Exception):
-    pass
+public class DispensingState implements VendingMachineState {}
 
+public class OutOfStockState implements VendingMachineState {
+    @Override
+    public void cancel(VendingMachine vm) {
+        vm.setSelectedSlot(null);
+        vm.setState(new IdleState());
+    }
+}
 
-class VendingMachineState(ABC):
-    def select_product(self, vm: "VendingMachine", slot: str) -> None:
-        raise InvalidOperationError("Cannot select product in this state")
+// ---------- Orchestrator ----------
 
-    def insert_coin(self, vm: "VendingMachine", coin: Coin) -> None:
-        raise InvalidOperationError("Cannot insert coin in this state")
+public class VendingMachine {
+    private VendingMachineState state = new IdleState();
+    private final Inventory inventory;
+    private final Payment payment = new Payment();
+    private String selectedSlot;
+    private final List<VendingTransaction> transactions = new ArrayList<>();
 
-    def dispense(self, vm: "VendingMachine") -> None:
-        raise InvalidOperationError("Cannot dispense in this state")
+    public VendingMachine(Inventory inventory) {
+        this.inventory = inventory;
+    }
 
-    def cancel(self, vm: "VendingMachine") -> None:
-        raise InvalidOperationError("Nothing to cancel")
+    public void setState(VendingMachineState state) { this.state = state; }
+    public VendingMachineState getState() { return state; }
+    public Inventory getInventory() { return inventory; }
+    public Payment getPayment() { return payment; }
+    public void setSelectedSlot(String slot) { this.selectedSlot = slot; }
+    public String getSelectedSlot() { return selectedSlot; }
 
+    public void selectProduct(String slot) { state.selectProduct(this, slot); }
+    public void insertCoin(Coin coin) { state.insertCoin(this, coin); }
+    public void cancel() { state.cancel(this); }
 
-class IdleState(VendingMachineState):
-    def select_product(self, vm: "VendingMachine", slot: str) -> None:
-        if not vm.inventory.has_stock(slot):
-            vm.selected_slot = slot
-            vm.set_state(OutOfStockState())
-            return
-        vm.selected_slot = slot
-        vm.set_state(HasMoneyState())
+    public void dispense() {
+        Product product = inventory.getProduct(selectedSlot);
+        int change = payment.changeDue(product.priceCents());
+        inventory.decrementStock(selectedSlot);
+        transactions.add(new VendingTransaction(selectedSlot, payment.getAmountInserted(), change, "SUCCESS"));
+        payment.reset();
+        selectedSlot = null;
+        setState(new IdleState());
+    }
 
-
-class HasMoneyState(VendingMachineState):
-    def insert_coin(self, vm: "VendingMachine", coin: Coin) -> None:
-        vm.payment.add_coin(coin)
-        price = vm.inventory.get_product(vm.selected_slot).price
-        if vm.payment.is_sufficient(price):
-            vm.set_state(DispensingState())
-            vm.dispense()
-
-    def cancel(self, vm: "VendingMachine") -> None:
-        vm.refund()
-        vm.set_state(IdleState())
-
-
-class DispensingState(VendingMachineState):
-    """Transient — machine performs the dispense + change return, then resets to Idle."""
-    pass
-
-
-class OutOfStockState(VendingMachineState):
-    def cancel(self, vm: "VendingMachine") -> None:
-        vm.selected_slot = None
-        vm.set_state(IdleState())
-
-
-# ---------- Orchestrator ----------
-
-class VendingMachine:
-    def __init__(self, inventory: Inventory):
-        self.state: VendingMachineState = IdleState()
-        self.inventory = inventory
-        self.payment = Payment()
-        self.selected_slot: str | None = None
-        self.transactions: list[Transaction] = []
-
-    def set_state(self, state: VendingMachineState) -> None:
-        self.state = state
-
-    def select_product(self, slot: str) -> None:
-        self.state.select_product(self, slot)
-
-    def insert_coin(self, coin: Coin) -> None:
-        self.state.insert_coin(self, coin)
-
-    def cancel(self) -> None:
-        self.state.cancel(self)
-
-    def dispense(self) -> None:
-        """Decrement stock, compute + return change, log transaction, reset to Idle."""
-        product = self.inventory.get_product(self.selected_slot)
-        change = self.payment.change_due(product.price)
-        self.inventory.decrement_stock(self.selected_slot)
-        self.transactions.append(
-            Transaction(self.selected_slot, self.payment.amount_inserted, change)
-        )
-        self.payment.reset()
-        self.selected_slot = None
-        self.set_state(IdleState())
-
-    def refund(self) -> None:
-        """Return all inserted money on cancel."""
-        self.payment.reset()
+    public int refund() {
+        int refunded = payment.reset();
+        selectedSlot = null;
+        return refunded;
+    }
+}
 ```
 
 ---
