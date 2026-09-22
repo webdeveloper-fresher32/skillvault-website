@@ -61,6 +61,7 @@ const CAREER_TRACKS: CareerTrack[] = [
         description: 'ACID guarantees, indexing theory, query execution plans, document models, and Redis caching topologies.',
         courseLinks: [
           { name: 'Database Systems & Internals', slug: 'databasesfundamentals' },
+          { name: 'PostgreSQL Architecture & Mastery', slug: 'postgresql' },
           { name: 'MySQL & Relational Design', slug: 'mysql' },
           { name: 'MongoDB Architecture', slug: 'mongodb' },
           { name: 'Redis In-Memory & Caching', slug: 'redis' },
@@ -127,6 +128,7 @@ const CAREER_TRACKS: CareerTrack[] = [
         description: 'Relational query optimization, B-Tree and LSM storage engines, distributed sharding, and high-volume Redis clusters.',
         courseLinks: [
           { name: 'Database Systems & Internals', slug: 'databasesfundamentals' },
+          { name: 'PostgreSQL Architecture & Mastery', slug: 'postgresql' },
           { name: 'MySQL & Relational Design', slug: 'mysql' },
           { name: 'Redis In-Memory & Caching', slug: 'redis' },
         ],

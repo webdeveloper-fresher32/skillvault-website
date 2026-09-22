@@ -275,6 +275,7 @@ public class ContentIndexingService {
         if ("DatabasesFundamentals".equalsIgnoreCase(name)) return "Database Systems & Internals";
         if ("MongoDB".equalsIgnoreCase(name)) return "MongoDB Architecture & Modeling";
         if ("MySQL".equalsIgnoreCase(name)) return "MySQL & Relational Design";
+        if ("PostgreSQL".equalsIgnoreCase(name) || "Postgres".equalsIgnoreCase(name)) return "PostgreSQL Architecture & Mastery";
         if ("Redis".equalsIgnoreCase(name)) return "Redis In-Memory & Caching";
         if ("JavaScript".equalsIgnoreCase(name)) return "Modern JavaScript Full Stack";
         if ("Java".equalsIgnoreCase(name)) return "Java Core & Concurrency Masterclass";
@@ -351,7 +352,7 @@ public class ContentIndexingService {
         if (slug.contains("java")) return "coffee";
         if (slug.contains("react") || slug.contains("next")) return "atom";
         if (slug.contains("docker") || slug.contains("kube")) return "box";
-        if (slug.contains("data") || slug.contains("sql")) return "database";
+        if (slug.contains("data") || slug.contains("sql") || slug.contains("postgres")) return "database";
         if (slug.contains("ai") || slug.contains("rag") || slug.contains("lang")) return "brain";
         if (slug.contains("hld") || slug.contains("lld")) return "layers";
         return "terminal";

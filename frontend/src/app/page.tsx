@@ -181,7 +181,7 @@ export default function HomePage() {
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">
                     <div className="h-10 w-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 font-bold">
-                      {item.icon === 'leaf' ? '🌱' : item.icon === 'cloud' ? '☁️' : '📐'}
+                      {item.icon === 'leaf' ? '🌱' : item.icon === 'cloud' ? '☁️' : item.icon === 'database' ? '🗄️' : '📐'}
                     </div>
                     <div>
                       <span className="text-[11px] font-medium text-blue-400 uppercase tracking-wider">{item.category}</span>
