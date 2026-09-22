@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { Search, Terminal, BookOpen, CheckCircle2, Bookmark, Flame, Zap, Layers, HelpCircle } from 'lucide-react';
 import SearchModal from './SearchModal';
@@ -56,8 +57,15 @@ export default function Navbar() {
               onMouseDown={() => setOptimisticPath('/')}
               className="flex items-center gap-3 group focus:outline-none"
             >
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 via-indigo-600 to-cyan-500 shadow-lg shadow-blue-500/20 group-hover:scale-105 transition-transform">
-                <Terminal className="h-5 w-5 text-white" />
+              <div className="relative flex h-10 w-10 items-center justify-center rounded-xl overflow-hidden shadow-lg shadow-blue-500/20 group-hover:scale-105 transition-transform">
+                <Image
+                  src="/icon.png"
+                  alt="SkillVault Logo"
+                  width={40}
+                  height={40}
+                  className="h-full w-full object-contain"
+                  priority
+                />
               </div>
               <div>
                 <span className="text-xl font-bold tracking-tight bg-gradient-to-r from-white via-slate-100 to-slate-400 bg-clip-text text-transparent">

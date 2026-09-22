@@ -5,6 +5,15 @@ import Navbar from '@/components/Navbar';
 export const metadata: Metadata = {
   title: 'SkillVault — Developer Learning Operating System',
   description: 'Master backend, cloud architecture, system design, and AI engineering from structured, production-grade knowledge paths.',
+  icons: {
+    icon: [
+      { url: '/favicon.ico', sizes: 'any' },
+      { url: '/icon.png', type: 'image/png', sizes: '512x512' },
+    ],
+    apple: [
+      { url: '/apple-icon.png', sizes: '180x180', type: 'image/png' },
+    ],
+  },
 };
 
 export default function RootLayout({
