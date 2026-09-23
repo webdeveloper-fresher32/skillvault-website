@@ -6,6 +6,7 @@ export interface ParsedLessonContent {
   mainMarkdown: string;
   qaItems: QAPair[];
   exercises: ExerciseItem[];
+  exerciseTitle?: string;
   codeToggles: CodeToggleProps[];
   hasInteractiveComponents: boolean;
 }
@@ -91,18 +92,22 @@ export function parseQAPairs(markdown: string): { qaItems: QAPair[]; remainingMa
 /**
  * Extracts hands-on exercises from "## Interview-Style Exercise" or "## Hands-On Exercises".
  */
-export function parseExercises(markdown: string): { exercises: ExerciseItem[]; remainingMarkdown: string } {
-  const exerciseRegex = /(?:^|\n)##\s+(?:\d+[\.\-\s]+)?(?:Interview-Style\s+|Hands-On\s+)?Exercises?([\s\S]*?)(?=(?:\n##\s+)|\s*$)/i;
+export function parseExercises(markdown: string): { exercises: ExerciseItem[]; remainingMarkdown: string; exerciseTitle?: string } {
+  const exerciseRegex = /(?:^|\n)(##\s+((?:\d+[\.\-\s]+)?(?:Interview-Style\s+|Hands-On\s+|Practice\s+|Refactor\s+|Implementation\s+)?(?:Verification\s+)?(?:Drills?|Exercises?)[^\n]*))\n([\s\S]*?)(?=(?:\n##\s+)|\s*$)/i;
   const match = markdown.match(exerciseRegex);
 
   if (!match) {
     return { exercises: [], remainingMarkdown: markdown };
   }
 
-  const exerciseBody = match[1];
-  const remainingMarkdown = markdown.replace(match[0], '\n\n');
+  const fullHeadingLine = match[1]; // e.g. "## 8. Hands-On Exercises"
+  const rawTitle = match[2].trim(); // e.g. "8. Hands-On Exercises"
+  const exerciseBody = match[3];
 
   const exercises: ExerciseItem[] = [];
+
+  // Clean title for card display (removes leading "8. ")
+  const displayTitle = rawTitle.replace(/^\d+[\.\-\s]+/, '').trim() || 'Hands-On Exercises';
 
   // 1. Check for multiple numbered exercises like "**Exercise 1:** ..."
   const multiExRegex = /\*\*Exercise\s+(\d+):\*\*\s*([\s\S]*?)(?=(?:\*\*Exercise\s+\d+:)|(?:\n---)|\s*$)/gi;
@@ -110,36 +115,68 @@ export function parseExercises(markdown: string): { exercises: ExerciseItem[]; r
   while ((exMatch = multiExRegex.exec(exerciseBody)) !== null) {
     const num = exMatch[1];
     const text = exMatch[2].trim();
-    exercises.push({
-      id: `ex-${num}`,
-      title: `Exercise ${num}`,
-      problem: text,
-    });
+    if (text) {
+      exercises.push({
+        id: `ex-${num}`,
+        title: `Exercise ${num}`,
+        problem: text,
+      });
+    }
   }
 
-  // 2. Fallback: single Interview-Style Refactor prompt
+  // 2. Check for standard Markdown numbered list: "1. Do this...\n2. Do that..."
+  if (exercises.length === 0) {
+    const numberedItemRegex = /(?:^|\n)(\d+)\.\s+([\s\S]*?)(?=(?:\n\d+\.)|(?:\n---)|\s*$)/g;
+    let nMatch;
+    while ((nMatch = numberedItemRegex.exec(exerciseBody)) !== null) {
+      const num = nMatch[1];
+      const text = nMatch[2].trim();
+      if (text) {
+        exercises.push({
+          id: `ex-${num}`,
+          title: `Task ${num}`,
+          problem: text,
+        });
+      }
+    }
+  }
+
+  // 3. Check for single Interview-Style Refactor prompt with code block
   if (exercises.length === 0) {
     const promptMatch = exerciseBody.match(/\*\*Prompt:\*\*\s*([^\n]+)/i);
-    const promptText = promptMatch ? promptMatch[1].trim().replace(/^"|"$/g, '') : 'Refactor the given code to satisfy clean architecture standards.';
-
     const codeBlocks = Array.from(exerciseBody.matchAll(/```(?:[a-z]+)?\n([\s\S]*?)```/gi));
-    const problemCode = codeBlocks[0] ? codeBlocks[0][1].trim() : undefined;
-    const solutionCode = codeBlocks[1] ? codeBlocks[1][1].trim() : undefined;
 
-    const talkingPointsMatch = exerciseBody.match(/(?:Talking points|Interview talking points|Say out loud)[^:]*:\s*([\s\S]*?)$/i);
-    const talkingPoints = talkingPointsMatch ? talkingPointsMatch[1].trim() : undefined;
+    // Only treat as refactor drill if there is an explicit prompt or code block
+    if (promptMatch || codeBlocks.length > 0) {
+      const promptText = promptMatch ? promptMatch[1].trim().replace(/^"|"$/g, '') : 'Refactor the given code to satisfy clean architecture standards.';
+      const problemCode = codeBlocks[0] ? codeBlocks[0][1].trim() : undefined;
+      const solutionCode = codeBlocks[1] ? codeBlocks[1][1].trim() : undefined;
 
-    exercises.push({
-      id: 'exercise-1',
-      title: 'Exercise 1: ' + (promptText.length > 60 ? promptText.substring(0, 57) + '...' : promptText),
-      problem: promptText,
-      promptCode: problemCode,
-      solutionCode: solutionCode,
-      talkingPoints: talkingPoints,
-    });
+      const talkingPointsMatch = exerciseBody.match(/(?:Talking points|Interview talking points|Say out loud)[^:]*:\s*([\s\S]*?)$/i);
+      const talkingPoints = talkingPointsMatch ? talkingPointsMatch[1].trim() : undefined;
+
+      exercises.push({
+        id: 'exercise-1',
+        title: 'Exercise 1: ' + (promptText.length > 60 ? promptText.substring(0, 57) + '...' : promptText),
+        problem: promptText,
+        promptCode: problemCode,
+        solutionCode: solutionCode,
+        talkingPoints: talkingPoints,
+      });
+    }
   }
 
-  return { exercises, remainingMarkdown };
+  // If no structured exercises were found, do NOT strip or alter the markdown!
+  if (exercises.length === 0) {
+    return { exercises: [], remainingMarkdown: markdown };
+  }
+
+  // Replace with the original H2 heading preserved, followed by an in-place placeholder
+  // This keeps the heading (e.g. ## 8. Hands-On Exercises) in the markdown document
+  // so timeline scrollspy and heading anchors remain intact!
+  const remainingMarkdown = markdown.replace(match[0], `\n\n${fullHeadingLine}\n\n__EXERCISES_PLACEHOLDER__\n\n`);
+
+  return { exercises, remainingMarkdown, exerciseTitle: displayTitle };
 }
 
 /**
@@ -207,7 +244,7 @@ export function parseLessonContent(rawMarkdown: string): ParsedLessonContent {
   text = textWithoutQA;
 
   // 2. Extract Exercises
-  const { exercises, remainingMarkdown: textWithoutEx } = parseExercises(text);
+  const { exercises, remainingMarkdown: textWithoutEx, exerciseTitle } = parseExercises(text);
   text = textWithoutEx;
 
   // 3. Extract Bad vs Good Code
@@ -220,6 +257,7 @@ export function parseLessonContent(rawMarkdown: string): ParsedLessonContent {
     mainMarkdown: text,
     qaItems,
     exercises,
+    exerciseTitle,
     codeToggles,
     hasInteractiveComponents: hasInteractive,
   };

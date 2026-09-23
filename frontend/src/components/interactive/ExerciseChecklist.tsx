@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { CheckCircle, ChevronDown, ChevronUp, Terminal, Dumbbell } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 export interface ExerciseItem {
   id: string;
@@ -20,7 +22,7 @@ export interface ExerciseChecklistProps {
 
 export default function ExerciseChecklist({
   storageKey = 'course_exercises_state',
-  title = 'Hands-On Refactoring Exercises',
+  title = 'Hands-On Exercises',
   items,
 }: ExerciseChecklistProps) {
   const [completedMap, setCompletedMap] = useState<Record<string, boolean>>({});
@@ -108,9 +110,11 @@ export default function ExerciseChecklist({
                     {item.title}
                   </label>
 
-                  <p className="text-xs sm:text-[13px] text-slate-300 leading-relaxed mt-1">
-                    {item.problem}
-                  </p>
+                  <div className="text-xs sm:text-[13px] text-slate-300 leading-relaxed mt-1.5 [&>p]:m-0 [&>p]:leading-relaxed [&_code]:text-emerald-300 [&_code]:bg-emerald-950/40 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:font-mono [&_code]:text-[11px] [&_ul]:my-2 [&_ul]:pl-5 [&_ul]:list-disc [&_li]:my-1 [&_li]:text-slate-300">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {item.problem}
+                    </ReactMarkdown>
+                  </div>
 
                   {/* Problem prompt code if available */}
                   {item.promptCode && (

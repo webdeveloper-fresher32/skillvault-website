@@ -40,10 +40,21 @@ public class CourseService {
     }
 
     public List<Course> getAllCourses(String category) {
+        List<Course> courses;
         if (category != null && !category.isEmpty() && !"all".equalsIgnoreCase(category)) {
-            return courseRepository.findByCategoryIgnoreCase(category);
+            courses = courseRepository.findByCategoryIgnoreCase(category);
+        } else {
+            courses = courseRepository.findAll();
         }
-        return courseRepository.findAll();
+        
+        return courses.stream().map(c -> {
+            Course dto = new Course(c.getSlug(), c.getTitle(), c.getDescription(), c.getCategory(), c.getLevel(), c.getIcon());
+            dto.setId(c.getId());
+            dto.setTotalLessons(c.getTotalLessons());
+            dto.setEstimatedHours(c.getEstimatedHours());
+            dto.setModules(null); // Prevent N+1 lazy loading
+            return dto;
+        }).toList();
     }
 
     @Transactional(readOnly = true)
@@ -180,7 +191,7 @@ public class CourseService {
         stats.setStreakDays(7);
         stats.setStudyHours((int) (stats.getCompletedLessons() * 25 / 60) + 12);
 
-        List<Course> recentCourses = courseRepository.findAll().stream().limit(4).toList();
+        List<Course> recentCourses = courseRepository.findRecentCourses();
         List<Map<String, Object>> inProgress = new ArrayList<>();
         for (Course c : recentCourses) {
             long completed = progressRepository.countCompletedByCourse(userIdentifier, c.getSlug());

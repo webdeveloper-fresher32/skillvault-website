@@ -11,4 +11,7 @@ import java.util.Optional;
 public interface CourseRepository extends JpaRepository<Course, Long> {
     Optional<Course> findBySlug(String slug);
     List<Course> findByCategoryIgnoreCase(String category);
+
+    @org.springframework.data.jpa.repository.Query(value = "SELECT * FROM courses ORDER BY id DESC LIMIT 4", nativeQuery = true)
+    List<Course> findRecentCourses();
 }

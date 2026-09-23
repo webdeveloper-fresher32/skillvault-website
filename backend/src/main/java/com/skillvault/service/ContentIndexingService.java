@@ -366,9 +366,23 @@ public class ContentIndexingService {
             if (trimmed.startsWith("#") || trimmed.startsWith("---") || trimmed.startsWith("```") || trimmed.isEmpty()) {
                 continue;
             }
+            if (trimmed.startsWith(">")) {
+                trimmed = trimmed.substring(1).trim();
+            }
+            // Strip bold, italics
+            trimmed = trimmed.replaceAll("\\*\\*", "").replaceAll("\\*", "");
+            // Strip inline code
+            trimmed = trimmed.replaceAll("`([^`]+)`", "$1");
+            // Strip links [text](url)
+            trimmed = trimmed.replaceAll("\\[([^\\]]+)\\]\\([^\\)]+\\)", "$1");
+            
             sb.append(trimmed).append(" ");
             if (sb.length() > 220) break;
         }
-        return sb.toString().trim();
+        String result = sb.toString().trim();
+        if (result.length() > 220) {
+            return result.substring(0, 217) + "...";
+        }
+        return result;
     }
 }

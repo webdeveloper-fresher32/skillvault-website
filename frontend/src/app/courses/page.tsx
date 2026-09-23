@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { BookOpen, Search, ArrowRight, Layers, Terminal, Sparkles, Filter } from 'lucide-react';
 import { fetchCourses, Course } from '@/lib/api';
+import { stripMarkdown } from '@/lib/utils';
 
 const CATEGORIES = [
   'All',
@@ -126,7 +127,7 @@ export default function CoursesPage() {
                 </h3>
 
                 <p className="mt-2 text-xs text-slate-400 line-clamp-3 leading-relaxed">
-                  {course.description || `Comprehensive guide and production-grade knowledge on ${course.title}.`}
+                  {course.description ? stripMarkdown(course.description) : `Comprehensive guide and production-grade knowledge on ${course.title}.`}
                 </p>
               </div>
 

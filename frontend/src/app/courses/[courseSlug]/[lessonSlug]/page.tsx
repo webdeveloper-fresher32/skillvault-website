@@ -25,6 +25,17 @@ import {
 import MarkdownViewer from '@/components/MarkdownViewer';
 import TopScrollProgress from '@/components/interactive/TopScrollProgress';
 
+// Helper to normalize heading and timeline titles for accurate matching
+function normalizeHeadingText(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[`*_~#]/g, '') // remove markdown syntax
+    .replace(/^\d+[\.\-\s]+/, '') // remove leading numbers like "1. ", "02 - "
+    .replace(/[^a-z0-9\s]/g, ' ') // convert punctuation/colons/symbols to spaces
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 interface PageProps {
   params: Promise<{ courseSlug: string; lessonSlug: string }>;
 }
@@ -43,6 +54,86 @@ export default function LessonPage({ params }: PageProps) {
   const [bookmarked, setBookmarked] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
+
+  // Draggable sidebar configuration & state
+  const DEFAULT_SIDEBAR_WIDTH = 320;
+  const MIN_SIDEBAR_WIDTH = 220;
+  const MAX_SIDEBAR_WIDTH = 540;
+
+  const [sidebarWidth, setSidebarWidth] = useState<number>(DEFAULT_SIDEBAR_WIDTH);
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const [isDesktop, setIsDesktop] = useState<boolean>(false);
+
+  // Restore sidebar width from localStorage & track desktop breakpoint
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('skillvault_sidebar_width');
+      if (saved) {
+        const val = parseInt(saved, 10);
+        if (!isNaN(val) && val >= MIN_SIDEBAR_WIDTH && val <= MAX_SIDEBAR_WIDTH) {
+          setSidebarWidth(val);
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+
+    const checkDesktop = () => {
+      setIsDesktop(window.innerWidth >= 1024);
+    };
+    checkDesktop();
+    window.addEventListener('resize', checkDesktop);
+    return () => window.removeEventListener('resize', checkDesktop);
+  }, []);
+
+  // Handle dragging resize smoothly
+  useEffect(() => {
+    if (!isDragging) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      e.preventDefault();
+      const maxAllowed = Math.min(MAX_SIDEBAR_WIDTH, window.innerWidth * 0.45);
+      const newWidth = Math.max(MIN_SIDEBAR_WIDTH, Math.min(maxAllowed, e.clientX));
+      setSidebarWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(false);
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+      try {
+        localStorage.setItem('skillvault_sidebar_width', String(sidebarWidth));
+      } catch (e) {
+        // ignore
+      }
+    };
+
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'col-resize';
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+    };
+  }, [isDragging, sidebarWidth]);
+
+  const handleStartDrag = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleResetSidebarWidth = () => {
+    setSidebarWidth(DEFAULT_SIDEBAR_WIDTH);
+    try {
+      localStorage.setItem('skillvault_sidebar_width', String(DEFAULT_SIDEBAR_WIDTH));
+    } catch (e) {
+      // ignore
+    }
+  };
 
   // Accordion state for sidebar course sections
   const [openSections, setOpenSections] = useState<Record<string, boolean>>({});
@@ -127,19 +218,32 @@ export default function LessonPage({ params }: PageProps) {
       const headings = Array.from(document.querySelectorAll('.markdown-body h2, .markdown-body h3')) as HTMLElement[];
       if (!headings.length || !subtopicsList.length) return;
 
-      const scrollPos = window.scrollY + 160;
+      // Bottom-of-page detection: highlight final subtopic if user has scrolled to bottom
+      const isAtBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 80;
+      if (isAtBottom) {
+        setActiveSubtopicIndex(subtopicsList.length - 1);
+        return;
+      }
+
+      const scrollPos = window.scrollY + 180;
+      const h2Elements = Array.from(document.querySelectorAll('.markdown-body h2')) as HTMLElement[];
 
       // Match against subtopics list
       let bestIdx = 0;
       for (let s = 0; s < subtopicsList.length; s++) {
         const sub = subtopicsList[s];
-        const cleanSub = sub.title.replace(/^\d+[\.\-\s]+/, '').trim().toLowerCase();
+        const cleanSub = normalizeHeadingText(sub.title);
 
-        // Find heading in document matching this subtopic
-        const hMatch = headings.find((h) => {
-          const hText = (h.textContent || '').replace(/^\d+[\.\-\s]+/, '').trim().toLowerCase();
-          return hText === cleanSub || hText.includes(cleanSub) || cleanSub.includes(hText);
+        // 1. Match against document headings using normalized text
+        let hMatch = headings.find((h) => {
+          const hText = normalizeHeadingText(h.textContent || '');
+          return hText === cleanSub || (cleanSub.length > 3 && (hText.includes(cleanSub) || cleanSub.includes(hText)));
         });
+
+        // 2. Fallback: match by sequential H2 index
+        if (!hMatch && h2Elements[s]) {
+          hMatch = h2Elements[s];
+        }
 
         if (hMatch) {
           const top = hMatch.getBoundingClientRect().top + window.scrollY;
@@ -199,12 +303,12 @@ export default function LessonPage({ params }: PageProps) {
 
   const scrollToSection = (title: string, index?: number) => {
     const headings = Array.from(document.querySelectorAll('.markdown-body h2, .markdown-body h3')) as HTMLElement[];
-    const cleanTitle = title.replace(/^\d+[\.\-\s]+/, '').trim().toLowerCase();
+    const cleanTitle = normalizeHeadingText(title);
     
     // 1. Try finding heading matching clean title
     let target = headings.find((h) => {
-      const hText = (h.textContent || '').replace(/^\d+[\.\-\s]+/, '').trim().toLowerCase();
-      return hText === cleanTitle || hText.startsWith(cleanTitle) || cleanTitle.startsWith(hText);
+      const hText = normalizeHeadingText(h.textContent || '');
+      return hText === cleanTitle || (cleanTitle.length > 3 && (hText.includes(cleanTitle) || cleanTitle.includes(hText)));
     });
 
     // 2. Fallback: match by index if provided
@@ -255,8 +359,11 @@ export default function LessonPage({ params }: PageProps) {
 
       {/* 1. FIXED LEFT SIDEBAR: Udemy / EdTech Course Curriculum Accordion */}
       <aside
-        className={`fixed top-16 bottom-0 left-0 z-30 w-80 sm:w-88 border-r border-[#30363d] bg-[#161b22] transition-transform duration-200 lg:translate-x-0 overflow-y-auto ${
-          isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        style={{ width: isDesktop ? `${sidebarWidth}px` : undefined }}
+        className={`fixed top-16 bottom-0 left-0 z-30 border-r border-[#30363d] bg-[#161b22] ${
+          isDragging ? '' : 'transition-[width,transform] duration-150'
+        } lg:translate-x-0 overflow-y-auto ${
+          isSidebarOpen ? 'translate-x-0 w-80 sm:w-88' : '-translate-x-full'
         }`}
       >
         {/* Course Title Header */}
@@ -370,10 +477,32 @@ export default function LessonPage({ params }: PageProps) {
             );
           })}
         </div>
+
+        {/* DRAGGABLE RESIZE HANDLE (Desktop only) */}
+        <div
+          onMouseDown={handleStartDrag}
+          onDoubleClick={handleResetSidebarWidth}
+          title="Drag to resize sidebar • Double-click to reset width"
+          className={`hidden lg:flex group absolute top-0 bottom-0 right-0 w-3 cursor-col-resize z-40 items-center justify-center transition-colors select-none ${
+            isDragging ? 'bg-indigo-500/25' : 'hover:bg-indigo-500/10'
+          }`}
+        >
+          {/* Subtle indicator bar */}
+          <div
+            className={`h-8 w-1 rounded-full transition-all duration-200 ${
+              isDragging ? 'bg-indigo-400 scale-y-125' : 'bg-slate-600/70 group-hover:bg-indigo-400 group-hover:h-10'
+            }`}
+          />
+        </div>
       </aside>
 
       {/* 2. SCROLLABLE MIDDLE SECTION: Full Continuous Markdown Content (No middle accordions) */}
-      <main className="flex-1 lg:ml-80 sm:lg:ml-88 xl:mr-72 min-w-0 px-4 sm:px-8 lg:px-10 py-8 max-w-5xl mx-auto w-full">
+      <main
+        style={{ marginLeft: isDesktop ? `${sidebarWidth}px` : undefined }}
+        className={`flex-1 xl:mr-72 min-w-0 px-4 sm:px-8 lg:px-10 py-8 max-w-5xl mx-auto w-full ${
+          isDragging ? '' : 'transition-[margin-left] duration-150'
+        }`}
+      >
         {/* GitHub Breadcrumb Navigation Bar */}
         <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-[#30363d] text-xs text-slate-400">
           <div className="flex items-center gap-2 font-mono truncate">

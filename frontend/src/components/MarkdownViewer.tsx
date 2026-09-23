@@ -66,12 +66,22 @@ export default function MarkdownViewer({
 
           // Custom paragraph handler to mount Bad-vs-Good code toggles
           p({ children, ...props }: any) {
-            let textContent = '';
-            if (typeof children === 'string') {
-              textContent = children;
-            } else if (Array.isArray(children) && typeof children[0] === 'string') {
-              textContent = children.join('');
-            }
+            const extractText = (node: any) => {
+              let text = '';
+              const extract = (n: any) => {
+                if (!n) return;
+                if (typeof n === 'string' || typeof n === 'number') {
+                  text += n;
+                } else if (Array.isArray(n)) {
+                  n.forEach(extract);
+                } else if (React.isValidElement(n)) {
+                  extract((n.props as any)?.children);
+                }
+              };
+              extract(node);
+              return text;
+            };
+            const textContent = extractText(children);
 
             if (textContent.includes('__CODE_TOGGLE_PLACEHOLDER__')) {
               if (parsed.codeToggles.length > 0) {
@@ -86,7 +96,45 @@ export default function MarkdownViewer({
               return null;
             }
 
+            if (textContent.includes('EXERCISES_PLACEHOLDER')) {
+              if (parsed.exercises.length > 0) {
+                return (
+                  <ExerciseChecklist
+                    storageKey={exerciseStorageKey}
+                    title={parsed.exerciseTitle || 'Hands-On Exercises'}
+                    items={parsed.exercises}
+                  />
+                );
+              }
+              return null;
+            }
+
             return <p {...props}>{children}</p>;
+          },
+
+          h2({ children, ...props }: any) {
+            const extractText = (node: any) => {
+              let text = '';
+              const extract = (n: any) => {
+                if (!n) return;
+                if (typeof n === 'string' || typeof n === 'number') {
+                  text += n;
+                } else if (Array.isArray(n)) {
+                  n.forEach(extract);
+                } else if (React.isValidElement(n)) {
+                  extract((n.props as any)?.children);
+                }
+              };
+              extract(node);
+              return text;
+            };
+            const textContent = extractText(children);
+            
+            if (/(Hands-On.*Exercises?|Interview-Style.*Exercise|Practice.*Exercise)/i.test(textContent) && parsed.exercises.length === 0) {
+              return null;
+            }
+            
+            return <h2 {...props}>{children}</h2>;
           },
 
           // Custom table wrapper for responsive scroll and sticky header
@@ -135,10 +183,11 @@ export default function MarkdownViewer({
         {parsed.mainMarkdown}
       </ReactMarkdown>
 
-      {/* RENDER INTERACTIVE HANDS-ON EXERCISES IF EXTRACTED */}
-      {parsed.exercises.length > 0 && (
+      {/* RENDER INTERACTIVE HANDS-ON EXERCISES IF EXTRACTED BUT NOT IN-PLACE */}
+      {parsed.exercises.length > 0 && !parsed.mainMarkdown.includes('__EXERCISES_PLACEHOLDER__') && (
         <ExerciseChecklist
           storageKey={exerciseStorageKey}
+          title={parsed.exerciseTitle || 'Hands-On Exercises'}
           items={parsed.exercises}
         />
       )}

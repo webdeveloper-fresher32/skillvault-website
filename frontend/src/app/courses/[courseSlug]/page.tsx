@@ -14,6 +14,7 @@ import {
   Sparkles 
 } from 'lucide-react';
 import { fetchCourseBySlug, Course } from '@/lib/api';
+import { stripMarkdown } from '@/lib/utils';
 
 interface PageProps {
   params: Promise<{ courseSlug: string }>;
@@ -100,7 +101,7 @@ export default function CourseDetailPage({ params }: PageProps) {
                 {course.title}
               </h1>
               <p className="mt-3 text-sm sm:text-base text-slate-400 max-w-2xl leading-relaxed">
-                {course.description || `Comprehensive production curriculum designed for developers.`}
+                {course.description ? stripMarkdown(course.description) : `Comprehensive production curriculum designed for developers.`}
               </p>
             </div>
 
