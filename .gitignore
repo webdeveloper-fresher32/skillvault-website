@@ -35,3 +35,10 @@ target/
 .env.development.local
 .env.test.local
 .env.production.local
+
+# Resumes & Personal Docs
+personal/
+*.tex
+*_Google_Flow.md
+
+
