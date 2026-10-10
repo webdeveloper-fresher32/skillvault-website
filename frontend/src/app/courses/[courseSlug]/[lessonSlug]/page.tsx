@@ -12,7 +12,8 @@ import {
   Share2, 
   Menu, 
   X,
-  ListOrdered
+  ListOrdered,
+  PenLine
 } from 'lucide-react';
 import { 
   fetchLessonDetail, 
@@ -24,6 +25,7 @@ import {
 } from '@/lib/api';
 import MarkdownViewer from '@/components/MarkdownViewer';
 import TopScrollProgress from '@/components/interactive/TopScrollProgress';
+import NotionNotesSidebar from '@/components/NotionNotesSidebar';
 
 // Helper to normalize heading and timeline titles for accurate matching
 function normalizeHeadingText(text: string): string {
@@ -55,7 +57,7 @@ export default function LessonPage({ params }: PageProps) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
 
-  // Draggable sidebar configuration & state
+  // Left Draggable sidebar configuration & state
   const DEFAULT_SIDEBAR_WIDTH = 320;
   const MIN_SIDEBAR_WIDTH = 220;
   const MAX_SIDEBAR_WIDTH = 540;
@@ -64,7 +66,17 @@ export default function LessonPage({ params }: PageProps) {
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [isDesktop, setIsDesktop] = useState<boolean>(false);
 
-  // Restore sidebar width from localStorage & track desktop breakpoint
+  // Right sidebar (Notion Notes) configuration & state
+  const DEFAULT_RIGHT_SIDEBAR_WIDTH = 380;
+  const MIN_RIGHT_SIDEBAR_WIDTH = 280;
+  const MAX_RIGHT_SIDEBAR_WIDTH = 680;
+
+  const [rightSidebarWidth, setRightSidebarWidth] = useState<number>(DEFAULT_RIGHT_SIDEBAR_WIDTH);
+  const [isRightSidebarOpen, setIsRightSidebarOpen] = useState<boolean>(true);
+  const [isRightDragging, setIsRightDragging] = useState<boolean>(false);
+  const [isXlDesktop, setIsXlDesktop] = useState<boolean>(false);
+
+  // Restore sidebar widths from localStorage & track responsive breakpoints
   useEffect(() => {
     try {
       const saved = localStorage.getItem('skillvault_sidebar_width');
@@ -74,19 +86,33 @@ export default function LessonPage({ params }: PageProps) {
           setSidebarWidth(val);
         }
       }
+
+      const savedRightWidth = localStorage.getItem('skillvault_right_sidebar_width');
+      if (savedRightWidth) {
+        const val = parseInt(savedRightWidth, 10);
+        if (!isNaN(val) && val >= MIN_RIGHT_SIDEBAR_WIDTH && val <= MAX_RIGHT_SIDEBAR_WIDTH) {
+          setRightSidebarWidth(val);
+        }
+      }
+
+      const savedRightOpen = localStorage.getItem('skillvault_right_sidebar_open');
+      if (savedRightOpen !== null) {
+        setIsRightSidebarOpen(savedRightOpen === 'true');
+      }
     } catch (e) {
       // ignore
     }
 
-    const checkDesktop = () => {
+    const checkBreakpoints = () => {
       setIsDesktop(window.innerWidth >= 1024);
+      setIsXlDesktop(window.innerWidth >= 1280);
     };
-    checkDesktop();
-    window.addEventListener('resize', checkDesktop);
-    return () => window.removeEventListener('resize', checkDesktop);
+    checkBreakpoints();
+    window.addEventListener('resize', checkBreakpoints);
+    return () => window.removeEventListener('resize', checkBreakpoints);
   }, []);
 
-  // Handle dragging resize smoothly
+  // Handle left dragging resize smoothly
   useEffect(() => {
     if (!isDragging) return;
 
@@ -121,6 +147,42 @@ export default function LessonPage({ params }: PageProps) {
     };
   }, [isDragging, sidebarWidth]);
 
+  // Handle right dragging resize smoothly
+  useEffect(() => {
+    if (!isRightDragging) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      e.preventDefault();
+      const maxAllowed = Math.min(MAX_RIGHT_SIDEBAR_WIDTH, window.innerWidth * 0.5);
+      const computedWidth = window.innerWidth - e.clientX;
+      const newWidth = Math.max(MIN_RIGHT_SIDEBAR_WIDTH, Math.min(maxAllowed, computedWidth));
+      setRightSidebarWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      setIsRightDragging(false);
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+      try {
+        localStorage.setItem('skillvault_right_sidebar_width', String(rightSidebarWidth));
+      } catch (e) {
+        // ignore
+      }
+    };
+
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'col-resize';
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+    };
+  }, [isRightDragging, rightSidebarWidth]);
+
   const handleStartDrag = (e: React.MouseEvent) => {
     e.preventDefault();
     setIsDragging(true);
@@ -130,6 +192,20 @@ export default function LessonPage({ params }: PageProps) {
     setSidebarWidth(DEFAULT_SIDEBAR_WIDTH);
     try {
       localStorage.setItem('skillvault_sidebar_width', String(DEFAULT_SIDEBAR_WIDTH));
+    } catch (e) {
+      // ignore
+    }
+  };
+
+  const handleStartRightDrag = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsRightDragging(true);
+  };
+
+  const handleResetRightSidebarWidth = () => {
+    setRightSidebarWidth(DEFAULT_RIGHT_SIDEBAR_WIDTH);
+    try {
+      localStorage.setItem('skillvault_right_sidebar_width', String(DEFAULT_RIGHT_SIDEBAR_WIDTH));
     } catch (e) {
       // ignore
     }
@@ -498,9 +574,12 @@ export default function LessonPage({ params }: PageProps) {
 
       {/* 2. SCROLLABLE MIDDLE SECTION: Full Continuous Markdown Content (No middle accordions) */}
       <main
-        style={{ marginLeft: isDesktop ? `${sidebarWidth}px` : undefined }}
-        className={`flex-1 xl:mr-72 min-w-0 px-4 sm:px-8 lg:px-10 py-8 max-w-5xl mx-auto w-full ${
-          isDragging ? '' : 'transition-[margin-left] duration-150'
+        style={{
+          marginLeft: isDesktop ? `${sidebarWidth}px` : undefined,
+          marginRight: isXlDesktop && isRightSidebarOpen ? `${rightSidebarWidth}px` : undefined,
+        }}
+        className={`flex-1 min-w-0 px-4 sm:px-8 lg:px-10 py-8 max-w-5xl mx-auto w-full ${
+          isDragging || isRightDragging ? '' : 'transition-[margin] duration-150'
         }`}
       >
         {/* GitHub Breadcrumb Navigation Bar */}
@@ -516,6 +595,26 @@ export default function LessonPage({ params }: PageProps) {
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            {/* Notes Panel Toggle Button */}
+            <button
+              onClick={() => {
+                const next = !isRightSidebarOpen;
+                setIsRightSidebarOpen(next);
+                try {
+                  localStorage.setItem('skillvault_right_sidebar_open', String(next));
+                } catch (e) {}
+              }}
+              className={`flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-semibold border transition-all ${
+                isRightSidebarOpen
+                  ? 'bg-[#7c3aed]/20 text-[#c4b5fd] border-[#7c3aed]/40 shadow-xs'
+                  : 'bg-[#21262d] text-slate-300 border-[#30363d] hover:bg-[#30363d]'
+              }`}
+              title={isRightSidebarOpen ? 'Hide Notes Panel' : 'Open Notion Notes'}
+            >
+              <PenLine className="h-3.5 w-3.5" />
+              <span>Notes</span>
+            </button>
+
             <button
               onClick={handleToggleBookmark}
               className={`flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-medium border transition-all ${
@@ -581,67 +680,59 @@ export default function LessonPage({ params }: PageProps) {
         </div>
       </main>
 
-      {/* 3. FIXED RIGHT SIDEBAR: Interactive Timeline of Subtopics / Headings */}
-      <aside className="hidden xl:block fixed top-16 bottom-0 right-0 w-72 border-l border-[#30363d] bg-[#161b22] p-5 overflow-y-auto">
-        <div className="pb-3 border-b border-[#30363d] mb-4">
-          <div className="flex items-center gap-2 text-xs font-bold text-slate-200 uppercase tracking-wider">
-            <ListOrdered className="h-4 w-4 text-[#7c3aed]" />
-            <span>On This Page (Timeline)</span>
-          </div>
-          <div className="text-[11px] text-slate-400 mt-1">
-            {subtopicsList.length} Key Subtopics
-          </div>
-        </div>
+      {/* 3. RIGHT SIDEBAR: Notion-like Markdown Notes & Outline Panel */}
+      <NotionNotesSidebar
+        courseSlug={courseSlug}
+        courseTitle={course?.title}
+        lessonSlug={activeLessonSlug}
+        lessonTitle={lesson.title}
+        subtopics={subtopicsList}
+        activeSubtopicIndex={activeSubtopicIndex}
+        onSelectSubtopic={scrollToSection}
+        width={rightSidebarWidth}
+        onWidthChange={(w) => {
+          setRightSidebarWidth(w);
+          try {
+            localStorage.setItem('skillvault_right_sidebar_width', String(w));
+          } catch (e) {}
+        }}
+        isOpen={isRightSidebarOpen}
+        onClose={() => {
+          setIsRightSidebarOpen(false);
+          try {
+            localStorage.setItem('skillvault_right_sidebar_open', 'false');
+          } catch (e) {}
+        }}
+        isDragging={isRightDragging}
+        onStartDrag={handleStartRightDrag}
+        onResetWidth={handleResetRightSidebarWidth}
+        isOverlay={!isXlDesktop}
+      />
 
-        {/* Timeline Path */}
-        <div className="relative pl-3 space-y-4">
-          {/* Vertical Connecting Line */}
-          <div className="absolute left-[17px] top-2 bottom-2 w-0.5 bg-[#30363d]" />
+      {/* Backdrop for overlay drawer on non-XL screens */}
+      {!isXlDesktop && isRightSidebarOpen && (
+        <div
+          onClick={() => setIsRightSidebarOpen(false)}
+          className="fixed inset-0 bg-black/60 backdrop-blur-xs z-30"
+        />
+      )}
 
-          {subtopicsList.map((sub, sIdx) => {
-            const isCurrent = sIdx === activeSubtopicIndex;
-            const isPassed = sIdx < activeSubtopicIndex;
-
-            return (
-              <div
-                key={sub.id}
-                onClick={() => scrollToSection(sub.title, sIdx)}
-                className="group relative flex items-start gap-3 cursor-pointer select-none"
-              >
-                {/* Timeline node bullet */}
-                <div
-                  className={`mt-1 h-3.5 w-3.5 rounded-full border-2 transition-all duration-200 shrink-0 z-10 ${
-                    isCurrent
-                      ? 'bg-[#7c3aed] border-white ring-4 ring-[#7c3aed]/40 scale-110 shadow-lg shadow-[#7c3aed]/50'
-                      : isPassed
-                      ? 'bg-[#7c3aed] border-[#7c3aed]'
-                      : 'bg-[#161b22] border-slate-600 group-hover:border-[#7c3aed]'
-                  }`}
-                />
-
-                <div className="flex-1">
-                  <div
-                    className={`text-xs leading-snug transition-all duration-200 line-clamp-2 ${
-                      isCurrent
-                        ? 'font-bold text-[#c4b5fd] translate-x-0.5'
-                        : isPassed
-                        ? 'text-slate-300 font-medium'
-                        : 'text-slate-500 group-hover:text-slate-300'
-                    }`}
-                  >
-                    {sub.title}
-                  </div>
-                  <div className={`text-[10px] font-mono mt-0.5 transition-colors ${
-                    isCurrent ? 'text-indigo-400 font-semibold' : 'text-slate-600'
-                  }`}>
-                    Step {sIdx + 1}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </aside>
+      {/* Floating Action Button for Notes when sidebar is closed or on mobile */}
+      {(!isRightSidebarOpen || !isXlDesktop) && (
+        <button
+          onClick={() => {
+            setIsRightSidebarOpen(true);
+            try {
+              localStorage.setItem('skillvault_right_sidebar_open', 'true');
+            } catch (e) {}
+          }}
+          className="fixed bottom-6 right-6 z-30 flex items-center gap-2 rounded-full bg-[#7c3aed] hover:bg-[#6d28d9] px-4 py-2.5 text-xs font-semibold text-white shadow-xl shadow-purple-900/40 border border-purple-400/30 transition-all hover:scale-105 select-none"
+          title="Open Notion Notes"
+        >
+          <PenLine className="h-4 w-4" />
+          <span>Take Notes</span>
+        </button>
+      )}
     </div>
     </>
   );

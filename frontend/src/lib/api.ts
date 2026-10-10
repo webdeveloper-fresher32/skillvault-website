@@ -194,3 +194,61 @@ export async function fetchFlashcards(): Promise<any[]> {
   if (!res.ok) return [];
   return res.json();
 }
+
+export interface LessonNoteData {
+  id?: number;
+  userIdentifier?: string;
+  courseSlug: string;
+  lessonSlug: string;
+  lessonTitle: string;
+  content: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export async function fetchLessonNote(courseSlug: string, lessonSlug: string): Promise<LessonNoteData | null> {
+  try {
+    const res = await fetch(`${API_BASE}/notes/${courseSlug}/${lessonSlug}`);
+    if (res.status === 204 || !res.ok) return null;
+    return res.json();
+  } catch (err) {
+    return null;
+  }
+}
+
+export async function saveLessonNote(
+  courseSlug: string,
+  lessonSlug: string,
+  lessonTitle: string,
+  content: string
+): Promise<LessonNoteData> {
+  const res = await fetch(`${API_BASE}/notes/${courseSlug}/${lessonSlug}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ lessonTitle, content }),
+  });
+  if (!res.ok) throw new Error('Failed to save note to database');
+  return res.json();
+}
+
+export async function deleteLessonNote(courseSlug: string, lessonSlug: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE}/notes/${courseSlug}/${lessonSlug}`, {
+      method: 'DELETE',
+    });
+    return res.ok;
+  } catch (err) {
+    return false;
+  }
+}
+
+export async function fetchAllUserNotes(): Promise<LessonNoteData[]> {
+  try {
+    const res = await fetch(`${API_BASE}/notes`);
+    if (!res.ok) return [];
+    return res.json();
+  } catch (err) {
+    return [];
+  }
+}
+
