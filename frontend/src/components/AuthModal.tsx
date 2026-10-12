@@ -60,51 +60,47 @@ export default function AuthModal() {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-md animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-in fade-in duration-200">
       {/* Backdrop click handler */}
       <div className="absolute inset-0" onClick={closeAuthModal} />
 
-      <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-slate-700/80 bg-[#0c1222] p-6 shadow-2xl shadow-blue-500/10 z-10 transition-all">
-        {/* Decorative background glow */}
-        <div className="absolute -top-24 -right-24 h-48 w-48 rounded-full bg-blue-500/10 blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-24 -left-24 h-48 w-48 rounded-full bg-indigo-500/10 blur-3xl pointer-events-none" />
-
+      <div className="relative w-full max-w-md overflow-hidden rounded-xl border border-white/[0.12] bg-[#0c1019] p-6 shadow-2xl z-10 transition-all">
         {/* Close button */}
         <button
           onClick={closeAuthModal}
-          className="absolute top-4 right-4 rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white transition-colors"
+          className="absolute top-4 right-4 rounded-lg p-1.5 text-slate-400 hover:bg-white/[0.06] hover:text-white transition-colors"
           aria-label="Close modal"
         >
-          <X className="h-5 w-5" />
+          <X className="h-4 w-4" />
         </button>
 
         {/* Header */}
         <div className="mb-6 flex flex-col items-center text-center">
-          <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 shadow-lg shadow-blue-500/20 text-white">
-            <ShieldCheck className="h-6 w-6" />
+          <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-lg bg-sky-500/10 border border-sky-500/20 text-sky-400">
+            <ShieldCheck className="h-5 w-5" />
           </div>
-          <h2 className="text-xl font-bold text-white tracking-tight">
+          <h2 className="text-lg font-bold text-white tracking-tight">
             {activeTab === 'login' ? 'Welcome Back to SkillVault' : 'Create Your SkillVault Account'}
           </h2>
           <p className="mt-1 text-xs text-slate-400 max-w-xs">
             {activeTab === 'login'
-              ? 'Access your private lesson notes, track course completion, and sync across devices.'
-              : 'Keep your notes 100% private and sync your developer learning progress in real-time.'}
+              ? 'Access private lesson notes, track syllabus progress, and sync across sessions.'
+              : 'Keep notes 100% private and synchronize your progress directly into Neon PostgreSQL.'}
           </p>
         </div>
 
         {/* Tab Switcher */}
-        <div className="mb-5 flex rounded-lg bg-slate-900/90 p-1 border border-slate-800">
+        <div className="mb-5 flex rounded-lg bg-[#070a12] p-1 border border-white/[0.08]">
           <button
             type="button"
             onClick={() => {
               setActiveTab('login');
               setErrorMessage('');
             }}
-            className={`flex-1 rounded-md py-2 text-xs font-semibold transition-all ${
+            className={`flex-1 rounded-md py-1.5 text-xs font-semibold transition-all ${
               activeTab === 'login'
-                ? 'bg-blue-600 text-white shadow-sm'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'bg-sky-500/15 text-sky-400 border border-sky-500/30'
+                : 'text-slate-400 hover:text-white'
             }`}
           >
             Sign In
@@ -115,10 +111,10 @@ export default function AuthModal() {
               setActiveTab('register');
               setErrorMessage('');
             }}
-            className={`flex-1 rounded-md py-2 text-xs font-semibold transition-all ${
+            className={`flex-1 rounded-md py-1.5 text-xs font-semibold transition-all ${
               activeTab === 'register'
-                ? 'bg-blue-600 text-white shadow-sm'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'bg-sky-500/15 text-sky-400 border border-sky-500/30'
+                : 'text-slate-400 hover:text-white'
             }`}
           >
             Create Account
@@ -127,7 +123,7 @@ export default function AuthModal() {
 
         {/* Error message */}
         {errorMessage && (
-          <div className="mb-4 rounded-lg border border-red-500/20 bg-red-500/10 px-3.5 py-2.5 text-xs font-medium text-red-400 animate-in fade-in">
+          <div className="mb-4 rounded-lg border border-rose-500/20 bg-rose-500/10 px-3.5 py-2.5 text-xs font-medium text-rose-400 animate-in fade-in">
             {errorMessage}
           </div>
         )}
@@ -147,14 +143,14 @@ export default function AuthModal() {
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
                     placeholder="e.g. John Doe"
-                    className="w-full rounded-lg border border-slate-700/80 bg-slate-900/80 pl-9 pr-3.5 py-2 text-xs text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="w-full rounded-lg border border-white/[0.08] bg-[#070a12] pl-9 pr-3.5 py-2 text-xs text-white placeholder-slate-500 focus:border-sky-500/50 focus:outline-none"
                   />
                 </div>
               </div>
 
               <div>
                 <label className="mb-1.5 block text-xs font-medium text-slate-300">
-                  Username <span className="text-red-400">*</span>
+                  Username <span className="text-rose-400">*</span>
                 </label>
                 <div className="relative">
                   <User className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
@@ -164,14 +160,14 @@ export default function AuthModal() {
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     placeholder="e.g. dev_johndoe"
-                    className="w-full rounded-lg border border-slate-700/80 bg-slate-900/80 pl-9 pr-3.5 py-2 text-xs text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="w-full rounded-lg border border-white/[0.08] bg-[#070a12] pl-9 pr-3.5 py-2 text-xs text-white placeholder-slate-500 focus:border-sky-500/50 focus:outline-none"
                   />
                 </div>
               </div>
 
               <div>
                 <label className="mb-1.5 block text-xs font-medium text-slate-300">
-                  Email Address <span className="text-red-400">*</span>
+                  Email Address <span className="text-rose-400">*</span>
                 </label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
@@ -181,7 +177,7 @@ export default function AuthModal() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="you@domain.com"
-                    className="w-full rounded-lg border border-slate-700/80 bg-slate-900/80 pl-9 pr-3.5 py-2 text-xs text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    className="w-full rounded-lg border border-white/[0.08] bg-[#070a12] pl-9 pr-3.5 py-2 text-xs text-white placeholder-slate-500 focus:border-sky-500/50 focus:outline-none"
                   />
                 </div>
               </div>
@@ -191,7 +187,7 @@ export default function AuthModal() {
           {activeTab === 'login' && (
             <div>
               <label className="mb-1.5 block text-xs font-medium text-slate-300">
-                Email or Username <span className="text-red-400">*</span>
+                Email or Username <span className="text-rose-400">*</span>
               </label>
               <div className="relative">
                 <Mail className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
@@ -201,7 +197,7 @@ export default function AuthModal() {
                   value={emailOrUsername}
                   onChange={(e) => setEmailOrUsername(e.target.value)}
                   placeholder="Email or Username"
-                  className="w-full rounded-lg border border-slate-700/80 bg-slate-900/80 pl-9 pr-3.5 py-2 text-xs text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="w-full rounded-lg border border-white/[0.08] bg-[#070a12] pl-9 pr-3.5 py-2 text-xs text-white placeholder-slate-500 focus:border-sky-500/50 focus:outline-none"
                 />
               </div>
             </div>
@@ -209,7 +205,7 @@ export default function AuthModal() {
 
           <div>
             <label className="mb-1.5 block text-xs font-medium text-slate-300">
-              Password <span className="text-red-400">*</span>
+              Password <span className="text-rose-400">*</span>
             </label>
             <div className="relative">
               <Lock className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
@@ -219,7 +215,7 @@ export default function AuthModal() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder={activeTab === 'register' ? 'Min. 6 characters' : 'Enter password'}
-                className="w-full rounded-lg border border-slate-700/80 bg-slate-900/80 pl-9 pr-9 py-2 text-xs text-white placeholder-slate-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full rounded-lg border border-white/[0.08] bg-[#070a12] pl-9 pr-9 py-2 text-xs text-white placeholder-slate-500 focus:border-sky-500/50 focus:outline-none"
               />
               <button
                 type="button"
@@ -234,7 +230,7 @@ export default function AuthModal() {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full mt-2 flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-4 py-2.5 text-xs font-semibold text-white shadow-lg shadow-blue-500/20 hover:from-blue-500 hover:to-indigo-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-slate-900 transition-all disabled:opacity-50"
+            className="w-full mt-2 flex items-center justify-center gap-2 rounded-lg bg-sky-600 hover:bg-sky-500 px-4 py-2.5 text-xs font-semibold text-white shadow-xs focus:outline-none transition-colors disabled:opacity-50"
           >
             {isSubmitting ? (
               <>
@@ -243,7 +239,7 @@ export default function AuthModal() {
               </>
             ) : (
               <>
-                <Sparkles className="h-3.5 w-3.5" />
+                <ShieldCheck className="h-3.5 w-3.5" />
                 <span>{activeTab === 'login' ? 'Sign In to SkillVault' : 'Create Free Account'}</span>
               </>
             )}
@@ -261,7 +257,7 @@ export default function AuthModal() {
                   setActiveTab('register');
                   setErrorMessage('');
                 }}
-                className="font-semibold text-blue-400 hover:text-blue-300 hover:underline"
+                className="font-semibold text-sky-400 hover:text-sky-300 hover:underline"
               >
                 Sign up free
               </button>
@@ -275,7 +271,7 @@ export default function AuthModal() {
                   setActiveTab('login');
                   setErrorMessage('');
                 }}
-                className="font-semibold text-blue-400 hover:text-blue-300 hover:underline"
+                className="font-semibold text-sky-400 hover:text-sky-300 hover:underline"
               >
                 Sign in
               </button>

@@ -25,7 +25,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="dark">
-      <body className="min-h-screen bg-[#090d16] text-slate-100 antialiased selection:bg-blue-600/30 selection:text-blue-200">
+      <body className="min-h-screen bg-[#06080e] text-slate-100 antialiased selection:bg-sky-500/20 selection:text-sky-200">
         <AuthProvider>
           <Navbar />
           <main>{children}</main>

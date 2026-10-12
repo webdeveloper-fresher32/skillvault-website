@@ -236,65 +236,53 @@ export default function InterviewHubPage() {
   }, [guides]);
 
   return (
-    <div className="min-h-screen bg-[#070b12] text-slate-100 pb-24">
+    <div className="min-h-screen bg-[#06080e] text-slate-100 pb-24">
       {/* 1. HERO HEADER */}
-      <section className="relative overflow-hidden border-b border-slate-800/80 bg-gradient-to-b from-[#0e1626] to-[#070b12] px-4 py-16 sm:px-6 lg:px-8">
-        {/* Glow ambient background elements */}
-        <div className="absolute top-0 left-1/4 h-80 w-80 rounded-full bg-blue-600/10 blur-3xl pointer-events-none" />
-        <div className="absolute top-10 right-1/4 h-80 w-80 rounded-full bg-purple-600/10 blur-3xl pointer-events-none" />
-
-        <div className="relative mx-auto max-w-6xl text-center">
-          <div className="inline-flex items-center gap-2 rounded-full border border-blue-500/20 bg-blue-500/10 px-3.5 py-1 text-xs font-semibold text-blue-400 mb-4 shadow-sm">
-            <Sparkles className="h-3.5 w-3.5 text-blue-400" />
-            <span>Senior Engineering Tech Interview Vault</span>
+      <section className="border-b border-white/[0.06] bg-[#080c14] px-4 py-14 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-5xl text-center">
+          <div className="inline-flex items-center gap-2 rounded-md border border-white/[0.08] bg-white/[0.03] px-3 py-1 text-xs font-mono text-sky-400 mb-4">
+            <Sparkles className="h-3.5 w-3.5 text-sky-400" />
+            <span>Senior Technical Interview Knowledge Vault</span>
           </div>
 
-          <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl lg:text-6xl text-white">
-            Technical Interview{' '}
-            <span className="bg-gradient-to-r from-blue-400 via-indigo-300 to-purple-400 bg-clip-text text-transparent">
-              Master Guides
-            </span>
+          <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl lg:text-5xl text-white">
+            Technical Interview Master Guides
           </h1>
 
-          <p className="mx-auto mt-4 max-w-3xl text-base text-slate-300 sm:text-lg leading-relaxed">
-            Battle-tested senior interview questions, practical code snippets, production tradeoffs, and mock interview
-            walkthroughs organized across <strong className="text-white font-semibold">{guides.length}+ technology domains</strong>.
+          <p className="mx-auto mt-4 max-w-2xl text-xs sm:text-sm text-slate-400 leading-relaxed">
+            Battle-tested senior engineering questions, real-world code snippets, and architectural trade-offs organized across <strong className="text-white font-semibold">{guides.length}+ technology domains</strong>.
           </p>
 
           {/* Quick Metrics */}
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-6 sm:gap-10 text-xs sm:text-sm font-medium text-slate-400">
-            <div className="flex items-center gap-2">
-              <span className="flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-6 sm:gap-8 text-xs font-mono text-slate-400">
+            <div className="flex items-center gap-1.5">
+              <span className="flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
               <span>{guides.length} Curated Tracks</span>
             </div>
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-blue-400" />
-              <span>1,200+ Senior Q&As</span>
+            <div className="flex items-center gap-1.5">
+              <CheckCircle2 className="h-3.5 w-3.5 text-sky-400" />
+              <span>1,200+ Verified Q&As</span>
             </div>
-            <div className="flex items-center gap-2">
-              <Code2 className="h-4 w-4 text-purple-400" />
-              <span>Production Code & Edge Cases</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <GraduationCap className="h-4 w-4 text-amber-400" />
-              <span>Interview-Ready Tradeoffs</span>
+            <div className="flex items-center gap-1.5">
+              <Code2 className="h-3.5 w-3.5 text-sky-400" />
+              <span>Edge Cases & Concurrency</span>
             </div>
           </div>
 
           {/* Search Box */}
           <div className="mx-auto mt-8 max-w-2xl relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-400" />
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search interview questions by technology (e.g. Angular, Spring Boot, Kafka, AWS, DSA, SQL)..."
-              className="w-full rounded-2xl border border-slate-700/80 bg-slate-900/90 pl-12 pr-4 py-3.5 text-sm sm:text-base text-white placeholder-slate-500 shadow-2xl focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all"
+              placeholder="Search interview guides (e.g. Angular, Spring Boot, Kafka, AWS, DSA, SQL)..."
+              className="w-full rounded-lg border border-white/[0.08] bg-[#0c1019] pl-11 pr-4 py-2.5 text-xs sm:text-sm text-white placeholder-slate-500 focus:border-sky-500/50 focus:outline-none transition-colors"
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery('')}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-white bg-slate-800 px-2 py-1 rounded"
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[11px] font-mono text-slate-400 hover:text-white bg-white/[0.06] px-2 py-0.5 rounded"
               >
                 Clear
               </button>
@@ -306,23 +294,23 @@ export default function InterviewHubPage() {
       {/* 2. MAIN CONTENT AREA */}
       <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 mt-10">
         {/* Category Pills Navigation */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-4 scrollbar-thin scrollbar-thumb-slate-800">
+        <div className="flex items-center gap-2 overflow-x-auto pb-4 scrollbar-none">
           {categories.map((cat) => (
             <button
               key={cat.name}
               onClick={() => setSelectedCategory(cat.name)}
-              className={`shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all ${
+              className={`shrink-0 flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-md transition-colors ${
                 selectedCategory === cat.name
-                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
-                  : 'bg-slate-900/90 text-slate-400 border border-slate-800 hover:bg-slate-800 hover:text-slate-200'
+                  ? 'bg-sky-500/15 text-sky-400 border border-sky-500/30'
+                  : 'bg-[#0c1019] text-slate-400 border border-white/[0.06] hover:text-white'
               }`}
             >
               <span>{cat.name}</span>
               <span
-                className={`text-[11px] px-1.5 py-0.2 rounded-full font-mono ${
+                className={`text-[10px] px-1.5 py-0.2 rounded font-mono ${
                   selectedCategory === cat.name
-                    ? 'bg-blue-700/80 text-blue-100'
-                    : 'bg-slate-800 text-slate-400'
+                    ? 'bg-sky-500/20 text-sky-300'
+                    : 'bg-white/[0.04] text-slate-500'
                 }`}
               >
                 {cat.count}
@@ -335,11 +323,11 @@ export default function InterviewHubPage() {
         {selectedCategory === 'All' && !searchQuery.trim() && featuredPicks.length > 0 && (
           <div className="mt-8 mb-12">
             <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-slate-300">
-                <Zap className="h-4 w-4 text-amber-400" />
-                <span>Most Frequently Interviewed Tracks</span>
+              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-300 font-mono">
+                <Zap className="h-3.5 w-3.5 text-amber-400" />
+                <span>Frequently Interviewed Senior Tracks</span>
               </div>
-              <span className="text-xs text-slate-500">Essential Senior Focus</span>
+              <span className="text-xs text-slate-500 font-mono">Essential Focus</span>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -347,20 +335,20 @@ export default function InterviewHubPage() {
                 <Link
                   key={pick.id}
                   href={pick.url}
-                  className="group relative rounded-2xl border border-blue-500/20 bg-gradient-to-b from-blue-950/20 to-slate-900/80 p-5 shadow-lg hover:border-blue-500/50 hover:shadow-blue-500/10 transition-all flex flex-col justify-between"
+                  className="group rounded-xl border border-white/[0.08] bg-[#0a0e17] p-5 hover:border-white/[0.16] transition-colors flex flex-col justify-between"
                 >
                   <div>
                     <div className="flex items-center justify-between text-xs mb-3">
-                      <span className="font-semibold text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">
+                      <span className="font-semibold text-sky-400 bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/20 text-[11px] font-mono">
                         {pick.category}
                       </span>
-                      <span className="text-slate-500 flex items-center gap-1">
+                      <span className="text-slate-500 flex items-center gap-1 font-mono text-[11px]">
                         <Clock className="h-3 w-3" />
                         {pick.estimatedMinutes || 30}m
                       </span>
                     </div>
 
-                    <h3 className="font-bold text-white text-base group-hover:text-blue-300 transition-colors line-clamp-2">
+                    <h3 className="font-bold text-white text-sm group-hover:text-sky-400 transition-colors line-clamp-2">
                       {pick.courseTitle}
                     </h3>
 
@@ -369,9 +357,9 @@ export default function InterviewHubPage() {
                     </p>
                   </div>
 
-                  <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs font-semibold text-blue-400 group-hover:text-blue-300">
+                  <div className="mt-4 pt-3 border-t border-white/[0.06] flex items-center justify-between text-xs font-semibold text-sky-400 group-hover:text-sky-300">
                     <span>Study Master Q&A</span>
-                    <ArrowRight className="h-3.5 w-3.5 group-hover:translate-x-1 transition-transform" />
+                    <ArrowRight className="h-3 w-3 group-hover:translate-x-0.5 transition-transform" />
                   </div>
                 </Link>
               ))}
@@ -380,16 +368,16 @@ export default function InterviewHubPage() {
         )}
 
         {/* Results Header */}
-        <div className="mt-8 flex items-center justify-between pb-3 border-b border-slate-800">
-          <div className="flex items-center gap-2 text-sm font-semibold text-slate-300">
-            <Briefcase className="h-4 w-4 text-blue-400" />
+        <div className="mt-8 flex items-center justify-between pb-3 border-b border-white/[0.06]">
+          <div className="flex items-center gap-2 text-xs font-semibold text-slate-300 font-mono">
+            <Briefcase className="h-3.5 w-3.5 text-sky-400" />
             <span>
               {selectedCategory === 'All' ? 'All Interview Guides' : `${selectedCategory} Tracks`}
             </span>
-            <span className="text-xs text-slate-500 font-mono">({filteredGuides.length} available)</span>
+            <span className="text-slate-500">({filteredGuides.length} available)</span>
           </div>
           {searchQuery && (
-            <span className="text-xs text-slate-400">
+            <span className="text-xs text-slate-400 font-mono">
               Matching <span className="text-white font-medium">"{searchQuery}"</span>
             </span>
           )}
@@ -397,10 +385,10 @@ export default function InterviewHubPage() {
 
         {/* Cards Grid */}
         {filteredGuides.length === 0 ? (
-          <div className="py-20 text-center rounded-2xl border border-dashed border-slate-800 mt-6">
-            <HelpCircle className="h-10 w-10 text-slate-600 mx-auto mb-3" />
-            <h3 className="text-base font-semibold text-white">No interview guides found</h3>
-            <p className="mt-1 text-sm text-slate-400 max-w-sm mx-auto">
+          <div className="py-20 text-center rounded-xl border border-dashed border-white/[0.08] mt-6">
+            <HelpCircle className="h-8 w-8 text-slate-600 mx-auto mb-3" />
+            <h3 className="text-sm font-semibold text-white">No interview guides found</h3>
+            <p className="mt-1 text-xs text-slate-400 max-w-sm mx-auto">
               No tracks match your current search query "{searchQuery}". Try searching for another tech stack.
             </p>
             <button
@@ -408,30 +396,30 @@ export default function InterviewHubPage() {
                 setSearchQuery('');
                 setSelectedCategory('All');
               }}
-              className="mt-4 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold transition-colors"
+              className="mt-4 px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold transition-colors"
             >
               Reset Filters
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 mt-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
             {filteredGuides.map((guide) => {
               const tags = TECH_TAGS_MAP[guide.courseSlug] || [
                 'Architecture Tradeoffs',
                 'Code Edge Cases',
                 'Core Concepts',
-                'Mock Interview Scenarios'
+                'Mock Scenarios'
               ];
 
               return (
                 <div
                   key={`${guide.courseSlug}-${guide.lessonSlug}-${guide.id}`}
-                  className="rounded-2xl border border-slate-800 bg-[#0c1220]/90 p-5 shadow-xl hover:border-slate-700 transition-all flex flex-col justify-between group hover:shadow-2xl"
+                  className="rounded-xl border border-white/[0.08] bg-[#0a0e17] p-5 hover:border-white/[0.16] transition-colors flex flex-col justify-between group"
                 >
                   <div>
                     {/* Top row: Category badge & duration */}
                     <div className="flex items-center justify-between text-xs mb-3">
-                      <span className="rounded bg-slate-800/80 px-2 py-0.5 text-[11px] font-semibold text-slate-300 border border-slate-700/60">
+                      <span className="rounded bg-white/[0.04] px-2 py-0.5 text-[11px] font-mono text-slate-300 border border-white/[0.06]">
                         {guide.category}
                       </span>
                       <span className="flex items-center gap-1 text-[11px] text-slate-500 font-mono">
@@ -442,15 +430,15 @@ export default function InterviewHubPage() {
 
                     {/* Course Title & Lesson Title */}
                     <div className="mb-2">
-                      <span className="text-[11px] font-semibold uppercase tracking-wider text-blue-400/90 font-mono">
+                      <span className="text-[10px] font-mono font-semibold uppercase tracking-wider text-sky-400 block">
                         {guide.courseTitle}
                       </span>
-                      <h3 className="text-base font-bold text-white group-hover:text-blue-300 transition-colors mt-0.5 line-clamp-2">
+                      <h3 className="text-sm font-bold text-white group-hover:text-sky-400 transition-colors mt-0.5 line-clamp-2">
                         {guide.title}
                       </h3>
                     </div>
 
-                    {/* Description or Excerpt */}
+                    {/* Description */}
                     <p className="text-xs text-slate-400 leading-relaxed line-clamp-2 mb-4">
                       {guide.summary ||
                         `Senior-level interview questions, concrete code examples, and technical tradeoffs for ${guide.courseTitle}.`}
@@ -461,7 +449,7 @@ export default function InterviewHubPage() {
                       {tags.slice(0, 3).map((tag, i) => (
                         <span
                           key={i}
-                          className="text-[10px] font-medium px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-300 border border-blue-500/20"
+                          className="text-[10px] font-mono px-2 py-0.5 rounded bg-sky-500/10 text-sky-300 border border-sky-500/20"
                         >
                           {tag}
                         </span>
@@ -470,14 +458,14 @@ export default function InterviewHubPage() {
                   </div>
 
                   {/* Footer link button */}
-                  <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between">
-                    <span className="text-[11px] text-slate-500">Interactive Q&A + Notes</span>
+                  <div className="pt-3 border-t border-white/[0.06] flex items-center justify-between">
+                    <span className="text-[11px] text-slate-500 font-mono">Interactive Q&A + Notes</span>
                     <Link
                       href={guide.url}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600/15 hover:bg-blue-600 text-blue-400 hover:text-white text-xs font-semibold border border-blue-500/30 hover:border-transparent transition-all shadow-xs"
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 text-xs font-semibold border border-sky-500/25 transition-colors"
                     >
                       <span>Study Guide</span>
-                      <ArrowRight className="h-3.5 w-3.5 group-hover:translate-x-0.5 transition-transform" />
+                      <ArrowRight className="h-3 w-3 group-hover:translate-x-0.5 transition-transform" />
                     </Link>
                   </div>
                 </div>

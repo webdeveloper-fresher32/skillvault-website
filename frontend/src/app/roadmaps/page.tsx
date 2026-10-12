@@ -287,97 +287,99 @@ export default function RoadmapsPage() {
   const activeTrack = CAREER_TRACKS.find((t) => t.id === activeTab) || CAREER_TRACKS[0];
 
   return (
-    <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-12">
-      {/* Header */}
-      <div className="pb-8 border-b border-slate-800">
-        <div className="inline-flex items-center gap-2 rounded-full border border-blue-500/20 bg-blue-500/10 px-3 py-1 text-xs font-semibold text-blue-400 mb-3">
-          <Compass className="h-3.5 w-3.5" />
-          <span>Industry Career Tracks</span>
-        </div>
-        <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">Career Roadmaps & Learning Pathways</h1>
-        <p className="mt-2 text-sm sm:text-base text-slate-400 max-w-3xl leading-relaxed">
-          Step-by-step career tracks modeled after senior engineering requirements. Each track sequences foundational theory, implementation phases, and direct course links.
-        </p>
+    <div className="min-h-screen bg-[#06080e] text-slate-100 pb-20">
+      {/* 1. HEADER */}
+      <section className="border-b border-white/[0.06] bg-[#080c14] py-10 px-4 sm:px-6 lg:px-8">
+        <div className="mx-auto max-w-5xl">
+          <div className="inline-flex items-center gap-2 rounded-md border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 text-xs font-mono text-sky-400 mb-3">
+            <Compass className="h-3.5 w-3.5 text-sky-400" />
+            <span>Senior Career Engineering Pathways</span>
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+            Career Roadmaps & Learning Milestones
+          </h1>
+          <p className="mt-1 text-xs sm:text-sm text-slate-400 max-w-2xl leading-relaxed">
+            Progressive engineering pathways modeled after senior industry roles. Sequence core computer science foundations, microservices, and high-scale production operations.
+          </p>
 
-        {/* Tab Selection */}
-        <div className="mt-8 flex flex-wrap gap-2 sm:gap-3">
-          {CAREER_TRACKS.map((track) => (
-            <button
-              key={track.id}
-              onClick={() => setActiveTab(track.id)}
-              className={`flex items-center gap-2.5 rounded-xl px-4 py-2.5 text-xs sm:text-sm font-semibold transition-all ${
-                activeTab === track.id
-                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/25 border border-blue-400/40'
-                  : 'bg-slate-900/80 text-slate-400 hover:bg-slate-800 hover:text-slate-200 border border-slate-800'
-              }`}
-            >
-              {track.icon}
-              <span>{track.title}</span>
-            </button>
-          ))}
+          {/* Tab Selection */}
+          <div className="mt-6 flex flex-wrap gap-2 pt-4 border-t border-white/[0.06]">
+            {CAREER_TRACKS.map((track) => (
+              <button
+                key={track.id}
+                onClick={() => setActiveTab(track.id)}
+                className={`flex items-center gap-2 rounded-md px-3.5 py-1.5 text-xs font-medium transition-colors ${
+                  activeTab === track.id
+                    ? 'bg-sky-500/15 text-sky-400 border border-sky-500/30'
+                    : 'bg-[#0c1019] text-slate-400 hover:text-white border border-white/[0.06]'
+                }`}
+              >
+                {track.icon}
+                <span>{track.title}</span>
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      </section>
 
-      {/* Selected Career Track Content */}
-      <div className="mt-10">
-        {/* Track Highlight Card */}
-        <div className="rounded-2xl border border-slate-800 bg-[#0f172a] p-6 sm:p-8 mb-10">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-6 border-b border-slate-800/80">
+      {/* 2. SELECTED CAREER TRACK CONTENT */}
+      <main className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 mt-10">
+        {/* Track Overview Card */}
+        <div className="rounded-xl border border-white/[0.08] bg-[#0a0e17] p-6 mb-10">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-white/[0.06]">
             <div>
-              <span className="inline-block rounded-md bg-blue-500/10 px-2.5 py-1 text-[11px] font-semibold text-blue-400 border border-blue-500/20 mb-2">
+              <span className="inline-block rounded bg-sky-500/10 px-2 py-0.5 text-[11px] font-mono font-semibold text-sky-400 border border-sky-500/20 mb-1.5">
                 {activeTrack.badge}
               </span>
-              <h2 className="text-2xl font-bold text-white tracking-tight">{activeTrack.title} Pathway</h2>
+              <h2 className="text-xl font-bold text-white tracking-tight">{activeTrack.title} Pathway</h2>
             </div>
             <span className="text-xs font-mono text-slate-400">
-              {activeTrack.phases.length} Progressive Milestones
+              {activeTrack.phases.length} Sequential Milestones
             </span>
           </div>
-          <p className="mt-4 text-sm text-slate-300 leading-relaxed max-w-4xl">
+          <p className="mt-3 text-xs sm:text-sm text-slate-300 leading-relaxed">
             {activeTrack.tagline}
           </p>
         </div>
 
         {/* Timeline Sequence */}
-        <div className="relative pl-6 sm:pl-8 border-l-2 border-slate-800 space-y-8">
+        <div className="relative pl-6 sm:pl-8 border-l border-white/[0.1] space-y-6">
           {activeTrack.phases.map((phase, idx) => (
             <div key={idx} className="relative group">
               {/* Timeline Marker Dot */}
-              <div className="absolute -left-[31px] sm:-left-[39px] top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-slate-950 border-2 border-blue-500 text-[11px] font-mono font-bold text-blue-400 shadow-md shadow-blue-500/20">
+              <div className="absolute -left-[31px] sm:-left-[39px] top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-[#06080e] border border-sky-400 text-[10px] font-mono font-bold text-sky-400">
                 {idx + 1}
               </div>
 
               {/* Milestone Card */}
-              <div className="rounded-2xl border border-slate-800/90 bg-[#0f172a]/70 p-6 hover:border-slate-700 hover:bg-slate-900/80 transition-all">
-                <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-1 mb-2">
-                  <span className="text-xs font-semibold uppercase tracking-wider text-blue-400 font-mono">
-                    {phase.number}
-                  </span>
-                </div>
+              <div className="rounded-xl border border-white/[0.08] bg-[#0a0e17] p-5 hover:border-white/[0.16] transition-colors">
+                <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-sky-400 block mb-1">
+                  {phase.number}
+                </span>
 
-                <h3 className="text-lg font-bold text-white group-hover:text-blue-300 transition-colors">
+                <h3 className="text-base font-bold text-white group-hover:text-sky-300 transition-colors">
                   {phase.title}
                 </h3>
 
-                <p className="mt-2 text-xs sm:text-sm text-slate-400 leading-relaxed">
+                <p className="mt-1.5 text-xs text-slate-400 leading-relaxed">
                   {phase.description}
                 </p>
 
-                {/* Direct Course Links for this Milestone */}
-                <div className="mt-4 pt-4 border-t border-slate-800/80">
-                  <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2.5">
-                    Recommended Learning Courses:
+                {/* Direct Course Links */}
+                <div className="mt-4 pt-3 border-t border-white/[0.06]">
+                  <div className="text-[10px] font-mono uppercase tracking-wider text-slate-500 mb-2">
+                    Core Technical Curricula:
                   </div>
-                  <div className="flex flex-wrap gap-2.5">
+                  <div className="flex flex-wrap gap-2">
                     {phase.courseLinks.map((course, cIdx) => (
                       <Link
                         key={cIdx}
                         href={`/courses/${course.slug}`}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700/80 bg-slate-800/80 px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-blue-500/60 hover:bg-blue-600/20 hover:text-blue-300 transition-all"
+                        className="inline-flex items-center gap-1.5 rounded-md border border-white/[0.08] bg-[#0c1019] px-2.5 py-1 text-xs font-medium text-slate-300 hover:border-sky-500/30 hover:text-white transition-colors"
                       >
-                        <CheckCircle2 className="h-3 w-3 text-blue-400" />
+                        <CheckCircle2 className="h-3 w-3 text-sky-400" />
                         <span>{course.name}</span>
-                        <ArrowRight className="h-3 w-3 text-slate-400" />
+                        <ArrowRight className="h-3 w-3 text-slate-500" />
                       </Link>
                     ))}
                   </div>
@@ -386,7 +388,7 @@ export default function RoadmapsPage() {
             </div>
           ))}
         </div>
-      </div>
+      </main>
     </div>
   );
 }

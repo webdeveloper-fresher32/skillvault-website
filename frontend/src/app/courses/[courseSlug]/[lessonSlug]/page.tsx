@@ -434,34 +434,34 @@ export default function LessonPage({ params }: PageProps) {
   return (
     <>
       <TopScrollProgress />
-      <div className="flex min-h-[calc(100vh-4rem)] bg-[#0d1117]">
+      <div className="flex min-h-[calc(100vh-4rem)] bg-[#06080e]">
       {/* Mobile Toggle Button */}
       <button
         onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-        className="fixed bottom-6 right-6 z-50 flex h-12 w-12 items-center justify-center rounded-full bg-indigo-600 text-white shadow-xl lg:hidden"
+        className="fixed bottom-6 right-6 z-50 flex h-12 w-12 items-center justify-center rounded-full bg-sky-600 text-white shadow-xl lg:hidden"
       >
         {isSidebarOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
       </button>
 
-      {/* 1. FIXED LEFT SIDEBAR: Udemy / EdTech Course Curriculum Accordion */}
+      {/* 1. FIXED LEFT SIDEBAR: Course Curriculum Accordion */}
       <aside
         style={{ width: isDesktop ? `${sidebarWidth}px` : undefined }}
-        className={`fixed top-16 bottom-0 left-0 z-30 border-r border-[#30363d] bg-[#161b22] ${
+        className={`fixed top-16 bottom-0 left-0 z-30 border-r border-white/[0.08] bg-[#0a0e17] ${
           isDragging ? '' : 'transition-[width,transform] duration-150'
         } lg:translate-x-0 overflow-y-auto ${
           isSidebarOpen ? 'translate-x-0 w-80 sm:w-88' : '-translate-x-full'
         }`}
       >
         {/* Course Title Header */}
-        <div className="p-4 border-b border-[#30363d] bg-[#0d1117]/95 sticky top-0 z-10 backdrop-blur">
+        <div className="p-4 border-b border-white/[0.06] bg-[#0c101a]/95 sticky top-0 z-10 backdrop-blur">
           <Link
             href={`/courses/${course.slug}`}
-            className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-indigo-400 transition-colors mb-2"
+            className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-sky-400 transition-colors mb-2 font-mono"
           >
             ‹ Back to Course
           </Link>
           <h2 className="text-sm font-bold text-slate-100 line-clamp-1">{course.title}</h2>
-          <div className="mt-1 text-[11px] text-slate-400 flex items-center gap-2">
+          <div className="mt-1 text-[11px] text-slate-400 flex items-center gap-2 font-mono">
             <span>Course Content</span>
             <span>•</span>
             <span>{course.modules?.length || 0} Sections</span>
@@ -469,7 +469,7 @@ export default function LessonPage({ params }: PageProps) {
         </div>
 
         {/* Sections Accordion */}
-        <div className="divide-y divide-[#30363d]/80">
+        <div className="divide-y divide-white/[0.04]">
           {course.modules?.map((mod, modIdx) => {
             const isOpen = !!openSections[mod.slug];
             const isCurrentSection = mod.lessons?.some((l) => l.slug === lesson.slug);
@@ -482,30 +482,30 @@ export default function LessonPage({ params }: PageProps) {
                 <button
                   onClick={() => toggleSection(mod.slug)}
                   className={`w-full flex items-center justify-between p-4 text-left transition-colors ${
-                    isCurrentSection ? 'bg-[#1f242c]' : 'hover:bg-[#1f242c]/60'
+                    isCurrentSection ? 'bg-white/[0.04]' : 'hover:bg-white/[0.02]'
                   }`}
                 >
                   <div className="pr-2">
-                    <h3 className="text-sm font-bold text-slate-100">
+                    <h3 className="text-xs sm:text-sm font-bold text-slate-100">
                       Section {modIdx + 1}: {mod.title}
                     </h3>
-                    <div className="mt-1 text-xs text-slate-400 font-sans">
+                    <div className="mt-1 text-xs text-slate-400 font-mono">
                       {completedCount} / {totalItems} | {totalItems * 10}min
                     </div>
                   </div>
 
                   <div className="text-slate-400 shrink-0">
                     {isOpen ? (
-                      <ChevronDown className="h-5 w-5 text-slate-300" />
+                      <ChevronDown className="h-4 w-4 text-slate-300" />
                     ) : (
-                      <ChevronRight className="h-5 w-5 text-slate-400" />
+                      <ChevronRight className="h-4 w-4 text-slate-400" />
                     )}
                   </div>
                 </button>
 
                 {/* Accordion Section Items */}
                 {isOpen && (
-                  <div className="bg-[#0d1117] py-2 border-t border-[#30363d]/60">
+                  <div className="bg-[#070a12] py-1 border-t border-white/[0.04]">
                     {mod.lessons?.map((l, lIdx) => {
                       const isCurrent = l.slug === activeLessonSlug;
                       const isDone = isCurrent ? completed : !!completedItems[l.slug];
@@ -518,13 +518,13 @@ export default function LessonPage({ params }: PageProps) {
                               handleSwitchTopic(l.slug);
                             }
                           }}
-                          className={`flex items-start gap-3 px-4 py-3 cursor-pointer transition-colors ${
+                          className={`flex items-start gap-3 px-4 py-2.5 cursor-pointer transition-colors ${
                             isCurrent
-                              ? 'bg-[#1f2937]/90 text-white'
-                              : 'text-slate-300 hover:bg-[#161b22] hover:text-white'
+                              ? 'bg-sky-500/10 text-white border-l-2 border-sky-400'
+                              : 'text-slate-300 hover:bg-white/[0.03] hover:text-white'
                           }`}
                         >
-                          {/* Purple checkbox */}
+                          {/* Checkbox */}
                           <button
                             onClick={(e) => {
                               if (isCurrent) {
@@ -537,20 +537,20 @@ export default function LessonPage({ params }: PageProps) {
                             className="mt-0.5 shrink-0"
                           >
                             {isDone ? (
-                              <div className="h-4 w-4 rounded bg-[#7c3aed] flex items-center justify-center text-white shadow-sm">
+                              <div className="h-4 w-4 rounded bg-sky-500 flex items-center justify-center text-white shadow-xs">
                                 <Check className="h-3 w-3 stroke-[3]" />
                               </div>
                             ) : (
-                              <div className="h-4 w-4 rounded border border-slate-500 bg-slate-800 hover:border-slate-400" />
+                              <div className="h-4 w-4 rounded border border-slate-600 bg-slate-900 hover:border-slate-400" />
                             )}
                           </button>
 
                           <div className="flex-1">
-                            <div className="text-sm font-medium leading-snug">
+                            <div className="text-xs sm:text-sm font-medium leading-snug">
                               {lIdx + 1}. {l.title}
                             </div>
-                            <div className="flex items-center gap-1.5 text-xs text-slate-400 mt-1">
-                              <PlaySquare className="h-3.5 w-3.5 text-slate-400" />
+                            <div className="flex items-center gap-1.5 text-[11px] text-slate-500 mt-0.5 font-mono">
+                              <PlaySquare className="h-3 w-3 text-slate-500" />
                               <span>{l.estimatedMinutes || 15}min</span>
                             </div>
                           </div>
@@ -570,19 +570,18 @@ export default function LessonPage({ params }: PageProps) {
           onDoubleClick={handleResetSidebarWidth}
           title="Drag to resize sidebar • Double-click to reset width"
           className={`hidden lg:flex group absolute top-0 bottom-0 right-0 w-3 cursor-col-resize z-40 items-center justify-center transition-colors select-none ${
-            isDragging ? 'bg-indigo-500/25' : 'hover:bg-indigo-500/10'
+            isDragging ? 'bg-sky-500/25' : 'hover:bg-sky-500/10'
           }`}
         >
-          {/* Subtle indicator bar */}
           <div
             className={`h-8 w-1 rounded-full transition-all duration-200 ${
-              isDragging ? 'bg-indigo-400 scale-y-125' : 'bg-slate-600/70 group-hover:bg-indigo-400 group-hover:h-10'
+              isDragging ? 'bg-sky-400 scale-y-125' : 'bg-slate-700 group-hover:bg-sky-400 group-hover:h-10'
             }`}
           />
         </div>
       </aside>
 
-      {/* 2. SCROLLABLE MIDDLE SECTION: Full Continuous Markdown Content (No middle accordions) */}
+      {/* 2. SCROLLABLE MIDDLE SECTION: Full Continuous Markdown Content */}
       <main
         style={{
           marginLeft: isDesktop ? `${sidebarWidth}px` : undefined,
@@ -592,14 +591,14 @@ export default function LessonPage({ params }: PageProps) {
           isDragging || isRightDragging ? '' : 'transition-[margin] duration-150'
         }`}
       >
-        {/* GitHub Breadcrumb Navigation Bar */}
-        <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-[#30363d] text-xs text-slate-400">
+        {/* Breadcrumb Navigation Bar */}
+        <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-white/[0.08] text-xs text-slate-400">
           <div className="flex items-center gap-2 font-mono truncate">
-            <Link href={`/courses/${course.slug}`} className="text-blue-400 hover:underline truncate">
+            <Link href={`/courses/${course.slug}`} className="text-sky-400 hover:underline truncate">
               {course.title}
             </Link>
             <span>/</span>
-            <span className="text-blue-400 truncate">{lesson.moduleTitle}</span>
+            <span className="text-sky-400 truncate">{lesson.moduleTitle}</span>
             <span>/</span>
             <span className="text-slate-200 font-semibold truncate">{lesson.slug}.md</span>
           </div>
@@ -616,8 +615,8 @@ export default function LessonPage({ params }: PageProps) {
               }}
               className={`flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-semibold border transition-all ${
                 isRightSidebarOpen
-                  ? 'bg-[#7c3aed]/20 text-[#c4b5fd] border-[#7c3aed]/40 shadow-xs'
-                  : 'bg-[#21262d] text-slate-300 border-[#30363d] hover:bg-[#30363d]'
+                  ? 'bg-sky-500/15 text-sky-300 border-sky-500/30'
+                  : 'bg-[#0c1019] text-slate-300 border-white/[0.08] hover:bg-[#121826]'
               }`}
               title={isRightSidebarOpen ? 'Hide Notes Panel' : 'Open Notion Notes'}
             >
@@ -630,7 +629,7 @@ export default function LessonPage({ params }: PageProps) {
               className={`flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-medium border transition-all ${
                 bookmarked
                   ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
-                  : 'bg-[#21262d] text-slate-300 border-[#30363d] hover:bg-[#30363d]'
+                  : 'bg-[#0c1019] text-slate-300 border-white/[0.08] hover:bg-[#121826]'
               }`}
             >
               <Bookmark className={`h-3.5 w-3.5 ${bookmarked ? 'fill-amber-400' : ''}`} />
@@ -641,8 +640,8 @@ export default function LessonPage({ params }: PageProps) {
               onClick={handleToggleComplete}
               className={`flex items-center gap-1.5 rounded-md px-3.5 py-1 text-xs font-semibold border transition-all ${
                 completed
-                  ? 'bg-[#7c3aed] text-white border-[#7c3aed]'
-                  : 'bg-[#21262d] text-slate-200 border-[#30363d] hover:bg-[#30363d]'
+                  ? 'bg-emerald-600 text-white border-emerald-500'
+                  : 'bg-[#0c1019] text-slate-200 border-white/[0.08] hover:bg-[#121826]'
               }`}
             >
               <Check className="h-3.5 w-3.5" />
@@ -651,7 +650,7 @@ export default function LessonPage({ params }: PageProps) {
 
             <button
               onClick={handleShare}
-              className="rounded-md border border-[#30363d] bg-[#21262d] p-1.5 text-slate-300 hover:text-white hover:bg-[#30363d]"
+              className="rounded-md border border-white/[0.08] bg-[#0c1019] p-1.5 text-slate-300 hover:text-white hover:bg-[#121826]"
               title="Share Link"
             >
               {isCopied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Share2 className="h-3.5 w-3.5" />}
@@ -659,7 +658,7 @@ export default function LessonPage({ params }: PageProps) {
           </div>
         </div>
 
-        {/* Clean, Full-Stream Markdown Document (Normal Continuous Reading) */}
+        {/* Clean, Full-Stream Markdown Document */}
         <div className={`py-6 transition-opacity duration-150 ${isLessonSwitching ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
           <MarkdownViewer
             content={lesson.markdownContent}
@@ -669,11 +668,11 @@ export default function LessonPage({ params }: PageProps) {
         </div>
 
         {/* Prev / Next Footer Navigation */}
-        <div className="mt-12 flex items-center justify-between border-t border-[#30363d] pt-6 pb-12">
+        <div className="mt-12 flex items-center justify-between border-t border-white/[0.08] pt-6 pb-12">
           {lesson.prevLessonSlug ? (
             <button
               onClick={() => handleSwitchTopic(lesson.prevLessonSlug!)}
-              className="flex items-center gap-2 rounded-lg border border-[#30363d] bg-[#21262d] px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-[#30363d] hover:text-white transition-colors"
+              className="flex items-center gap-2 rounded-lg border border-white/[0.08] bg-[#0c1019] px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-[#121826] hover:text-white transition-colors"
             >
               <span>‹ Previous Topic</span>
             </button>
@@ -682,7 +681,7 @@ export default function LessonPage({ params }: PageProps) {
           {lesson.nextLessonSlug && (
             <button
               onClick={() => handleSwitchTopic(lesson.nextLessonSlug!)}
-              className="flex items-center gap-2 rounded-lg bg-[#7c3aed] px-5 py-2 text-xs font-semibold text-white shadow-md hover:bg-[#6d28d9] transition-colors"
+              className="flex items-center gap-2 rounded-lg bg-sky-600 px-5 py-2 text-xs font-semibold text-white shadow-xs hover:bg-sky-500 transition-colors"
             >
               <span>Next Topic ›</span>
             </button>
@@ -736,7 +735,7 @@ export default function LessonPage({ params }: PageProps) {
               localStorage.setItem('skillvault_right_sidebar_open', 'true');
             } catch (e) {}
           }}
-          className="fixed bottom-6 right-6 z-30 flex items-center gap-2 rounded-full bg-[#7c3aed] hover:bg-[#6d28d9] px-4 py-2.5 text-xs font-semibold text-white shadow-xl shadow-purple-900/40 border border-purple-400/30 transition-all hover:scale-105 select-none"
+          className="fixed bottom-6 right-6 z-30 flex items-center gap-2 rounded-full bg-sky-600 hover:bg-sky-500 px-4 py-2.5 text-xs font-semibold text-white shadow-xl shadow-sky-950/40 border border-sky-400/30 transition-all hover:scale-105 select-none"
           title="Open Notion Notes"
         >
           <PenLine className="h-4 w-4" />

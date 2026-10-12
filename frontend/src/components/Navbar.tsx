@@ -65,7 +65,7 @@ export default function Navbar() {
 
   return (
     <>
-      <header className="sticky top-0 z-40 w-full border-b border-slate-800 bg-[#090d16]/90 backdrop-blur-md">
+      <header className="sticky top-0 z-40 w-full border-b border-white/[0.08] bg-[#06080e]/90 backdrop-blur-md">
         <div className="flex h-16 w-full items-center justify-between px-4 sm:px-6 lg:px-8">
           <div className="flex items-center gap-8">
             <Link
@@ -75,19 +75,22 @@ export default function Navbar() {
               onMouseDown={() => setOptimisticPath('/')}
               className="flex items-center gap-3 group focus:outline-none"
             >
-              <div className="relative flex h-10 w-10 items-center justify-center rounded-xl overflow-hidden shadow-lg shadow-blue-500/20 group-hover:scale-105 transition-transform">
+              <div className="relative flex h-9 w-9 items-center justify-center rounded-lg border border-white/[0.1] bg-[#0c1019] overflow-hidden group-hover:border-sky-500/40 transition-colors">
                 <Image
                   src="/icon.png"
                   alt="SkillVault Logo"
-                  width={40}
-                  height={40}
+                  width={36}
+                  height={36}
                   className="h-full w-full object-contain"
                   priority
                 />
               </div>
-              <div>
-                <span className="text-xl font-bold tracking-tight bg-gradient-to-r from-white via-slate-100 to-slate-400 bg-clip-text text-transparent">
+              <div className="flex items-baseline gap-2">
+                <span className="text-lg font-bold tracking-tight text-white">
                   SkillVault
+                </span>
+                <span className="hidden lg:inline text-[10px] font-mono uppercase tracking-wider text-slate-500 font-medium">
+                  v2.4
                 </span>
               </div>
             </Link>
@@ -103,13 +106,13 @@ export default function Navbar() {
                     prefetch={true}
                     onClick={() => setOptimisticPath(item.href)}
                     onMouseDown={() => setOptimisticPath(item.href)}
-                    className={`flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium border focus:outline-none transition-colors duration-75 select-none ${
+                    className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium border focus:outline-none transition-all duration-75 select-none ${
                       isActive
-                        ? 'bg-blue-600/15 text-blue-400 border-blue-500/20 shadow-sm'
-                        : 'border-transparent text-slate-400 hover:bg-slate-800/60 hover:text-slate-200'
+                        ? 'bg-sky-500/10 text-sky-400 border-sky-500/25 shadow-xs'
+                        : 'border-transparent text-slate-400 hover:bg-white/[0.04] hover:text-slate-200'
                     }`}
                   >
-                    <Icon className={`h-4 w-4 transition-colors duration-75 ${isActive ? 'text-blue-400' : 'text-slate-400'}`} />
+                    <Icon className={`h-3.5 w-3.5 transition-colors duration-75 ${isActive ? 'text-sky-400' : 'text-slate-400'}`} />
                     {item.label}
                   </Link>
                 );
@@ -121,11 +124,11 @@ export default function Navbar() {
             {/* Quick Search Bar */}
             <button
               onClick={() => setIsSearchOpen(true)}
-              className="flex items-center gap-3 rounded-lg border border-slate-800 bg-slate-900/80 px-3.5 py-1.5 text-xs text-slate-400 hover:border-slate-700 hover:text-slate-300 transition-colors shadow-inner focus:outline-none"
+              className="flex items-center gap-2.5 rounded-lg border border-white/[0.08] bg-[#0c1019] px-3 py-1.5 text-xs text-slate-400 hover:border-white/[0.16] hover:text-slate-200 transition-colors focus:outline-none"
             >
-              <Search className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Search courses, lessons, code...</span>
-              <kbd className="hidden sm:inline rounded bg-slate-800 px-1.5 py-0.5 text-[10px] font-mono text-slate-400 border border-slate-700">
+              <Search className="h-3.5 w-3.5 text-slate-500" />
+              <span className="hidden sm:inline text-xs">Search knowledge base...</span>
+              <kbd className="hidden sm:inline rounded bg-white/[0.06] px-1.5 py-0.5 text-[10px] font-mono text-slate-400 border border-white/[0.08]">
                 /
               </kbd>
             </button>
@@ -134,7 +137,7 @@ export default function Navbar() {
             {!isAuthenticated ? (
               <button
                 onClick={() => openAuthModal('login')}
-                className="flex items-center gap-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 px-3.5 py-1.5 text-xs font-semibold text-white shadow-md shadow-blue-500/20 hover:shadow-blue-500/30 transition-all focus:outline-none"
+                className="flex items-center gap-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs transition-all focus:outline-none"
               >
                 <LogIn className="h-3.5 w-3.5" />
                 <span>Sign In</span>
@@ -143,9 +146,9 @@ export default function Navbar() {
               <div className="relative" ref={profileMenuRef}>
                 <button
                   onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
-                  className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900/90 px-2 py-1 hover:border-slate-600 transition-colors focus:outline-none"
+                  className="flex items-center gap-2 rounded-lg border border-white/[0.08] bg-[#0c1019] px-2.5 py-1 hover:border-white/[0.16] transition-colors focus:outline-none"
                 >
-                  <div className="flex h-7 w-7 items-center justify-center rounded-md bg-gradient-to-tr from-blue-600 to-indigo-600 text-xs font-bold text-white shadow-sm">
+                  <div className="flex h-6 w-6 items-center justify-center rounded bg-sky-500/15 border border-sky-500/30 text-xs font-bold text-sky-400">
                     {(() => {
                       const name = user?.fullName || user?.username || 'U';
                       const parts = name.trim().split(/\s+/);
@@ -161,17 +164,17 @@ export default function Navbar() {
                 </button>
 
                 {isProfileMenuOpen && (
-                  <div className="absolute right-0 mt-2 w-56 rounded-xl border border-slate-700/80 bg-[#0c1222] p-1.5 shadow-2xl z-50 animate-in fade-in">
-                    <div className="border-b border-slate-800 px-3 py-2.5 mb-1">
+                  <div className="absolute right-0 mt-2 w-56 rounded-xl border border-white/[0.12] bg-[#0c1019] p-1.5 shadow-2xl z-50">
+                    <div className="border-b border-white/[0.06] px-3 py-2.5 mb-1">
                       <p className="text-xs font-semibold text-white truncate">{user?.fullName || user?.username}</p>
                       <p className="text-[11px] text-slate-400 truncate">{user?.email}</p>
                       <div className="mt-1.5 flex items-center gap-1.5">
-                        <span className="rounded bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-medium text-blue-400 border border-blue-500/20">
+                        <span className="rounded bg-sky-500/10 px-1.5 py-0.5 text-[10px] font-medium text-sky-400 border border-sky-500/20">
                           {user?.role}
                         </span>
                         <span className="text-[10px] text-emerald-400 flex items-center gap-1">
-                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                          Authenticated
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                          Session Active
                         </span>
                       </div>
                     </div>
@@ -181,7 +184,7 @@ export default function Navbar() {
                         setIsProfileMenuOpen(false);
                         logout();
                       }}
-                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors text-left"
+                      className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium text-rose-400 hover:bg-rose-500/10 transition-colors text-left"
                     >
                       <LogOut className="h-3.5 w-3.5" />
                       <span>Sign Out</span>
