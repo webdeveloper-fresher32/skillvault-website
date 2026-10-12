@@ -1,6 +1,7 @@
 package com.skillvault.controller;
 
 import com.skillvault.dto.DashboardStatsDto;
+import com.skillvault.dto.InterviewGuideDto;
 import com.skillvault.dto.LessonDetailDto;
 import com.skillvault.model.Course;
 import com.skillvault.security.UserPrincipal;
@@ -38,6 +39,11 @@ public class CourseController {
             return authentication.getName();
         }
         return (defaultFallback != null && !defaultFallback.isBlank()) ? defaultFallback : "default-dev";
+    }
+
+    @GetMapping("/interview-questions")
+    public ResponseEntity<List<InterviewGuideDto>> getInterviewGuides() {
+        return ResponseEntity.ok(courseService.getAllInterviewGuides());
     }
 
     @GetMapping

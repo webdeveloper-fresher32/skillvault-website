@@ -1,6 +1,7 @@
 package com.skillvault.service;
 
 import com.skillvault.dto.DashboardStatsDto;
+import com.skillvault.dto.InterviewGuideDto;
 import com.skillvault.dto.LessonDetailDto;
 import com.skillvault.dto.SubtopicSectionDto;
 import com.skillvault.model.Course;
@@ -37,6 +38,10 @@ public class CourseService {
         this.lessonRepository = lessonRepository;
         this.progressRepository = progressRepository;
         this.bookmarkRepository = bookmarkRepository;
+    }
+
+    public List<InterviewGuideDto> getAllInterviewGuides() {
+        return lessonRepository.findAllInterviewGuides();
     }
 
     public List<Course> getAllCourses(String category) {

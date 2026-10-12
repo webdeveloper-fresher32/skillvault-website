@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { Search, Terminal, BookOpen, CheckCircle2, Bookmark, Flame, Zap, Layers, HelpCircle, LogIn, LogOut, ChevronDown, UserCircle } from 'lucide-react';
+import { Search, Terminal, BookOpen, CheckCircle2, Bookmark, Zap, Layers, HelpCircle, LogIn, LogOut, ChevronDown, UserCircle } from 'lucide-react';
 import SearchModal from './SearchModal';
 import { useAuth } from '@/context/AuthContext';
 
@@ -50,6 +50,7 @@ export default function Navbar() {
   const navItems = [
     { label: 'Dashboard', href: '/', icon: Terminal },
     { label: 'Courses', href: '/courses', icon: BookOpen },
+    { label: 'Interview Q&A', href: '/interview', icon: HelpCircle },
     { label: 'Practice & Quizzes', href: '/practice', icon: Zap },
     { label: 'Revision & Cards', href: '/revision', icon: Bookmark },
     { label: 'Roadmaps', href: '/roadmaps', icon: Layers },
@@ -87,9 +88,6 @@ export default function Navbar() {
               <div>
                 <span className="text-xl font-bold tracking-tight bg-gradient-to-r from-white via-slate-100 to-slate-400 bg-clip-text text-transparent">
                   SkillVault
-                </span>
-                <span className="ml-1.5 rounded-full bg-blue-500/10 px-2 py-0.5 text-[10px] font-semibold text-blue-400 border border-blue-500/20">
-                  DEV OS
                 </span>
               </div>
             </Link>
@@ -131,12 +129,6 @@ export default function Navbar() {
                 /
               </kbd>
             </button>
-
-            {/* Daily Streak Indicator */}
-            <div className="flex items-center gap-1.5 rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-xs font-semibold text-amber-400">
-              <Flame className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
-              <span>7 Day Streak</span>
-            </div>
 
             {/* Authentication: Sign In or User Profile */}
             {!isAuthenticated ? (

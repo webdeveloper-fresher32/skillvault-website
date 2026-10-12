@@ -303,4 +303,29 @@ export async function fetchAllUserNotes(): Promise<LessonNoteData[]> {
   }
 }
 
+export interface InterviewGuide {
+  id: number;
+  title: string;
+  lessonSlug: string;
+  courseSlug: string;
+  courseTitle: string;
+  category: string;
+  courseIcon?: string;
+  estimatedMinutes?: number;
+  summary?: string;
+  url: string;
+}
+
+export async function fetchInterviewGuides(): Promise<InterviewGuide[]> {
+  try {
+    const res = await fetch(`${API_BASE}/courses/interview-questions`);
+    if (!res.ok) return [];
+    return res.json();
+  } catch (err) {
+    console.error('Failed to load interview guides', err);
+    return [];
+  }
+}
+
+
 
