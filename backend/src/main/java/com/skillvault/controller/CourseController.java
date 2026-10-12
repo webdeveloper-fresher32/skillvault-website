@@ -3,8 +3,11 @@ package com.skillvault.controller;
 import com.skillvault.dto.DashboardStatsDto;
 import com.skillvault.dto.LessonDetailDto;
 import com.skillvault.model.Course;
+import com.skillvault.security.UserPrincipal;
 import com.skillvault.service.CourseService;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -27,6 +30,16 @@ public class CourseController {
         return ResponseEntity.ok("Reindexing completed successfully");
     }
 
+    private String resolveUserIdentifier(UserPrincipal principal, Authentication authentication, String defaultFallback) {
+        if (principal != null && principal.getEmail() != null) {
+            return principal.getEmail();
+        }
+        if (authentication != null && authentication.isAuthenticated() && !"anonymousUser".equals(authentication.getName())) {
+            return authentication.getName();
+        }
+        return (defaultFallback != null && !defaultFallback.isBlank()) ? defaultFallback : "default-dev";
+    }
+
     @GetMapping
     public ResponseEntity<List<Course>> getAllCourses(@RequestParam(required = false) String category) {
         return ResponseEntity.ok(courseService.getAllCourses(category));
@@ -34,7 +47,10 @@ public class CourseController {
 
     @GetMapping("/stats/dashboard")
     public ResponseEntity<DashboardStatsDto> getDashboardStats(
-            @RequestHeader(value = "X-User-Id", defaultValue = "default-dev") String userIdentifier) {
+            @AuthenticationPrincipal UserPrincipal principal,
+            Authentication authentication,
+            @RequestHeader(value = "X-User-Id", defaultValue = "default-dev") String headerUser) {
+        String userIdentifier = resolveUserIdentifier(principal, authentication, headerUser);
         return ResponseEntity.ok(courseService.getDashboardStats(userIdentifier));
     }
 
@@ -49,7 +65,10 @@ public class CourseController {
     public ResponseEntity<LessonDetailDto> getLessonDetail(
             @PathVariable String courseSlug,
             @PathVariable String lessonSlug,
-            @RequestHeader(value = "X-User-Id", defaultValue = "default-dev") String userIdentifier) {
+            @AuthenticationPrincipal UserPrincipal principal,
+            Authentication authentication,
+            @RequestHeader(value = "X-User-Id", defaultValue = "default-dev") String headerUser) {
+        String userIdentifier = resolveUserIdentifier(principal, authentication, headerUser);
         return courseService.getLessonDetail(courseSlug, lessonSlug, userIdentifier)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());

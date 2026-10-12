@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import Navbar from '@/components/Navbar';
+import { AuthProvider } from '@/context/AuthContext';
+import AuthModal from '@/components/AuthModal';
 
 export const metadata: Metadata = {
   title: 'SkillVault — Developer Learning Operating System',
@@ -24,9 +26,13 @@ export default function RootLayout({
   return (
     <html lang="en" className="dark">
       <body className="min-h-screen bg-[#090d16] text-slate-100 antialiased selection:bg-blue-600/30 selection:text-blue-200">
-        <Navbar />
-        <main>{children}</main>
+        <AuthProvider>
+          <Navbar />
+          <main>{children}</main>
+          <AuthModal />
+        </AuthProvider>
       </body>
     </html>
   );
 }
+

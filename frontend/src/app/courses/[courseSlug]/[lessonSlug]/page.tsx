@@ -26,6 +26,7 @@ import {
 import MarkdownViewer from '@/components/MarkdownViewer';
 import TopScrollProgress from '@/components/interactive/TopScrollProgress';
 import NotionNotesSidebar from '@/components/NotionNotesSidebar';
+import { useAuth } from '@/context/AuthContext';
 
 // Helper to normalize heading and timeline titles for accurate matching
 function normalizeHeadingText(text: string): string {
@@ -46,6 +47,7 @@ export default function LessonPage({ params }: PageProps) {
   const router = useRouter();
   const resolvedParams = use(params);
   const { courseSlug, lessonSlug } = resolvedParams;
+  const { isAuthenticated, openAuthModal } = useAuth();
 
   const [activeLessonSlug, setActiveLessonSlug] = useState<string>(lessonSlug);
   const [lesson, setLesson] = useState<LessonDetail | null>(null);
@@ -273,7 +275,7 @@ export default function LessonPage({ params }: PageProps) {
 
   useEffect(() => {
     loadLessonData(lessonSlug, true);
-  }, [courseSlug, lessonSlug]);
+  }, [courseSlug, lessonSlug, isAuthenticated]);
 
   // Handler for seamless topic click
   const handleSwitchTopic = (targetSlug: string) => {
@@ -353,6 +355,10 @@ export default function LessonPage({ params }: PageProps) {
   };
 
   const handleToggleComplete = async () => {
+    if (!isAuthenticated) {
+      openAuthModal('login');
+      return;
+    }
     try {
       const res = await toggleLessonComplete(courseSlug, lessonSlug);
       setCompleted(res.completed);
@@ -362,6 +368,10 @@ export default function LessonPage({ params }: PageProps) {
   };
 
   const handleToggleBookmark = async () => {
+    if (!isAuthenticated) {
+      openAuthModal('login');
+      return;
+    }
     if (!lesson) return;
     try {
       const res = await toggleBookmark(courseSlug, lessonSlug, lesson.title);

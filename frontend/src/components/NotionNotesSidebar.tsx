@@ -42,7 +42,8 @@ import {
   Database,
   Loader2,
   Search,
-  ExternalLink
+  ExternalLink,
+  Lock
 } from 'lucide-react';
 import {
   fetchLessonNote,
@@ -51,6 +52,8 @@ import {
   fetchAllUserNotes,
   LessonNoteData
 } from '@/lib/api';
+import { useAuth } from '@/context/AuthContext';
+
 
 interface SubtopicItem {
   id: string;
@@ -157,6 +160,8 @@ export default function NotionNotesSidebar({
   onResetWidth,
   isOverlay = false,
 }: NotionNotesSidebarProps) {
+  const { user, isAuthenticated, openAuthModal } = useAuth();
+
   // Active top tab: 'notes' (default) or 'outline'
   const [activeTab, setActiveTab] = useState<'notes' | 'outline'>('notes');
 
@@ -197,46 +202,53 @@ export default function NotionNotesSidebar({
 
     setNoteContent(localDraft);
 
-    // 2. Fetch authoritative saved note from Neon DB backend (NO auto-save call!)
-    setIsLoadingFromDb(true);
-    fetchLessonNote(courseSlug, lessonSlug)
-      .then((dbNote) => {
-        if (!isMounted) return;
-        setIsLoadingFromDb(false);
-        if (dbNote && dbNote.content) {
-          setLastDbSavedContent(dbNote.content);
-          if (dbNote.updatedAt) {
-            const timeStr = new Date(dbNote.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-            setLastSavedDbTime(timeStr);
-          }
-
-          // If local draft is empty or equals DB content, sync completely
-          if (!localDraft || localDraft === dbNote.content) {
-            setNoteContent(dbNote.content);
-            setDbStatus('synced');
-            try {
-              localStorage.setItem(storageKey, dbNote.content);
-            } catch (e) {}
-          } else {
-            // Local draft has edits not yet saved to DB
-            setDbStatus('unsaved');
-          }
-        } else {
-          setLastDbSavedContent('');
-          setDbStatus(localDraft ? 'unsaved' : 'synced');
-        }
-      })
-      .catch(() => {
-        if (isMounted) {
+    // 2. If authenticated, fetch authoritative private saved note from backend
+    if (isAuthenticated) {
+      setIsLoadingFromDb(true);
+      fetchLessonNote(courseSlug, lessonSlug)
+        .then((dbNote) => {
+          if (!isMounted) return;
           setIsLoadingFromDb(false);
-          setDbStatus(localDraft ? 'unsaved' : 'synced');
-        }
-      });
+          if (dbNote && dbNote.content) {
+            setLastDbSavedContent(dbNote.content);
+            if (dbNote.updatedAt) {
+              const timeStr = new Date(dbNote.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+              setLastSavedDbTime(timeStr);
+            }
+
+            // If local draft is empty or equals DB content, sync completely
+            if (!localDraft || localDraft === dbNote.content) {
+              setNoteContent(dbNote.content);
+              setDbStatus('synced');
+              try {
+                localStorage.setItem(storageKey, dbNote.content);
+              } catch (e) {}
+            } else {
+              // Local draft has edits not yet saved to DB
+              setDbStatus('unsaved');
+            }
+          } else {
+            setLastDbSavedContent('');
+            setDbStatus(localDraft ? 'unsaved' : 'synced');
+          }
+        })
+        .catch(() => {
+          if (isMounted) {
+            setIsLoadingFromDb(false);
+            setDbStatus(localDraft ? 'unsaved' : 'synced');
+          }
+        });
+    } else {
+      setIsLoadingFromDb(false);
+      setLastDbSavedContent('');
+      setDbStatus(localDraft ? 'unsaved' : 'synced');
+    }
 
     return () => {
       isMounted = false;
     };
-  }, [courseSlug, lessonSlug, storageKey]);
+  }, [courseSlug, lessonSlug, storageKey, isAuthenticated]);
+
 
   // Record that this lesson has notes in the global index
   const updateNotesIndex = (hasContent: boolean) => {
@@ -273,6 +285,10 @@ export default function NotionNotesSidebar({
 
   // EXPLICIT SAVE TO NEON DB (Only triggers when clicking the Save button or Cmd+S)
   const handleSaveToDatabase = async () => {
+    if (!isAuthenticated) {
+      openAuthModal('login');
+      return;
+    }
     if (isSavingToDb) return;
     setIsSavingToDb(true);
 
@@ -438,6 +454,10 @@ export default function NotionNotesSidebar({
 
   // Open All Notes / Quick Reference modal
   const handleOpenAllNotesModal = async () => {
+    if (!isAuthenticated) {
+      openAuthModal('login');
+      return;
+    }
     setShowAllNotesModal(true);
     setIsLoadingAllNotes(true);
     try {
@@ -639,6 +659,22 @@ export default function NotionNotesSidebar({
         {/* 2. BODY CONTENT: NOTES VIEW */}
         {activeTab === 'notes' && (
           <div className="flex-1 flex flex-col min-h-0 bg-[#0d1117]">
+            {/* Unauthenticated Privacy Notice */}
+            {!isAuthenticated && (
+              <div className="shrink-0 bg-purple-950/40 border-b border-purple-500/20 px-3 py-2 flex items-center justify-between gap-2 text-xs">
+                <div className="flex items-center gap-2 text-purple-200">
+                  <Lock className="h-3.5 w-3.5 text-purple-400 shrink-0" />
+                  <span>Working locally. Sign in to sync & keep notes private.</span>
+                </div>
+                <button
+                  onClick={() => openAuthModal('login')}
+                  className="shrink-0 px-2 py-0.5 rounded bg-[#7c3aed] hover:bg-[#6d28d9] text-white font-medium text-[11px] transition-colors"
+                >
+                  Sign In
+                </button>
+              </div>
+            )}
+
             {/* Notion-style Action & Format Toolbar */}
             <div className="shrink-0 border-b border-[#30363d]/80 bg-[#161b22]/90 px-2 py-1.5 flex flex-wrap items-center justify-between gap-1 select-none">
               {/* View Mode Switcher */}
