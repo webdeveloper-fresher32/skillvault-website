@@ -85,12 +85,9 @@ export default function Navbar() {
                   priority
                 />
               </div>
-              <div className="flex items-baseline gap-2">
+              <div className="flex items-center">
                 <span className="text-lg font-bold tracking-tight text-white">
                   SkillVault
-                </span>
-                <span className="hidden lg:inline text-[10px] font-mono uppercase tracking-wider text-slate-500 font-medium">
-                  v2.4
                 </span>
               </div>
             </Link>
