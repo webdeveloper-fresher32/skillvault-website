@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
   ArrowRight, 
   Terminal, 
@@ -57,10 +58,10 @@ const DOMAIN_MATRIX = [
     id: 'ai',
     title: 'AI Engineering & Agents',
     icon: BrainCircuit,
-    count: '4 Tracks',
-    lessons: '150+ Lessons',
-    topics: ['RAG Architectures', 'Vector Databases', 'LangChain LCEL', 'LangGraph State Graphs', 'LLMOps Triad'],
-    primarySlug: 'rag',
+    count: '5 Tracks',
+    lessons: '180+ Lessons',
+    topics: ['Production RAG', 'PostgreSQL + pgvector', 'LangChain LCEL', 'LangGraph State Graphs', 'RAG Triad & Evals'],
+    primarySlug: 'production-rag',
   },
   {
     id: 'frontend',
@@ -169,7 +170,12 @@ export default function HomePage() {
   return (
     <div className="min-h-screen bg-[#06080e] text-slate-100 pb-20">
       {/* 1. SYSTEM TELEMETRY STRIP */}
-      <div className="border-b border-white/[0.06] bg-[#090d16] px-4 py-2">
+      <motion.div 
+        initial={{ opacity: 0, y: -8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+        className="border-b border-white/[0.06] bg-[#090d16] px-4 py-2"
+      >
         <div className="mx-auto max-w-7xl flex flex-wrap items-center justify-between gap-3 text-[11px] text-slate-400 font-mono">
           <div className="flex items-center gap-3">
             <span className="flex items-center gap-1.5 text-emerald-400 font-medium">
@@ -190,53 +196,79 @@ export default function HomePage() {
             <span className="text-slate-300 font-medium">{stats.studyHours}h Recorded</span>
           </div>
         </div>
-      </div>
+      </motion.div>
 
       {/* 2. HERO SECTION */}
       <section className="border-b border-white/[0.06] bg-[#080c14] py-16 sm:py-20 px-4 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-7xl">
           <div className="max-w-3xl">
-            <div className="inline-flex items-center gap-2 rounded-md border border-white/[0.08] bg-white/[0.03] px-3 py-1 text-xs font-mono text-slate-300 mb-6">
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35 }}
+              className="inline-flex items-center gap-2 rounded-md border border-white/[0.08] bg-white/[0.03] px-3 py-1 text-xs font-mono text-slate-300 mb-6"
+            >
               <Terminal className="h-3.5 w-3.5 text-sky-400" />
               <span>Production-Grade Developer Knowledge Platform</span>
-            </div>
+            </motion.div>
 
-            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-white leading-tight">
+            <motion.h1
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.08 }}
+              className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-white leading-tight"
+            >
               Engineered Knowledge Paths for <br className="hidden sm:inline" />
               Senior Software Engineers.
-            </h1>
+            </motion.h1>
 
-            <p className="mt-5 text-sm sm:text-base text-slate-400 leading-relaxed max-w-2xl">
+            <motion.p
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.16 }}
+              className="mt-5 text-sm sm:text-base text-slate-400 leading-relaxed max-w-2xl"
+            >
               Eliminate surface-level tutorials. Master distributed systems failure modes, cloud architecture trade-offs, Spring Boot microservices, and reactive frontends through structured curricula, interactive scenario drills, and active recall.
-            </p>
+            </motion.p>
 
-            <div className="mt-8 flex flex-wrap items-center gap-3">
-              <Link
-                href="/courses"
-                prefetch={true}
-                className="inline-flex items-center gap-2 rounded-lg bg-sky-600 hover:bg-sky-500 px-5 py-2.5 text-xs sm:text-sm font-semibold text-white shadow-xs transition-colors"
-              >
-                <BookOpen className="h-4 w-4" />
-                Browse 31 Course Tracks
-                <ArrowRight className="h-4 w-4" />
-              </Link>
-              <Link
-                href="/interview"
-                prefetch={true}
-                className="inline-flex items-center gap-2 rounded-lg border border-white/[0.1] bg-[#0c1019] hover:bg-[#121826] hover:border-white/[0.2] px-5 py-2.5 text-xs sm:text-sm font-semibold text-slate-200 transition-colors"
-              >
-                <HelpCircle className="h-4 w-4 text-sky-400" />
-                Interview Q&A Hub
-              </Link>
-              <Link
-                href="/practice"
-                prefetch={true}
-                className="inline-flex items-center gap-2 rounded-lg border border-white/[0.1] bg-[#0c1019] hover:bg-[#121826] hover:border-white/[0.2] px-5 py-2.5 text-xs sm:text-sm font-semibold text-slate-200 transition-colors"
-              >
-                <Zap className="h-4 w-4 text-emerald-400" />
-                Scenario Practice
-              </Link>
-            </div>
+            <motion.div
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: 0.24 }}
+              className="mt-8 flex flex-wrap items-center gap-3"
+            >
+              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
+                <Link
+                  href="/courses"
+                  prefetch={true}
+                  className="inline-flex items-center gap-2 rounded-lg bg-sky-600 hover:bg-sky-500 px-5 py-2.5 text-xs sm:text-sm font-semibold text-white shadow-xs transition-colors"
+                >
+                  <BookOpen className="h-4 w-4" />
+                  Browse 31 Course Tracks
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </motion.div>
+              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
+                <Link
+                  href="/interview"
+                  prefetch={true}
+                  className="inline-flex items-center gap-2 rounded-lg border border-white/[0.1] bg-[#0c1019] hover:bg-[#121826] hover:border-white/[0.2] px-5 py-2.5 text-xs sm:text-sm font-semibold text-slate-200 transition-colors"
+                >
+                  <HelpCircle className="h-4 w-4 text-sky-400" />
+                  Interview Q&A Hub
+                </Link>
+              </motion.div>
+              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
+                <Link
+                  href="/practice"
+                  prefetch={true}
+                  className="inline-flex items-center gap-2 rounded-lg border border-white/[0.1] bg-[#0c1019] hover:bg-[#121826] hover:border-white/[0.2] px-5 py-2.5 text-xs sm:text-sm font-semibold text-slate-200 transition-colors"
+                >
+                  <Zap className="h-4 w-4 text-emerald-400" />
+                  Scenario Practice
+                </Link>
+              </motion.div>
+            </motion.div>
           </div>
         </div>
       </section>
@@ -256,10 +288,14 @@ export default function HomePage() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {stats.inProgressCourses.map((track) => (
-                <div
+              {stats.inProgressCourses.map((track, idx) => (
+                <motion.div
                   key={track.courseSlug}
-                  className="rounded-lg border border-white/[0.06] bg-[#0d121f] p-4 flex flex-col justify-between hover:border-white/[0.14] transition-colors"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, delay: idx * 0.08 }}
+                  whileHover={{ y: -3, borderColor: 'rgba(56, 189, 248, 0.3)' }}
+                  className="rounded-lg border border-white/[0.06] bg-[#0d121f] p-4 flex flex-col justify-between transition-colors"
                 >
                   <div>
                     <div className="flex items-center justify-between text-xs mb-2">
@@ -270,9 +306,11 @@ export default function HomePage() {
                     </div>
                     <h3 className="font-semibold text-white text-sm line-clamp-1">{track.title}</h3>
                     <div className="mt-3 h-1.5 w-full rounded-full bg-slate-800 overflow-hidden">
-                      <div
-                        className="h-full bg-sky-500 rounded-full transition-all duration-300"
-                        style={{ width: `${track.percentage}%` }}
+                      <motion.div
+                        className="h-full bg-sky-500 rounded-full"
+                        initial={{ width: 0 }}
+                        animate={{ width: `${track.percentage}%` }}
+                        transition={{ duration: 0.8, ease: 'easeOut', delay: idx * 0.1 }}
                       />
                     </div>
                   </div>
@@ -287,7 +325,7 @@ export default function HomePage() {
                       Resume <ArrowRight className="h-3 w-3" />
                     </Link>
                   </div>
-                </div>
+                </motion.div>
               ))}
             </div>
           </div>
@@ -302,16 +340,20 @@ export default function HomePage() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-          {DOMAIN_MATRIX.map((domain) => {
+          {DOMAIN_MATRIX.map((domain, idx) => {
             const Icon = domain.icon;
             return (
-              <div
+              <motion.div
                 key={domain.id}
-                className="rounded-xl border border-white/[0.08] bg-[#0a0e17] p-5 flex flex-col justify-between hover:border-white/[0.16] transition-colors group"
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.35, delay: idx * 0.06 }}
+                whileHover={{ y: -4, borderColor: 'rgba(56, 189, 248, 0.3)' }}
+                className="rounded-xl border border-white/[0.08] bg-[#0a0e17] p-5 flex flex-col justify-between transition-colors group cursor-pointer"
               >
                 <div>
                   <div className="flex items-center justify-between mb-4">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-500/10 border border-sky-500/20 text-sky-400">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-500/10 border border-sky-500/20 text-sky-400 group-hover:scale-105 transition-transform">
                       <Icon className="h-4 w-4" />
                     </div>
                     <span className="text-[11px] font-mono text-slate-400 bg-white/[0.04] px-2 py-0.5 rounded border border-white/[0.06]">
@@ -325,8 +367,8 @@ export default function HomePage() {
                   <p className="text-[11px] font-mono text-slate-500 mt-1">{domain.lessons}</p>
 
                   <div className="mt-4 space-y-1.5">
-                    {domain.topics.map((t, idx) => (
-                      <div key={idx} className="flex items-center gap-1.5 text-xs text-slate-300">
+                    {domain.topics.map((t, topicIdx) => (
+                      <div key={topicIdx} className="flex items-center gap-1.5 text-xs text-slate-300">
                         <span className="h-1 w-1 rounded-full bg-slate-600" />
                         <span className="truncate">{t}</span>
                       </div>
@@ -341,10 +383,10 @@ export default function HomePage() {
                     className="flex items-center justify-between text-xs font-semibold text-sky-400 hover:text-sky-300 transition-colors"
                   >
                     <span>Inspect Track</span>
-                    <ArrowRight className="h-3 w-3" />
+                    <ArrowRight className="h-3 w-3 group-hover:translate-x-0.5 transition-transform" />
                   </Link>
                 </div>
-              </div>
+              </motion.div>
             );
           })}
         </div>
@@ -363,58 +405,77 @@ export default function HomePage() {
               <p className="text-xs text-slate-400 mt-0.5">Real code from lesson guides solving high-concurrency enterprise problems</p>
             </div>
 
-            {/* Tab switchers */}
+            {/* Tab switchers with sliding indicator */}
             <div className="flex items-center gap-1 bg-[#06080e] p-1 rounded-lg border border-white/[0.06]">
-              {CODE_SANDBOX_PREVIEWS.map((item, idx) => (
-                <button
-                  key={item.id}
-                  onClick={() => setActiveCodeTab(idx)}
-                  className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
-                    activeCodeTab === idx
-                      ? 'bg-sky-500/15 text-sky-400 border border-sky-500/25'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  {item.tab}
-                </button>
-              ))}
+              {CODE_SANDBOX_PREVIEWS.map((item, idx) => {
+                const isActive = activeCodeTab === idx;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => setActiveCodeTab(idx)}
+                    className={`relative px-3 py-1 text-xs font-medium rounded-md transition-colors focus:outline-none cursor-pointer ${
+                      isActive ? 'text-sky-300' : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    {isActive && (
+                      <motion.div
+                        layoutId="active-sandbox-tab"
+                        className="absolute inset-0 rounded-md bg-sky-500/15 border border-sky-500/25"
+                        transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                      />
+                    )}
+                    <span className="relative z-10">{item.tab}</span>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
-          {/* Sandbox Content Area */}
-          <div className="p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-            <div className="lg:col-span-4 space-y-3">
-              <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-sky-400 bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/20">
-                {CODE_SANDBOX_PREVIEWS[activeCodeTab].domain}
-              </span>
-              <h4 className="text-base font-bold text-white">
-                {CODE_SANDBOX_PREVIEWS[activeCodeTab].tab}
-              </h4>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                {CODE_SANDBOX_PREVIEWS[activeCodeTab].description}
-              </p>
+          {/* Sandbox Content Area with AnimatePresence */}
+          <div className="p-6">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={activeCodeTab}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.2, ease: 'easeOut' }}
+                className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start"
+              >
+                <div className="lg:col-span-4 space-y-3">
+                  <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-sky-400 bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/20">
+                    {CODE_SANDBOX_PREVIEWS[activeCodeTab].domain}
+                  </span>
+                  <h4 className="text-base font-bold text-white">
+                    {CODE_SANDBOX_PREVIEWS[activeCodeTab].tab}
+                  </h4>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    {CODE_SANDBOX_PREVIEWS[activeCodeTab].description}
+                  </p>
 
-              <div className="pt-4 border-t border-white/[0.06] space-y-2 text-xs text-slate-300">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
-                  <span>Tested against high concurrency</span>
+                  <div className="pt-4 border-t border-white/[0.06] space-y-2 text-xs text-slate-300">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                      <span>Tested against high concurrency</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                      <span>Integrated with full lesson walkthrough</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                      <span>Interactive Notion notes enabled</span>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
-                  <span>Integrated with full lesson walkthrough</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
-                  <span>Interactive Notion notes enabled</span>
-                </div>
-              </div>
-            </div>
 
-            <div className="lg:col-span-8 rounded-lg border border-white/[0.08] bg-[#070a12] p-4 font-mono text-xs overflow-x-auto text-slate-300 leading-relaxed">
-              <pre className="text-sky-300/90 whitespace-pre">
-                {CODE_SANDBOX_PREVIEWS[activeCodeTab].code}
-              </pre>
-            </div>
+                <div className="lg:col-span-8 rounded-lg border border-white/[0.08] bg-[#070a12] p-4 font-mono text-xs overflow-x-auto text-slate-300 leading-relaxed">
+                  <pre className="text-sky-300/90 whitespace-pre">
+                    {CODE_SANDBOX_PREVIEWS[activeCodeTab].code}
+                  </pre>
+                </div>
+              </motion.div>
+            </AnimatePresence>
           </div>
         </div>
       </section>
@@ -422,89 +483,97 @@ export default function HomePage() {
       {/* 6. FAST PRODUCTION PORTALS */}
       <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 mt-14">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Link
-            href="/interview"
-            prefetch={true}
-            className="rounded-xl border border-white/[0.08] bg-[#0a0e17] p-5 hover:border-white/[0.16] transition-colors group flex flex-col justify-between"
-          >
-            <div>
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-500/10 border border-sky-500/20 text-sky-400 mb-4">
-                <HelpCircle className="h-4 w-4" />
+          <motion.div whileHover={{ y: -4 }} whileTap={{ scale: 0.98 }} className="h-full">
+            <Link
+              href="/interview"
+              prefetch={true}
+              className="rounded-xl border border-white/[0.08] bg-[#0a0e17] p-5 hover:border-white/[0.16] transition-colors group flex flex-col justify-between h-full"
+            >
+              <div>
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-500/10 border border-sky-500/20 text-sky-400 mb-4 group-hover:scale-105 transition-transform">
+                  <HelpCircle className="h-4 w-4" />
+                </div>
+                <h3 className="font-bold text-white text-sm group-hover:text-sky-400 transition-colors">
+                  Interview Q&A Hub
+                </h3>
+                <p className="mt-1 text-xs text-slate-400 leading-relaxed">
+                  45+ technology tracks with 1,200+ senior engineering interview questions and production trade-offs.
+                </p>
               </div>
-              <h3 className="font-bold text-white text-sm group-hover:text-sky-400 transition-colors">
-                Interview Q&A Hub
-              </h3>
-              <p className="mt-1 text-xs text-slate-400 leading-relaxed">
-                45+ technology tracks with 1,200+ senior engineering interview questions and production trade-offs.
-              </p>
-            </div>
-            <span className="mt-4 text-xs font-semibold text-sky-400 flex items-center gap-1">
-              Explore Questions <ArrowRight className="h-3 w-3" />
-            </span>
-          </Link>
+              <span className="mt-4 text-xs font-semibold text-sky-400 flex items-center gap-1">
+                Explore Questions <ArrowRight className="h-3 w-3 group-hover:translate-x-0.5 transition-transform" />
+              </span>
+            </Link>
+          </motion.div>
 
-          <Link
-            href="/practice"
-            prefetch={true}
-            className="rounded-xl border border-white/[0.08] bg-[#0a0e17] p-5 hover:border-white/[0.16] transition-colors group flex flex-col justify-between"
-          >
-            <div>
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 mb-4">
-                <Zap className="h-4 w-4" />
+          <motion.div whileHover={{ y: -4 }} whileTap={{ scale: 0.98 }} className="h-full">
+            <Link
+              href="/practice"
+              prefetch={true}
+              className="rounded-xl border border-white/[0.08] bg-[#0a0e17] p-5 hover:border-white/[0.16] transition-colors group flex flex-col justify-between h-full"
+            >
+              <div>
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 mb-4 group-hover:scale-105 transition-transform">
+                  <Zap className="h-4 w-4" />
+                </div>
+                <h3 className="font-bold text-white text-sm group-hover:text-emerald-400 transition-colors">
+                  Scenario Practice Engine
+                </h3>
+                <p className="mt-1 text-xs text-slate-400 leading-relaxed">
+                  Real engineering failure scenarios with instant architectural evaluation and rationale.
+                </p>
               </div>
-              <h3 className="font-bold text-white text-sm group-hover:text-emerald-400 transition-colors">
-                Scenario Practice Engine
-              </h3>
-              <p className="mt-1 text-xs text-slate-400 leading-relaxed">
-                Real engineering failure scenarios with instant architectural evaluation and rationale.
-              </p>
-            </div>
-            <span className="mt-4 text-xs font-semibold text-emerald-400 flex items-center gap-1">
-              Take Scenarios <ArrowRight className="h-3 w-3" />
-            </span>
-          </Link>
+              <span className="mt-4 text-xs font-semibold text-emerald-400 flex items-center gap-1">
+                Take Scenarios <ArrowRight className="h-3 w-3 group-hover:translate-x-0.5 transition-transform" />
+              </span>
+            </Link>
+          </motion.div>
 
-          <Link
-            href="/revision"
-            prefetch={true}
-            className="rounded-xl border border-white/[0.08] bg-[#0a0e17] p-5 hover:border-white/[0.16] transition-colors group flex flex-col justify-between"
-          >
-            <div>
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 mb-4">
-                <Bookmark className="h-4 w-4" />
+          <motion.div whileHover={{ y: -4 }} whileTap={{ scale: 0.98 }} className="h-full">
+            <Link
+              href="/revision"
+              prefetch={true}
+              className="rounded-xl border border-white/[0.08] bg-[#0a0e17] p-5 hover:border-white/[0.16] transition-colors group flex flex-col justify-between h-full"
+            >
+              <div>
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-400 mb-4 group-hover:scale-105 transition-transform">
+                  <Bookmark className="h-4 w-4" />
+                </div>
+                <h3 className="font-bold text-white text-sm group-hover:text-amber-400 transition-colors">
+                  Spaced Recall Cards
+                </h3>
+                <p className="mt-1 text-xs text-slate-400 leading-relaxed">
+                  Active recall flashcards covering JVM memory, AWS VPC peering, and system design patterns.
+                </p>
               </div>
-              <h3 className="font-bold text-white text-sm group-hover:text-amber-400 transition-colors">
-                Spaced Recall Cards
-              </h3>
-              <p className="mt-1 text-xs text-slate-400 leading-relaxed">
-                Active recall flashcards covering JVM memory, AWS VPC peering, and system design patterns.
-              </p>
-            </div>
-            <span className="mt-4 text-xs font-semibold text-amber-400 flex items-center gap-1">
-              Start Revision <ArrowRight className="h-3 w-3" />
-            </span>
-          </Link>
+              <span className="mt-4 text-xs font-semibold text-amber-400 flex items-center gap-1">
+                Start Revision <ArrowRight className="h-3 w-3 group-hover:translate-x-0.5 transition-transform" />
+              </span>
+            </Link>
+          </motion.div>
 
-          <Link
-            href="/roadmaps"
-            prefetch={true}
-            className="rounded-xl border border-white/[0.08] bg-[#0a0e17] p-5 hover:border-white/[0.16] transition-colors group flex flex-col justify-between"
-          >
-            <div>
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-400 mb-4">
-                <Layers className="h-4 w-4" />
+          <motion.div whileHover={{ y: -4 }} whileTap={{ scale: 0.98 }} className="h-full">
+            <Link
+              href="/roadmaps"
+              prefetch={true}
+              className="rounded-xl border border-white/[0.08] bg-[#0a0e17] p-5 hover:border-white/[0.16] transition-colors group flex flex-col justify-between h-full"
+            >
+              <div>
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-purple-500/10 border border-purple-500/20 text-purple-400 mb-4 group-hover:scale-105 transition-transform">
+                  <Layers className="h-4 w-4" />
+                </div>
+                <h3 className="font-bold text-white text-sm group-hover:text-purple-400 transition-colors">
+                  Career Roadmaps
+                </h3>
+                <p className="mt-1 text-xs text-slate-400 leading-relaxed">
+                  Step-by-step career milestones for Full-Stack, Backend, AI Engineer, and Cloud & DevOps.
+                </p>
               </div>
-              <h3 className="font-bold text-white text-sm group-hover:text-purple-400 transition-colors">
-                Career Roadmaps
-              </h3>
-              <p className="mt-1 text-xs text-slate-400 leading-relaxed">
-                Step-by-step career milestones for Full-Stack, Backend, AI Engineer, and Cloud & DevOps.
-              </p>
-            </div>
-            <span className="mt-4 text-xs font-semibold text-purple-400 flex items-center gap-1">
-              View Roadmaps <ArrowRight className="h-3 w-3" />
-            </span>
-          </Link>
+              <span className="mt-4 text-xs font-semibold text-purple-400 flex items-center gap-1">
+                View Roadmaps <ArrowRight className="h-3 w-3 group-hover:translate-x-0.5 transition-transform" />
+              </span>
+            </Link>
+          </motion.div>
         </div>
       </section>
     </div>

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Zap, 
   CheckCircle2, 
@@ -283,187 +284,240 @@ export default function PracticePage() {
 
           {/* Category Filter Pills */}
           <div className="mt-6 flex flex-wrap items-center gap-2 pt-4 border-t border-white/[0.06]">
-            {['All', 'Backend', 'Cloud & Infrastructure', 'System Design', 'Frontend'].map((cat) => (
-              <button
-                key={cat}
-                onClick={() => handleCategoryChange(cat)}
-                className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
-                  activeCategory === cat
-                    ? 'bg-sky-500/15 text-sky-400 border border-sky-500/30'
-                    : 'bg-[#0c1019] text-slate-400 hover:text-white border border-white/[0.06]'
-                }`}
-              >
-                {cat}
-              </button>
-            ))}
+            {['All', 'Backend', 'Cloud & Infrastructure', 'System Design', 'Frontend'].map((cat) => {
+              const isActive = activeCategory === cat;
+              return (
+                <button
+                  key={cat}
+                  onClick={() => handleCategoryChange(cat)}
+                  className={`relative px-3 py-1 text-xs font-medium rounded-md transition-colors focus:outline-none cursor-pointer ${
+                    isActive
+                      ? 'text-sky-300 font-semibold'
+                      : 'bg-[#0c1019] text-slate-400 hover:text-white border border-white/[0.06]'
+                  }`}
+                >
+                  {isActive && (
+                    <motion.div
+                      layoutId="practice-category-active"
+                      className="absolute inset-0 rounded-md bg-sky-500/15 border border-sky-500/30"
+                      transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                    />
+                  )}
+                  <span className="relative z-10">{cat}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
       </section>
 
       {/* 2. MAIN SCENARIO VIEW */}
       <main className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 mt-8">
-        {sessionCompleted ? (
-          /* COMPLETION DEBRIEF REPORT */
-          <div className="rounded-xl border border-white/[0.08] bg-[#0a0e17] p-8 text-center max-w-2xl mx-auto shadow-2xl">
-            <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 mx-auto mb-4">
-              <CheckCircle2 className="h-7 w-7" />
-            </div>
-
-            <h2 className="text-2xl font-bold text-white">Scenario Evaluation Complete</h2>
-            <p className="text-slate-400 text-xs sm:text-sm mt-1">
-              You verified <span className="font-bold text-white">{score}</span> of <span className="font-bold text-white">{filteredScenarios.length}</span> engineering challenges correctly ({accuracyPct}% precision).
-            </p>
-
-            <div className="mt-6 grid grid-cols-3 gap-3 p-4 rounded-lg bg-[#070a12] border border-white/[0.06] text-center font-mono">
-              <div>
-                <div className="text-xs text-slate-500">Correct</div>
-                <div className="text-xl font-bold text-emerald-400 mt-0.5">{score}</div>
-              </div>
-              <div>
-                <div className="text-xs text-slate-500">Incorrect</div>
-                <div className="text-xl font-bold text-rose-400 mt-0.5">{filteredScenarios.length - score}</div>
-              </div>
-              <div>
-                <div className="text-xs text-slate-500">Accuracy</div>
-                <div className="text-xl font-bold text-sky-400 mt-0.5">{accuracyPct}%</div>
-              </div>
-            </div>
-
-            <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-              <button
-                onClick={handleRestart}
-                className="inline-flex items-center gap-2 rounded-lg bg-sky-600 hover:bg-sky-500 px-5 py-2.5 text-xs font-semibold text-white shadow-xs transition-colors"
+        <AnimatePresence mode="wait">
+          {sessionCompleted ? (
+            /* COMPLETION DEBRIEF REPORT */
+            <motion.div
+              key="completed-screen"
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.96 }}
+              transition={{ duration: 0.3 }}
+              className="rounded-xl border border-white/[0.08] bg-[#0a0e17] p-8 text-center max-w-2xl mx-auto shadow-2xl"
+            >
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ type: 'spring', stiffness: 400, damping: 20 }}
+                className="flex h-14 w-14 items-center justify-center rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 mx-auto mb-4"
               >
-                <RotateCcw className="h-4 w-4" />
-                Retake Scenario Battery
-              </button>
-              <Link
-                href="/interview"
-                className="inline-flex items-center gap-2 rounded-lg border border-white/[0.1] bg-[#0c1019] hover:bg-[#121826] px-5 py-2.5 text-xs font-semibold text-slate-200 transition-colors"
-              >
-                <BookOpen className="h-4 w-4 text-sky-400" />
-                Study 45+ Interview Guides
-              </Link>
-            </div>
-          </div>
-        ) : (
-          /* ACTIVE SCENARIO CARD */
-          <div className="rounded-xl border border-white/[0.08] bg-[#0a0e17] p-6 sm:p-8 shadow-xl">
-            {/* Meta bar */}
-            <div className="flex flex-wrap items-center justify-between gap-2 pb-4 border-b border-white/[0.06] text-xs">
-              <div className="flex items-center gap-2">
-                <span className="font-mono text-[11px] font-semibold text-sky-400 uppercase tracking-wide">
-                  {currentScenario.topic}
-                </span>
-                <span className="text-slate-600">•</span>
-                <span className="text-[11px] text-slate-400 bg-white/[0.04] px-2 py-0.5 rounded border border-white/[0.06]">
-                  {currentScenario.difficulty}
-                </span>
-              </div>
-              <div className="font-mono text-slate-400 text-xs">
-                Scenario {currentIndex + 1} of {filteredScenarios.length}
-              </div>
-            </div>
+                <CheckCircle2 className="h-7 w-7" />
+              </motion.div>
 
-            {/* Linear Progress Bar */}
-            <div className="mt-4 h-1 w-full rounded-full bg-slate-800 overflow-hidden">
-              <div
-                className="h-full bg-sky-500 rounded-full transition-all duration-300"
-                style={{ width: `${((currentIndex + 1) / filteredScenarios.length) * 100}%` }}
-              />
-            </div>
+              <h2 className="text-2xl font-bold text-white">Scenario Evaluation Complete</h2>
+              <p className="text-slate-400 text-xs sm:text-sm mt-1">
+                You verified <span className="font-bold text-white">{score}</span> of <span className="font-bold text-white">{filteredScenarios.length}</span> engineering challenges correctly ({accuracyPct}% precision).
+              </p>
 
-            {/* Real World Engineering Scenario Context */}
-            {currentScenario.scenario && (
-              <div className="mt-6 p-4 rounded-lg bg-[#070a12] border border-white/[0.06] text-xs leading-relaxed text-slate-300">
-                <span className="font-mono text-[11px] font-semibold uppercase text-slate-500 block mb-1">
-                  Engineering Context & Production Environment
-                </span>
-                {currentScenario.scenario}
-              </div>
-            )}
-
-            {/* Core Architectural Question */}
-            <h3 className="mt-5 text-base sm:text-lg font-bold text-white leading-snug">
-              {currentScenario.question}
-            </h3>
-
-            {/* Multiple Choice Options */}
-            <div className="mt-6 space-y-2.5">
-              {currentScenario.options.map((option: string, idx: number) => {
-                let stateStyle = 'border-white/[0.08] bg-[#0c1019] text-slate-300 hover:border-white/[0.18] hover:bg-[#111724]';
-
-                if (isAnswered) {
-                  if (idx === currentScenario.correctIndex) {
-                    stateStyle = 'border-emerald-500/50 bg-emerald-500/10 text-emerald-200 font-medium';
-                  } else if (idx === selectedOption) {
-                    stateStyle = 'border-rose-500/50 bg-rose-500/10 text-rose-300';
-                  } else {
-                    stateStyle = 'border-white/[0.04] bg-[#080c14] text-slate-500 opacity-60';
-                  }
-                }
-
-                return (
-                  <button
-                    key={idx}
-                    disabled={isAnswered}
-                    onClick={() => handleSelectOption(idx)}
-                    className={`w-full flex items-start gap-3.5 p-3.5 rounded-lg border text-left text-xs sm:text-sm transition-all ${stateStyle} focus:outline-none`}
-                  >
-                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-white/[0.06] font-mono text-[11px] font-semibold text-slate-400">
-                      {String.fromCharCode(65 + idx)}
-                    </span>
-                    <span className="leading-relaxed pt-0.5">{option}</span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Keyboard shortcuts reminder */}
-            {!isAnswered && (
-              <div className="mt-4 flex items-center justify-between text-[11px] text-slate-500 font-mono">
-                <span>Press keys 1-4 or A-D to select</span>
-                <span>Instant Evaluation</span>
-              </div>
-            )}
-
-            {/* Explanation & Tradeoff Insight */}
-            {isAnswered && (
-              <div className="mt-6 space-y-3">
-                <div className="p-4 rounded-lg border border-sky-500/20 bg-sky-500/5 text-xs text-slate-300 leading-relaxed">
-                  <div className="font-semibold text-white mb-1 flex items-center gap-1.5">
-                    <Sparkles className="h-3.5 w-3.5 text-sky-400" />
-                    <span>Architectural Rationale & Implementation Detail</span>
-                  </div>
-                  {currentScenario.explanation}
+              <div className="mt-6 grid grid-cols-3 gap-3 p-4 rounded-lg bg-[#070a12] border border-white/[0.06] text-center font-mono">
+                <div>
+                  <div className="text-xs text-slate-500">Correct</div>
+                  <div className="text-xl font-bold text-emerald-400 mt-0.5">{score}</div>
                 </div>
-
-                {currentScenario.architectureTradeoff && (
-                  <div className="p-3.5 rounded-lg border border-amber-500/20 bg-amber-500/5 text-xs text-amber-200/90 leading-relaxed">
-                    <span className="font-semibold text-amber-300 block mb-0.5 font-mono text-[11px]">
-                      Production Trade-off & Gotcha:
-                    </span>
-                    {currentScenario.architectureTradeoff}
-                  </div>
-                )}
+                <div>
+                  <div className="text-xs text-slate-500">Incorrect</div>
+                  <div className="text-xl font-bold text-rose-400 mt-0.5">{filteredScenarios.length - score}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-slate-500">Accuracy</div>
+                  <div className="text-xl font-bold text-sky-400 mt-0.5">{accuracyPct}%</div>
+                </div>
               </div>
-            )}
 
-            {/* Advance Button */}
-            {isAnswered && (
-              <div className="mt-6 pt-4 border-t border-white/[0.06] flex items-center justify-between">
-                <span className="text-[11px] text-slate-500 font-mono">Press Space or Enter to continue</span>
-                <button
-                  onClick={handleNext}
-                  className="inline-flex items-center gap-2 rounded-lg bg-sky-600 hover:bg-sky-500 px-5 py-2 text-xs font-semibold text-white transition-colors"
+              <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+                <motion.button
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.97 }}
+                  onClick={handleRestart}
+                  className="inline-flex items-center gap-2 rounded-lg bg-sky-600 hover:bg-sky-500 px-5 py-2.5 text-xs font-semibold text-white shadow-xs transition-colors cursor-pointer"
                 >
-                  <span>{currentIndex + 1 >= filteredScenarios.length ? 'Complete Battery' : 'Next Scenario'}</span>
-                  <ArrowRight className="h-3.5 w-3.5" />
-                </button>
+                  <RotateCcw className="h-4 w-4" />
+                  Retake Scenario Battery
+                </motion.button>
+                <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
+                  <Link
+                    href="/interview"
+                    className="inline-flex items-center gap-2 rounded-lg border border-white/[0.1] bg-[#0c1019] hover:bg-[#121826] px-5 py-2.5 text-xs font-semibold text-slate-200 transition-colors"
+                  >
+                    <BookOpen className="h-4 w-4 text-sky-400" />
+                    Study 45+ Interview Guides
+                  </Link>
+                </motion.div>
               </div>
-            )}
-          </div>
-        )}
+            </motion.div>
+          ) : (
+            /* ACTIVE SCENARIO CARD */
+            <motion.div
+              key={`scenario-${currentScenario.id}-${currentIndex}`}
+              initial={{ opacity: 0, x: 18 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -18 }}
+              transition={{ duration: 0.22, ease: 'easeOut' }}
+              className="rounded-xl border border-white/[0.08] bg-[#0a0e17] p-6 sm:p-8 shadow-xl"
+            >
+              {/* Meta bar */}
+              <div className="flex flex-wrap items-center justify-between gap-2 pb-4 border-b border-white/[0.06] text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="font-mono text-[11px] font-semibold text-sky-400 uppercase tracking-wide">
+                    {currentScenario.topic}
+                  </span>
+                  <span className="text-slate-600">•</span>
+                  <span className="text-[11px] text-slate-400 bg-white/[0.04] px-2 py-0.5 rounded border border-white/[0.06]">
+                    {currentScenario.difficulty}
+                  </span>
+                </div>
+                <div className="font-mono text-slate-400 text-xs">
+                  Scenario {currentIndex + 1} of {filteredScenarios.length}
+                </div>
+              </div>
+
+              {/* Linear Progress Bar */}
+              <div className="mt-4 h-1 w-full rounded-full bg-slate-800 overflow-hidden">
+                <motion.div
+                  className="h-full bg-sky-500 rounded-full"
+                  initial={false}
+                  animate={{ width: `${((currentIndex + 1) / filteredScenarios.length) * 100}%` }}
+                  transition={{ duration: 0.3 }}
+                />
+              </div>
+
+              {/* Real World Engineering Scenario Context */}
+              {currentScenario.scenario && (
+                <div className="mt-6 p-4 rounded-lg bg-[#070a12] border border-white/[0.06] text-xs leading-relaxed text-slate-300">
+                  <span className="font-mono text-[11px] font-semibold uppercase text-slate-500 block mb-1">
+                    Engineering Context & Production Environment
+                  </span>
+                  {currentScenario.scenario}
+                </div>
+              )}
+
+              {/* Core Architectural Question */}
+              <h3 className="mt-5 text-base sm:text-lg font-bold text-white leading-snug">
+                {currentScenario.question}
+              </h3>
+
+              {/* Multiple Choice Options */}
+              <div className="mt-6 space-y-2.5">
+                {currentScenario.options.map((option: string, idx: number) => {
+                  let stateStyle = 'border-white/[0.08] bg-[#0c1019] text-slate-300 hover:border-white/[0.18] hover:bg-[#111724]';
+
+                  if (isAnswered) {
+                    if (idx === currentScenario.correctIndex) {
+                      stateStyle = 'border-emerald-500/50 bg-emerald-500/10 text-emerald-200 font-medium';
+                    } else if (idx === selectedOption) {
+                      stateStyle = 'border-rose-500/50 bg-rose-500/10 text-rose-300';
+                    } else {
+                      stateStyle = 'border-white/[0.04] bg-[#080c14] text-slate-500 opacity-60';
+                    }
+                  }
+
+                  return (
+                    <motion.button
+                      key={idx}
+                      disabled={isAnswered}
+                      onClick={() => handleSelectOption(idx)}
+                      whileHover={!isAnswered ? { x: 3 } : {}}
+                      whileTap={!isAnswered ? { scale: 0.99 } : {}}
+                      className={`w-full flex items-start gap-3.5 p-3.5 rounded-lg border text-left text-xs sm:text-sm transition-colors ${stateStyle} focus:outline-none cursor-pointer disabled:cursor-default`}
+                    >
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-white/[0.06] font-mono text-[11px] font-semibold text-slate-400">
+                        {String.fromCharCode(65 + idx)}
+                      </span>
+                      <span className="leading-relaxed pt-0.5">{option}</span>
+                    </motion.button>
+                  );
+                })}
+              </div>
+
+              {/* Keyboard shortcuts reminder */}
+              {!isAnswered && (
+                <div className="mt-4 flex items-center justify-between text-[11px] text-slate-500 font-mono">
+                  <span>Press keys 1-4 or A-D to select</span>
+                  <span>Instant Evaluation</span>
+                </div>
+              )}
+
+              {/* Explanation & Tradeoff Insight */}
+              <AnimatePresence>
+                {isAnswered && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10, height: 0 }}
+                    animate={{ opacity: 1, y: 0, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.25 }}
+                    className="mt-6 space-y-3 overflow-hidden"
+                  >
+                    <div className="p-4 rounded-lg border border-sky-500/20 bg-sky-500/5 text-xs text-slate-300 leading-relaxed">
+                      <div className="font-semibold text-white mb-1 flex items-center gap-1.5">
+                        <Sparkles className="h-3.5 w-3.5 text-sky-400" />
+                        <span>Architectural Rationale & Implementation Detail</span>
+                      </div>
+                      {currentScenario.explanation}
+                    </div>
+
+                    {currentScenario.architectureTradeoff && (
+                      <div className="p-3.5 rounded-lg border border-amber-500/20 bg-amber-500/5 text-xs text-amber-200/90 leading-relaxed">
+                        <span className="font-semibold text-amber-300 block mb-0.5 font-mono text-[11px]">
+                          Production Trade-off & Gotcha:
+                        </span>
+                        {currentScenario.architectureTradeoff}
+                      </div>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Advance Button */}
+              {isAnswered && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="mt-6 pt-4 border-t border-white/[0.06] flex items-center justify-between"
+                >
+                  <span className="text-[11px] text-slate-500 font-mono">Press Space or Enter to continue</span>
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={handleNext}
+                    className="inline-flex items-center gap-2 rounded-lg bg-sky-600 hover:bg-sky-500 px-5 py-2 text-xs font-semibold text-white transition-colors cursor-pointer"
+                  >
+                    <span>{currentIndex + 1 >= filteredScenarios.length ? 'Complete Battery' : 'Next Scenario'}</span>
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </motion.button>
+                </motion.div>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </main>
     </div>
   );

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   HelpCircle,
   Search,
@@ -38,6 +39,7 @@ const TECH_TAGS_MAP: Record<string, string[]> = {
   javascript: ['Event Loop & Microtasks', 'Closures & Scopes', 'Prototypes & Classes', 'Promises & Async/Await'],
   nodejs: ['Event-Driven Architecture', 'Libuv & Worker Threads', 'Stream Backpressure', 'Memory Leaks'],
   nestjs: ['Dependency Injection', 'Guards & Interceptors', 'Microservices Transport', 'Pipes & Validation'],
+  'production-rag': ['PostgreSQL + pgvector', 'HNSW vs IVFFlat', 'Reciprocal Rank Fusion (RRF)', 'Cross-Encoder Reranking', 'Contextual Compression', 'FastAPI & Tenant Auth'],
   rag: ['Vector Embeddings', 'Hybrid Search & Reranking', 'Chunking Strategies', 'RAG Triad Evaluation'],
   genai: ['Prompt Engineering', 'Function Calling', 'Fine-Tuning vs RAG', 'Agentic Workflows'],
   langchain: ['LCEL Chains', 'Memory Systems', 'Retrievers & Tools', 'Custom Callbacks'],
@@ -122,6 +124,17 @@ const FALLBACK_GUIDES: InterviewGuide[] = [
     estimatedMinutes: 35,
     summary: 'Java memory model, Garbage Collectors (ZGC/G1), synchronized vs Lock, CompletableFuture, and Virtual Threads.',
     url: '/courses/java/interview-qa'
+  },
+  {
+    id: 71,
+    title: 'Senior Production RAG Architecture Interview Q&A',
+    lessonSlug: 'interview-qa',
+    courseSlug: 'production-rag',
+    courseTitle: 'Production RAG Architecture & Engineering',
+    category: 'AI & LLMs',
+    estimatedMinutes: 35,
+    summary: 'pgvector HNSW indexes, Reciprocal Rank Fusion (RRF), Cross-Encoder reranking, multi-tenant isolation, and citation validation.',
+    url: '/courses/production-rag/interview-qa'
   },
   {
     id: 7,
@@ -231,7 +244,7 @@ export default function InterviewHubPage() {
 
   // Featured top guides for quick launch
   const featuredPicks = useMemo(() => {
-    const topSlugs = ['angular', 'springboot', 'hld', 'aws', 'rag', 'dsa'];
+    const topSlugs = ['angular', 'springboot', 'hld', 'production-rag', 'rag', 'aws', 'dsa'];
     return guides.filter((g) => topSlugs.includes(g.courseSlug)).slice(0, 4);
   }, [guides]);
 
@@ -295,28 +308,38 @@ export default function InterviewHubPage() {
       <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 mt-10">
         {/* Category Pills Navigation */}
         <div className="flex items-center gap-2 overflow-x-auto pb-4 scrollbar-none">
-          {categories.map((cat) => (
-            <button
-              key={cat.name}
-              onClick={() => setSelectedCategory(cat.name)}
-              className={`shrink-0 flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-md transition-colors ${
-                selectedCategory === cat.name
-                  ? 'bg-sky-500/15 text-sky-400 border border-sky-500/30'
-                  : 'bg-[#0c1019] text-slate-400 border border-white/[0.06] hover:text-white'
-              }`}
-            >
-              <span>{cat.name}</span>
-              <span
-                className={`text-[10px] px-1.5 py-0.2 rounded font-mono ${
-                  selectedCategory === cat.name
-                    ? 'bg-sky-500/20 text-sky-300'
-                    : 'bg-white/[0.04] text-slate-500'
+          {categories.map((cat) => {
+            const isActive = selectedCategory === cat.name;
+            return (
+              <button
+                key={cat.name}
+                onClick={() => setSelectedCategory(cat.name)}
+                className={`relative shrink-0 flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-md transition-colors focus:outline-none cursor-pointer ${
+                  isActive
+                    ? 'text-sky-300 font-semibold'
+                    : 'bg-[#0c1019] text-slate-400 border border-white/[0.06] hover:text-white'
                 }`}
               >
-                {cat.count}
-              </span>
-            </button>
-          ))}
+                {isActive && (
+                  <motion.div
+                    layoutId="interview-category-pill"
+                    className="absolute inset-0 rounded-md bg-sky-500/15 border border-sky-500/30"
+                    transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                  />
+                )}
+                <span className="relative z-10">{cat.name}</span>
+                <span
+                  className={`relative z-10 text-[10px] px-1.5 py-0.2 rounded font-mono ${
+                    isActive
+                      ? 'bg-sky-500/20 text-sky-300'
+                      : 'bg-white/[0.04] text-slate-500'
+                  }`}
+                >
+                  {cat.count}
+                </span>
+              </button>
+            );
+          })}
         </div>
 
         {/* High-Yield Top Picks (Visible when on "All" and no search) */}
@@ -332,36 +355,41 @@ export default function InterviewHubPage() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {featuredPicks.map((pick) => (
-                <Link
+                <motion.div
                   key={pick.id}
-                  href={pick.url}
-                  className="group rounded-xl border border-white/[0.08] bg-[#0a0e17] p-5 hover:border-white/[0.16] transition-colors flex flex-col justify-between"
+                  whileHover={{ y: -4, borderColor: 'rgba(56, 189, 248, 0.35)' }}
+                  className="rounded-xl border border-white/[0.08] bg-[#0a0e17] transition-colors"
                 >
-                  <div>
-                    <div className="flex items-center justify-between text-xs mb-3">
-                      <span className="font-semibold text-sky-400 bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/20 text-[11px] font-mono">
-                        {pick.category}
-                      </span>
-                      <span className="text-slate-500 flex items-center gap-1 font-mono text-[11px]">
-                        <Clock className="h-3 w-3" />
-                        {pick.estimatedMinutes || 30}m
-                      </span>
+                  <Link
+                    href={pick.url}
+                    className="group p-5 flex flex-col justify-between h-full"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between text-xs mb-3">
+                        <span className="font-semibold text-sky-400 bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/20 text-[11px] font-mono">
+                          {pick.category}
+                        </span>
+                        <span className="text-slate-500 flex items-center gap-1 font-mono text-[11px]">
+                          <Clock className="h-3 w-3" />
+                          {pick.estimatedMinutes || 30}m
+                        </span>
+                      </div>
+
+                      <h3 className="font-bold text-white text-sm group-hover:text-sky-400 transition-colors line-clamp-2">
+                        {pick.courseTitle}
+                      </h3>
+
+                      <p className="mt-2 text-xs text-slate-400 line-clamp-2 leading-relaxed">
+                        {pick.summary || `Senior technical interview drilling guide for ${pick.courseTitle}.`}
+                      </p>
                     </div>
 
-                    <h3 className="font-bold text-white text-sm group-hover:text-sky-400 transition-colors line-clamp-2">
-                      {pick.courseTitle}
-                    </h3>
-
-                    <p className="mt-2 text-xs text-slate-400 line-clamp-2 leading-relaxed">
-                      {pick.summary || `Senior technical interview drilling guide for ${pick.courseTitle}.`}
-                    </p>
-                  </div>
-
-                  <div className="mt-4 pt-3 border-t border-white/[0.06] flex items-center justify-between text-xs font-semibold text-sky-400 group-hover:text-sky-300">
-                    <span>Study Master Q&A</span>
-                    <ArrowRight className="h-3 w-3 group-hover:translate-x-0.5 transition-transform" />
-                  </div>
-                </Link>
+                    <div className="mt-4 pt-3 border-t border-white/[0.06] flex items-center justify-between text-xs font-semibold text-sky-400 group-hover:text-sky-300">
+                      <span>Study Master Q&A</span>
+                      <ArrowRight className="h-3 w-3 group-hover:translate-x-0.5 transition-transform" />
+                    </div>
+                  </Link>
+                </motion.div>
               ))}
             </div>
           </div>
@@ -396,14 +424,14 @@ export default function InterviewHubPage() {
                 setSearchQuery('');
                 setSelectedCategory('All');
               }}
-              className="mt-4 px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold transition-colors"
+              className="mt-4 px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold transition-colors cursor-pointer"
             >
               Reset Filters
             </button>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
-            {filteredGuides.map((guide) => {
+            {filteredGuides.map((guide, idx) => {
               const tags = TECH_TAGS_MAP[guide.courseSlug] || [
                 'Architecture Tradeoffs',
                 'Code Edge Cases',
@@ -412,9 +440,13 @@ export default function InterviewHubPage() {
               ];
 
               return (
-                <div
+                <motion.div
                   key={`${guide.courseSlug}-${guide.lessonSlug}-${guide.id}`}
-                  className="rounded-xl border border-white/[0.08] bg-[#0a0e17] p-5 hover:border-white/[0.16] transition-colors flex flex-col justify-between group"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.2, delay: Math.min(idx * 0.03, 0.3) }}
+                  whileHover={{ y: -3, borderColor: 'rgba(56, 189, 248, 0.35)' }}
+                  className="rounded-xl border border-white/[0.08] bg-[#0a0e17] p-5 transition-colors flex flex-col justify-between group"
                 >
                   <div>
                     {/* Top row: Category badge & duration */}
@@ -468,7 +500,7 @@ export default function InterviewHubPage() {
                       <ArrowRight className="h-3 w-3 group-hover:translate-x-0.5 transition-transform" />
                     </Link>
                   </div>
-                </div>
+                </motion.div>
               );
             })}
           </div>

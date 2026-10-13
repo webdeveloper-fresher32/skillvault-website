@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Bookmark, 
   RotateCw, 
@@ -211,23 +212,33 @@ export default function RevisionPage() {
 
           {/* Category Filter Pills */}
           <div className="mt-6 flex flex-wrap items-center gap-2 pt-4 border-t border-white/[0.06]">
-            {categories.map((cat) => (
-              <button
-                key={cat}
-                onClick={() => {
-                  setActiveCategory(cat);
-                  setCurrentIndex(0);
-                  setIsFlipped(false);
-                }}
-                className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${
-                  activeCategory === cat
-                    ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
-                    : 'bg-[#0c1019] text-slate-400 hover:text-white border border-white/[0.06]'
-                }`}
-              >
-                {cat}
-              </button>
-            ))}
+            {categories.map((cat) => {
+              const isActive = activeCategory === cat;
+              return (
+                <button
+                  key={cat}
+                  onClick={() => {
+                    setActiveCategory(cat);
+                    setCurrentIndex(0);
+                    setIsFlipped(false);
+                  }}
+                  className={`relative px-3 py-1 text-xs font-medium rounded-md transition-colors focus:outline-none cursor-pointer ${
+                    isActive
+                      ? 'text-amber-300 font-semibold'
+                      : 'bg-[#0c1019] text-slate-400 hover:text-white border border-white/[0.06]'
+                  }`}
+                >
+                  {isActive && (
+                    <motion.div
+                      layoutId="revision-category-active"
+                      className="absolute inset-0 rounded-md bg-amber-500/15 border border-amber-500/30"
+                      transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                    />
+                  )}
+                  <span className="relative z-10">{cat}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
       </section>
@@ -240,16 +251,23 @@ export default function RevisionPage() {
           <span className="text-slate-500">Shortcuts: Space to flip • Arrows to navigate • M to master</span>
         </div>
         <div className="h-1 w-full rounded-full bg-slate-800 overflow-hidden mb-6">
-          <div
-            className="h-full bg-amber-500 rounded-full transition-all duration-300"
-            style={{ width: `${((currentIndex + 1) / filteredCards.length) * 100}%` }}
+          <motion.div
+            className="h-full bg-amber-500 rounded-full"
+            initial={false}
+            animate={{ width: `${((currentIndex + 1) / filteredCards.length) * 100}%` }}
+            transition={{ duration: 0.3 }}
           />
         </div>
 
         {/* Tactile Flashcard Card */}
-        <div
+        <motion.div
+          key={`card-shell-${currentCard.id}`}
+          initial={{ opacity: 0, scale: 0.98 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.2 }}
+          whileHover={{ y: -2 }}
           onClick={toggleFlip}
-          className="min-h-[340px] cursor-pointer rounded-xl border border-white/[0.08] bg-[#0a0e17] p-8 shadow-2xl flex flex-col justify-between hover:border-white/[0.16] transition-all select-none"
+          className="min-h-[340px] cursor-pointer rounded-xl border border-white/[0.08] bg-[#0a0e17] p-8 shadow-2xl flex flex-col justify-between hover:border-white/[0.18] transition-colors select-none"
         >
           {/* Card Meta Top */}
           <div className="flex items-center justify-between text-xs">
@@ -267,33 +285,47 @@ export default function RevisionPage() {
             </span>
           </div>
 
-          {/* Card Body */}
+          {/* Card Body with Smooth AnimatePresence */}
           <div className="py-6 text-center">
-            {!isFlipped ? (
-              <div>
-                <span className="text-[10px] font-mono uppercase tracking-widest text-slate-500 block mb-3">
-                  Technical Concept / Architectural Question
-                </span>
-                <h3 className="text-lg sm:text-xl font-bold text-white leading-relaxed max-w-2xl mx-auto">
-                  {currentCard.front}
-                </h3>
-              </div>
-            ) : (
-              <div>
-                <span className="text-[10px] font-mono uppercase tracking-widest text-emerald-400 block mb-3">
-                  Production Rationale & Verified Answer
-                </span>
-                <p className="text-sm sm:text-base text-slate-200 leading-relaxed max-w-2xl mx-auto font-sans">
-                  {currentCard.back}
-                </p>
-                {currentCard.notes && (
-                  <div className="mt-4 inline-block text-left p-3 rounded-md bg-[#070a12] border border-white/[0.06] text-xs text-slate-400 max-w-xl">
-                    <span className="font-mono text-sky-400 font-semibold block mb-0.5">Practical Tip:</span>
-                    {currentCard.notes}
-                  </div>
-                )}
-              </div>
-            )}
+            <AnimatePresence mode="wait">
+              {!isFlipped ? (
+                <motion.div
+                  key="front"
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.18 }}
+                >
+                  <span className="text-[10px] font-mono uppercase tracking-widest text-slate-500 block mb-3">
+                    Technical Concept / Architectural Question
+                  </span>
+                  <h3 className="text-lg sm:text-xl font-bold text-white leading-relaxed max-w-2xl mx-auto">
+                    {currentCard.front}
+                  </h3>
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="back"
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.18 }}
+                >
+                  <span className="text-[10px] font-mono uppercase tracking-widest text-emerald-400 block mb-3">
+                    Production Rationale & Verified Answer
+                  </span>
+                  <p className="text-sm sm:text-base text-slate-200 leading-relaxed max-w-2xl mx-auto font-sans">
+                    {currentCard.back}
+                  </p>
+                  {currentCard.notes && (
+                    <div className="mt-4 inline-block text-left p-3 rounded-md bg-[#070a12] border border-white/[0.06] text-xs text-slate-400 max-w-xl">
+                      <span className="font-mono text-sky-400 font-semibold block mb-0.5">Practical Tip:</span>
+                      {currentCard.notes}
+                    </div>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
           </div>
 
           {/* Card Bottom Meta */}
@@ -303,7 +335,7 @@ export default function RevisionPage() {
                 e.stopPropagation();
                 toggleMastery();
               }}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border transition-colors ${
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border transition-colors cursor-pointer ${
                 isCurrentMastered
                   ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
                   : 'bg-white/[0.03] text-slate-400 border-white/[0.06] hover:text-white'
@@ -317,32 +349,38 @@ export default function RevisionPage() {
               {isFlipped ? 'Tap to view question' : 'Tap to reveal answer'}
             </span>
           </div>
-        </div>
+        </motion.div>
 
         {/* Controls Bar */}
         <div className="mt-6 flex items-center justify-between">
-          <button
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.97 }}
             onClick={handlePrev}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.08] bg-[#0c1019] hover:bg-[#121826] px-4 py-2 text-xs font-semibold text-slate-300 transition-colors"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.08] bg-[#0c1019] hover:bg-[#121826] px-4 py-2 text-xs font-semibold text-slate-300 transition-colors cursor-pointer"
           >
             <ChevronLeft className="h-4 w-4" />
             Previous
-          </button>
+          </motion.button>
 
-          <button
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.97 }}
             onClick={toggleFlip}
-            className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-5 py-2 text-xs font-semibold text-amber-400 hover:bg-amber-500/20 transition-colors"
+            className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-5 py-2 text-xs font-semibold text-amber-400 hover:bg-amber-500/20 transition-colors cursor-pointer"
           >
             {isFlipped ? 'Show Question' : 'Flip Card (Space)'}
-          </button>
+          </motion.button>
 
-          <button
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.97 }}
             onClick={handleNext}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 px-4 py-2 text-xs font-semibold text-white transition-colors"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 px-4 py-2 text-xs font-semibold text-white transition-colors cursor-pointer"
           >
             Next
             <ChevronRight className="h-4 w-4" />
-          </button>
+          </motion.button>
         </div>
       </main>
     </div>

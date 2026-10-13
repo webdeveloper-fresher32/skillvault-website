@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
+import Link from 'next/link';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
@@ -10,7 +11,7 @@ import { parseLessonContent, isAsciiDiagram } from '@/lib/interactiveParser';
 import CodeToggle from './interactive/CodeToggle';
 import FlipCardDeck from './interactive/FlipCardDeck';
 import ExerciseChecklist from './interactive/ExerciseChecklist';
-import DiagramCard from './interactive/DiagramCard';
+import DiagramCard, { parsePipelineSteps } from './interactive/DiagramCard';
 
 interface MarkdownViewerProps {
   content: string;
@@ -37,6 +38,64 @@ export default function MarkdownViewer({
         remarkPlugins={[remarkGfm]}
         rehypePlugins={[rehypeHighlight, rehypeSlug]}
         components={{
+          // Custom link handler to navigate internal .md links within SkillVault!
+          a({ href, children, ...props }: any) {
+            if (!href) return <a {...props}>{children}</a>;
+            
+            // External links
+            if (href.startsWith('http://') || href.startsWith('https://')) {
+              return (
+                <a 
+                  href={href} 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="text-sky-400 hover:text-sky-300 underline underline-offset-2 transition-colors" 
+                  {...props}
+                >
+                  {children}
+                </a>
+              );
+            }
+            
+            // Relative markdown links
+            if (href.endsWith('.md') || href.includes('.md')) {
+              const cleanHref = href.split('#')[0].split('?')[0];
+              const parts = cleanHref.split('/');
+              const filePart = parts[parts.length - 1];
+              
+              if (filePart.toLowerCase() === 'readme.md') {
+                return (
+                  <Link 
+                    href={`/courses/${courseSlug}`} 
+                    className="text-sky-400 hover:text-sky-300 font-medium underline underline-offset-2 transition-colors"
+                  >
+                    {children}
+                  </Link>
+                );
+              }
+              
+              const targetLessonSlug = filePart.replace(/\.md$/i, '').toLowerCase();
+              return (
+                <Link 
+                  href={`/courses/${courseSlug}/${targetLessonSlug}`} 
+                  className="text-sky-400 hover:text-sky-300 font-medium underline underline-offset-2 transition-colors"
+                >
+                  {children}
+                </Link>
+              );
+            }
+            
+            return (
+              <a 
+                href={href} 
+                className="text-sky-400 hover:text-sky-300 underline underline-offset-2 transition-colors" 
+                {...props}
+              >
+                {children}
+              </a>
+            );
+          },
+
           // Custom pre / code block handler
           pre({ children, ...props }: any) {
             let rawCode = '';
@@ -52,8 +111,8 @@ export default function MarkdownViewer({
             };
             extractText(children);
 
-            // If this code block is an ASCII flowchart or architecture diagram, render DiagramCard
-            if (isAsciiDiagram(rawCode)) {
+            // If this code block is an ASCII flowchart, pipeline steps, or architecture diagram, render DiagramCard
+            if (isAsciiDiagram(rawCode) || parsePipelineSteps(rawCode) !== null) {
               return <DiagramCard diagramText={rawCode} />;
             }
 
@@ -176,6 +235,29 @@ export default function MarkdownViewer({
               >
                 {children}
               </blockquote>
+            );
+          },
+
+          // Custom image renderer with modern dark card styling
+          img({ src, alt, ...props }: any) {
+            if (!src) return null;
+            return (
+              <span className="my-8 flex flex-col items-center">
+                <span className="relative group overflow-hidden rounded-xl border border-slate-700/60 bg-[#0a0e17] p-2 shadow-2xl transition-all duration-300 hover:border-sky-500/50 block">
+                  <img
+                    src={src}
+                    alt={alt || 'Technical Architecture Diagram'}
+                    className="max-h-[580px] w-auto rounded-lg object-contain transition-transform duration-300 group-hover:scale-[1.01]"
+                    loading="lazy"
+                    {...props}
+                  />
+                </span>
+                {alt && (
+                  <span className="mt-3 text-center text-xs font-mono text-sky-400/80 block">
+                    ▲ {alt}
+                  </span>
+                )}
+              </span>
             );
           },
         }}

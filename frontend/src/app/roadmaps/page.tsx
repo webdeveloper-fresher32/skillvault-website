@@ -190,6 +190,7 @@ const CAREER_TRACKS: CareerTrack[] = [
         title: 'Advanced RAG & Vector Retrieval',
         description: 'Parent-document chunking, hybrid BM25 + dense vector search, reranking with Cohere, and pgvector/Pinecone indexes.',
         courseLinks: [
+          { name: 'Production RAG Architecture', slug: 'production-rag' },
           { name: 'Retrieval-Augmented Generation (RAG)', slug: 'rag' },
           { name: 'LangChain Orchestration', slug: 'langchain' },
         ],

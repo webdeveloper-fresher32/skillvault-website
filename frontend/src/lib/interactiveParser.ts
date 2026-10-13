@@ -15,7 +15,7 @@ export interface ParsedLessonContent {
  * Checks if a string contains ASCII diagram box/arrow characters.
  */
 export function isAsciiDiagram(text: string): boolean {
-  const diagramMarkers = ['┌', '└', '├', '┤', '│', '─', '──▶', '──>', '▲', '▼', '◄──', '◄──▶', '|---', '+---', '+==='];
+  const diagramMarkers = ['┌', '└', '├', '┤', '│', '─', '──▶', '──>', '▲', '▼', '◄──', '◄──▶', '|---', '+---', '+===', '→', '-->', '──►'];
   let markerHits = 0;
   for (const marker of diagramMarkers) {
     if (text.includes(marker)) {
@@ -234,10 +234,77 @@ export function parseBadGoodSections(markdown: string): {
 }
 
 /**
+ * Strips accidental 4+ space indentations on non-code lines outside of fenced code blocks.
+ * In CommonMark, 4 leading spaces creates an indented code block (<pre><code>).
+ * When copying/exporting from rich HTML, nested card divs turn into 4-8 space indented text,
+ * which erroneously renders as raw code boxes with Copy buttons.
+ */
+export function sanitizeAccidentalIndentedCodeBlocks(markdown: string): string {
+  if (!markdown) return '';
+  const lines = markdown.split('\n');
+  const cleaned: string[] = [];
+  let inFencedCode = false;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    if (trimmed.startsWith('```')) {
+      inFencedCode = !inFencedCode;
+      cleaned.push(line);
+      continue;
+    }
+
+    if (inFencedCode) {
+      cleaned.push(line);
+      continue;
+    }
+
+    // Outside fenced code:
+    if (!trimmed) {
+      cleaned.push('');
+      continue;
+    }
+
+    // Check if line has 4+ leading spaces or tabs
+    const leadingSpaces = line.length - line.trimStart().length;
+    if (line.startsWith('\t') || leadingSpaces >= 4) {
+      // If line is markdown formatted or prose
+      if (
+        trimmed.startsWith('**') ||
+        trimmed.startsWith('*') ||
+        trimmed.startsWith('###') ||
+        trimmed.startsWith('##') ||
+        trimmed.startsWith('#') ||
+        trimmed.startsWith('>') ||
+        trimmed.startsWith('- ') ||
+        trimmed.startsWith('1. ') ||
+        trimmed.startsWith('2. ') ||
+        trimmed.startsWith('3. ') ||
+        trimmed.startsWith('4. ') ||
+        trimmed.startsWith('5. ') ||
+        trimmed.startsWith('[') ||
+        trimmed.startsWith('<radio') ||
+        trimmed.startsWith('{#') ||
+        !/^[a-z_][a-z0-9_]*\s*[:=(]/i.test(trimmed)
+      ) {
+        cleaned.push(trimmed);
+        continue;
+      }
+    }
+
+    cleaned.push(line);
+  }
+
+  // Collapse 3+ consecutive newlines to at most 2 newlines
+  return cleaned.join('\n').replace(/\n{3,}/g, '\n\n');
+}
+
+/**
  * Main parser function to prepare markdown and interactive components.
  */
 export function parseLessonContent(rawMarkdown: string): ParsedLessonContent {
-  let text = rawMarkdown;
+  let text = sanitizeAccidentalIndentedCodeBlocks(rawMarkdown || '');
 
   // 1. Extract Q&A
   const { qaItems, remainingMarkdown: textWithoutQA } = parseQAPairs(text);

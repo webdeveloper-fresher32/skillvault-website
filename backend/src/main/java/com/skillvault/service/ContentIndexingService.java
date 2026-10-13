@@ -145,6 +145,7 @@ public class ContentIndexingService {
                     modName.equalsIgnoreCase("assets") || 
                     modName.equalsIgnoreCase("images") || 
                     modName.equalsIgnoreCase("img") ||
+                    modName.equalsIgnoreCase("docs") ||
                     modName.equalsIgnoreCase("Reference-Code")) {
                     continue;
                 }
@@ -265,6 +266,7 @@ public class ContentIndexingService {
         if ("DSA".equalsIgnoreCase(name)) return "Data Structures & Algorithms";
         if ("HLD".equalsIgnoreCase(name)) return "High-Level Design (HLD)";
         if ("LLD".equalsIgnoreCase(name)) return "Low-Level Design (LLD)";
+        if ("Production-RAG".equalsIgnoreCase(name) || "ProductionRAG".equalsIgnoreCase(name) || "production-rag".equalsIgnoreCase(name)) return "Production RAG Architecture & Engineering";
         if ("RAG".equalsIgnoreCase(name)) return "Retrieval-Augmented Generation (RAG)";
         if ("SpringBoot".equalsIgnoreCase(name)) return "Spring Boot 3 & 4 Backend";
         if ("NextJS".equalsIgnoreCase(name)) return "Next.js Full Stack";
@@ -294,14 +296,60 @@ public class ContentIndexingService {
     }
 
     private String formatModuleTitle(String name) {
-        String cleaned = name.replaceAll("^Phase-\\d+-?", "");
+        String cleaned = name.replaceAll("^(Phase-\\d+-?|\\d+-?)", "");
         cleaned = cleaned.replace("-", " ");
+        if (cleaned.toLowerCase().equals(cleaned)) {
+            String[] words = cleaned.split("\\s+");
+            StringBuilder sb = new StringBuilder();
+            for (String w : words) {
+                if (w.equalsIgnoreCase("rag")) sb.append("RAG");
+                else if (w.equalsIgnoreCase("pgvector")) sb.append("pgvector");
+                else if (w.equalsIgnoreCase("langchain")) sb.append("LangChain");
+                else if (w.equalsIgnoreCase("api")) sb.append("API");
+                else if (w.equalsIgnoreCase("rrf")) sb.append("RRF");
+                else if (w.equalsIgnoreCase("hnsw")) sb.append("HNSW");
+                else if (w.equalsIgnoreCase("fastapi")) sb.append("FastAPI");
+                else if (w.equalsIgnoreCase("and") || w.equalsIgnoreCase("or") || w.equalsIgnoreCase("with") || w.equalsIgnoreCase("vs")) sb.append(w.toLowerCase());
+                else if (w.length() > 0) {
+                    sb.append(Character.toUpperCase(w.charAt(0))).append(w.substring(1));
+                }
+                sb.append(" ");
+            }
+            cleaned = sb.toString().trim();
+        }
         return cleaned.isEmpty() ? name : cleaned;
     }
 
     private String formatLessonTitle(String name) {
         String cleaned = name.replaceAll("^\\d+-?", "");
         cleaned = cleaned.replace("-", " ");
+        if (cleaned.toLowerCase().equals(cleaned)) {
+            String[] words = cleaned.split("\\s+");
+            StringBuilder sb = new StringBuilder();
+            for (String w : words) {
+                if (w.equalsIgnoreCase("rag")) sb.append("RAG");
+                else if (w.equalsIgnoreCase("llm") || w.equalsIgnoreCase("llms")) sb.append(w.toUpperCase());
+                else if (w.equalsIgnoreCase("pgvector")) sb.append("pgvector");
+                else if (w.equalsIgnoreCase("fastapi")) sb.append("FastAPI");
+                else if (w.equalsIgnoreCase("rrf")) sb.append("RRF");
+                else if (w.equalsIgnoreCase("mrr")) sb.append("MRR");
+                else if (w.equalsIgnoreCase("api")) sb.append("API");
+                else if (w.equalsIgnoreCase("hnsw")) sb.append("HNSW");
+                else if (w.equalsIgnoreCase("ivfflat")) sb.append("IVFFlat");
+                else if (w.equalsIgnoreCase("docker")) sb.append("Docker");
+                else if (w.equalsIgnoreCase("macos")) sb.append("macOS");
+                else if (w.equalsIgnoreCase("python")) sb.append("Python");
+                else if (w.equalsIgnoreCase("langchain")) sb.append("LangChain");
+                else if (w.equalsIgnoreCase("lcel")) sb.append("LCEL");
+                else if (w.equalsIgnoreCase("qa") || w.equalsIgnoreCase("q&a")) sb.append("Q&A");
+                else if (w.equalsIgnoreCase("and") || w.equalsIgnoreCase("or") || w.equalsIgnoreCase("with") || w.equalsIgnoreCase("vs") || w.equalsIgnoreCase("to") || w.equalsIgnoreCase("in") || w.equalsIgnoreCase("of") || w.equalsIgnoreCase("for")) sb.append(w.toLowerCase());
+                else if (w.length() > 0) {
+                    sb.append(Character.toUpperCase(w.charAt(0))).append(w.substring(1));
+                }
+                sb.append(" ");
+            }
+            cleaned = sb.toString().trim();
+        }
         return cleaned.isEmpty() ? name : cleaned;
     }
 

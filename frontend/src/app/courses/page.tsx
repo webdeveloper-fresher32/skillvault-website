@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { motion, AnimatePresence } from 'framer-motion';
 import { BookOpen, Search, ArrowRight, Layers, Terminal, Sparkles, Filter, Clock, FileText } from 'lucide-react';
 import { fetchCourses, Course } from '@/lib/api';
 import { stripMarkdown } from '@/lib/utils';
@@ -80,19 +81,29 @@ export default function CoursesPage() {
 
           {/* Category Filter Pills */}
           <div className="flex items-center gap-2 overflow-x-auto pt-6 border-t border-white/[0.06] mt-6 scrollbar-none">
-            {CATEGORIES.map((cat) => (
-              <button
-                key={cat}
-                onClick={() => setActiveCategory(cat)}
-                className={`whitespace-nowrap rounded-md px-3 py-1 text-xs font-medium transition-colors ${
-                  activeCategory === cat
-                    ? 'bg-sky-500/15 text-sky-400 border border-sky-500/30'
-                    : 'bg-[#0c1019] text-slate-400 hover:text-white border border-white/[0.06]'
-                }`}
-              >
-                {cat}
-              </button>
-            ))}
+            {CATEGORIES.map((cat) => {
+              const isActive = activeCategory === cat;
+              return (
+                <button
+                  key={cat}
+                  onClick={() => setActiveCategory(cat)}
+                  className={`relative whitespace-nowrap rounded-md px-3 py-1 text-xs font-medium transition-colors focus:outline-none cursor-pointer ${
+                    isActive
+                      ? 'text-sky-300 font-semibold'
+                      : 'bg-[#0c1019] text-slate-400 hover:text-white border border-white/[0.06]'
+                  }`}
+                >
+                  {isActive && (
+                    <motion.div
+                      layoutId="courses-category-pill"
+                      className="absolute inset-0 rounded-md bg-sky-500/15 border border-sky-500/30"
+                      transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                    />
+                  )}
+                  <span className="relative z-10">{cat}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
       </section>
@@ -118,42 +129,50 @@ export default function CoursesPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {filteredCourses.map((course) => (
-              <Link
+            {filteredCourses.map((course, idx) => (
+              <motion.div
                 key={course.slug}
-                href={`/courses/${course.slug}`}
-                prefetch={true}
-                className="group rounded-xl border border-white/[0.08] bg-[#0a0e17] p-5 flex flex-col justify-between hover:border-white/[0.16] transition-colors"
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.25, delay: Math.min(idx * 0.03, 0.3) }}
+                whileHover={{ y: -4, borderColor: 'rgba(56, 189, 248, 0.35)' }}
+                className="rounded-xl border border-white/[0.08] bg-[#0a0e17] transition-colors"
               >
-                <div>
-                  <div className="flex items-center justify-between mb-3 text-xs">
-                    <span className="font-mono text-[11px] font-semibold text-sky-400 uppercase tracking-wide bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/20">
-                      {course.category}
-                    </span>
-                    <span className="text-[11px] font-mono text-slate-400 flex items-center gap-1">
-                      <FileText className="h-3 w-3" />
-                      {course.totalLessons} Lessons
-                    </span>
+                <Link
+                  href={`/courses/${course.slug}`}
+                  prefetch={true}
+                  className="group p-5 flex flex-col justify-between h-full"
+                >
+                  <div>
+                    <div className="flex items-center justify-between mb-3 text-xs">
+                      <span className="font-mono text-[11px] font-semibold text-sky-400 uppercase tracking-wide bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/20">
+                        {course.category}
+                      </span>
+                      <span className="text-[11px] font-mono text-slate-400 flex items-center gap-1">
+                        <FileText className="h-3 w-3" />
+                        {course.totalLessons} Lessons
+                      </span>
+                    </div>
+
+                    <h3 className="text-base font-bold text-white group-hover:text-sky-400 transition-colors">
+                      {course.title}
+                    </h3>
+
+                    <p className="mt-2 text-xs text-slate-400 line-clamp-3 leading-relaxed">
+                      {course.description ? stripMarkdown(course.description) : `Comprehensive production guide and curriculum for ${course.title}.`}
+                    </p>
                   </div>
 
-                  <h3 className="text-base font-bold text-white group-hover:text-sky-400 transition-colors">
-                    {course.title}
-                  </h3>
-
-                  <p className="mt-2 text-xs text-slate-400 line-clamp-3 leading-relaxed">
-                    {course.description ? stripMarkdown(course.description) : `Comprehensive production guide and curriculum for ${course.title}.`}
-                  </p>
-                </div>
-
-                <div className="mt-6 pt-3 border-t border-white/[0.06] flex items-center justify-between text-xs">
-                  <span className="text-slate-500 font-mono text-[11px]">
-                    ~{course.estimatedHours} Hours
-                  </span>
-                  <span className="flex items-center gap-1 font-semibold text-sky-400 group-hover:translate-x-0.5 transition-transform">
-                    Enter Track <ArrowRight className="h-3 w-3" />
-                  </span>
-                </div>
-              </Link>
+                  <div className="mt-6 pt-3 border-t border-white/[0.06] flex items-center justify-between text-xs">
+                    <span className="text-slate-500 font-mono text-[11px]">
+                      ~{course.estimatedHours} Hours
+                    </span>
+                    <span className="flex items-center gap-1 font-semibold text-sky-400 group-hover:translate-x-0.5 transition-transform">
+                      Enter Track <ArrowRight className="h-3 w-3" />
+                    </span>
+                  </div>
+                </Link>
+              </motion.div>
             ))}
           </div>
         )}
