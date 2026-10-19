@@ -1,227 +1,251 @@
-# 01 — Caching and Cost Control
+# Lesson 1: Caching and Cost Control in RAG
 
-> A comprehensive reference covering why naive RAG pipelines redo expensive work on every query, the three caching layers that fix it, and a working cosine-similarity-based semantic cache.
+Man, welcome to Phase 14! You now know how to build advanced RAG systems. But here is the reality of running AI in production: **LLM tokens and database calls cost real money**.
 
----
+In most enterprise applications, 60% to 80% of all user queries are repetitive (*"How do I reset my password?"*, *"What are the company holidays?"*, *"Where is the cafeteria?"*).
 
-## Table of Contents
-
-1. [The Problem: Every Query Pays Full Price](#1-the-problem-every-query-pays-full-price)
-2. [The Analogy: The Fast-Food Kitchen That Pre-Makes Common Orders](#2-the-analogy-the-fast-food-kitchen-that-pre-makes-common-orders)
-3. [Internal Flow: Three Caching Layers](#3-internal-flow-three-caching-layers)
-4. [Code Example: A Simple In-Memory Semantic Cache](#4-code-example-a-simple-in-memory-semantic-cache)
-5. [Comparing the Caching Layers](#5-comparing-the-caching-layers)
-6. [Common Mistakes](#6-common-mistakes)
-7. [Hands-On Exercises](#7-hands-on-exercises)
-8. [Interview Q&A](#8-interview-qa)
+If you run the full embedding + vector search + LLM generation loop for every single repeated question, you are throwing money away. Let's learn how **Semantic Caching** cuts latency from 2 seconds to 5 milliseconds and slashes API bills by up to 70%.
 
 ---
 
-## 1. The Problem: Every Query Pays Full Price
+### Step 1: Why Do We Need This?
 
-Every RAG pipeline you've built so far in this course does the same amount of work no matter how many times the same (or a nearly identical) question has already been asked: embed the query, search the vector store, assemble a prompt, and call the LLM. Each of these steps has a real cost — an embedding-model API call, a vector-database round trip, and, most expensive of all, an LLM generation call that's billed per token and takes real wall-clock time.
+A naive production RAG pipeline processes every user query from scratch:
+- Embed query ($) + Search vector database ($) + Call LLM ($$$).
+- Every query takes 1.5 to 3 seconds.
 
-At small scale this is fine. At production scale it isn't. Popular questions get asked over and over — "how do I reset my password," "what's your refund policy," "how do I cancel my subscription" — and a naive pipeline pays the full embedding + retrieval + generation cost every single time, even for a question that's been asked, word-for-word or near enough, a thousand times already today. That's wasted money and wasted latency for work whose answer was already computed and is very likely still correct.
+Look at why this is wasteful:
+1. **The Exact-Match Waste:** 500 employees ask *"What is the office Wi-Fi password?"* on Monday morning. The system generates the exact same answer 500 times, costing $5.00 in tokens and burning server compute.
+2. **The Paraphrase Waste:** Employee A asks: *"How do I reset my password?"* Employee B asks: *"Steps to change forgotten password."* A naive exact-match cache (like standard Redis) misses Employee B because the words are different, forcing another full LLM run.
+3. **Ingestion Re-Embedding Waste:** When updating a 500-page policy manual with 2 new sentences, naive scripts re-embed all 500 pages, wasting time and API quota.
 
-The concrete problem this lesson solves: **how do you avoid redoing expensive, repeatable work, without serving stale or wrong answers to genuinely different questions?**
-
----
-
-## 2. The Analogy: The Fast-Food Kitchen That Pre-Makes Common Orders
-
-**Real-world analogy:** picture two fast-food kitchens on a busy Friday night.
-
-Kitchen A cooks every single order completely from scratch, starting with raw ingredients, the moment it arrives — even though 80% of orders are the same handful of popular items. Every burger gets its patty grilled fresh, one at a time, in the order it was requested. The kitchen is "correct" — every order is made properly — but it's slow, and it burns through gas and staff-hours re-doing work that's nearly identical order after order.
-
-Kitchen B is smarter. It keeps a small batch of the most popular items — pre-grilled patties, pre-toasted buns — ready to assemble instantly the moment a matching order comes in, and only fires up a fresh, from-scratch cook for orders that don't match anything already prepared. Kitchen B serves the common case fast and cheap, while still cooking special or unusual orders properly from scratch.
-
-**Caching in a RAG pipeline is Kitchen B's strategy.** Instead of re-running the full embed → retrieve → generate pipeline for every query, you keep the results of recent or common queries ready to serve instantly, and only run the full (expensive) pipeline for queries that are actually new. The one thing Kitchen B has to get right that Kitchen A never worries about: knowing precisely when a new order is "close enough" to something pre-made to reuse it, versus when it's different enough that it needs the real kitchen — get that judgment wrong, and a customer who ordered "no onions" gets a burger with onions. That judgment call is exactly what Section 6 covers.
-
-> 🧠 Reach for this analogy whenever you need the one-line version: *"Don't re-cook from scratch every time — but know when an order is different enough that you have to."*
+Implementing multi-layer caching eliminates duplicate work, drops latency to near-zero, and protects your budget.
 
 ---
 
-## 3. Internal Flow: Three Caching Layers
+### Step 2: What Is It?
 
-A production RAG pipeline typically layers caching at three different points, each catching a different kind of repeated work.
+A production RAG caching architecture uses three distinct layers:
 
-**Embedding cache.** The same document chunk should never need to be re-embedded twice. If your ingestion pipeline re-runs (say, a scheduled re-index job that touches documents that haven't actually changed), an embedding cache keyed on a hash of the chunk's text lets you skip the embedding-model API call entirely for chunks you've already embedded, and reuse the stored vector. This is the cheapest, lowest-risk cache in the stack, because the input (identical text) genuinely guarantees an identical embedding — there's no fuzziness or judgment call involved.
+1. **Ingestion Hash Cache (Never re-embed the same text):**
+   - Stores the SHA-256 hash of each text chunk.
+   - If a file hasn't changed, reuse the existing vector. Zero embedding API calls!
 
-**Semantic cache.** This is the layer that catches *repeated or near-duplicate queries* rather than repeated documents. The idea: embed the incoming query (using the same embedding approach from Phase 2), and compare it against the embeddings of recent queries you've already answered, using cosine similarity — the exact metric and formula established in Phase 2's `cosine_similarity(a, b) = dot(a, b) / (|a| × |b|)`. If a new query's embedding is similar enough (above some chosen threshold) to a previously cached query's embedding, you skip retrieval and generation entirely and return the cached answer. This is the highest-leverage cache for cost and latency, because it can skip the single most expensive step (the LLM generation call) — but it's also the riskiest, because "similar enough" is a judgment call, not a guarantee of an identical question (Section 6).
+2. **Exact-Match Response Cache (Redis / In-Memory):**
+   - Key: Hash of the exact query string.
+   - Value: The generated answer.
+   - Response time: **< 1 millisecond**.
 
-**Response caching with TTLs.** Even for an exact-match query (not just a semantically similar one), you generally don't want to cache an answer forever — the underlying documents might change, making yesterday's cached answer wrong today. A TTL (**T**ime-**T**o-**L**ive — a duration after which a cache entry is considered expired and must be recomputed) puts an expiration on every cached response, so stale answers get naturally evicted and recomputed even if nothing explicitly invalidates them. Response caching is often layered *underneath* the semantic cache: an exact-match response cache (keyed on the literal query string) catches the truly identical repeated question cheaply, while the semantic cache catches paraphrases that a literal string match would miss.
+3. **Semantic Response Cache (GPTCache / Redis Vector):**
+   - Embeds the query and checks a database of *previously answered questions*.
+   - If a previous question has a **Cosine Similarity > 0.95** (e.g. *"reset password"* vs *"change forgotten password"*), it returns the cached answer immediately!
+   - Response time: **< 15 milliseconds** (skipping the slow LLM call completely).
+
+#### The Everyday Analogy: The Fast-Food Kitchen
+- **Naive RAG is a kitchen cooking everything from scratch:** Even if 100 people order the standard cheeseburger, the chef grinds fresh meat, bakes fresh buns, and cooks each burger one by one. The line is 45 minutes long.
+- **Production Caching is keeping popular items warm:** Popular cheeseburgers are ready in warming trays. When an order arrives, it is handed out in 5 seconds. The kitchen only cooks fresh meals for unique, custom orders.
+
+---
+
+### Step 3: Real-World Example
+
+Imagine an enterprise HR assistant serving 50,000 employees:
+
+- **Without Caching:**
+  - 100,000 queries per day.
+  - Average query latency: **2,200 ms**.
+  - Daily OpenAI API cost: **$350 / day ($10,500 / month)**.
+
+- **With Semantic Caching (Redis + TTL = 7 Days):**
+  - Cache Hit Ratio: **68%** (68,000 queries served from cache!).
+  - Cached Query Latency: **8 ms** (Feels instantaneous to users).
+  - Daily OpenAI API cost drops to **$112 / day ($3,360 / month)**.
+  - **Result:** You save over **$7,000 every single month** while making the application 10x faster!
+
+---
+
+### Step 4: How Does It Work?
+
+Here is the 3-tier caching query evaluation flow:
 
 ```
-   Query arrives
-        │
-        ▼
-   ┌─────────────────────┐   hit    ┌───────────────────────────┐
-   │ 1. Response cache    │ ───────▶ │ Return cached answer       │
-   │ (exact string match, │          │ (cheapest, fastest path)    │
-   │  respects TTL)        │          └───────────────────────────┘
-   └─────────────────────┘
-        │ miss
-        ▼
-   ┌─────────────────────┐   hit    ┌───────────────────────────┐
-   │ 2. Semantic cache     │ ───────▶ │ Return cached answer from  │
-   │ (cosine similarity    │          │ the similar prior query    │
-   │  vs. recent queries)  │          └───────────────────────────┘
-   └─────────────────────┘
-        │ miss
-        ▼
-   ┌─────────────────────────────────────────────────────────┐
-   │ 3. Full pipeline: embed → retrieve (embedding cache      │
-   │    speeds up re-indexing, not this step) → augment →     │
-   │    generate — then store the result in both caches        │
-   └─────────────────────────────────────────────────────────┘
+User Query Arrives: "How to change my password?"
+                       │
+         [Tier 1: Exact Match Cache (Redis)]
+         Key: SHA256("how to change my password?")
+                       │
+      ├── Cache Hit  ──► Return Cached Answer in 1ms!
+      └── Cache Miss ──► Proceed to Tier 2
+                             │
+         [Tier 2: Semantic Cache (Vector Similarity)]
+         Embed query & compare against past questions
+                       │
+      ├── Cosine Sim > 0.95 ──► Return Cached Answer in 12ms!
+      └── Cache Miss        ──► Proceed to Tier 3
+                                   │
+         [Tier 3: Full RAG Pipeline]
+         Search Vector DB ──► Rerank ──► LLM Generation (2,000ms)
+                                   │
+         [Store Answer in Semantic & Exact Caches with TTL]
+                                   │
+         Deliver Answer to User
 ```
+
+#### Time-To-Live (TTL) Cache Invalidation:
+Never cache answers forever! Policies change.
+- Attach a **TTL** (e.g. `ex=604800` for 7 days) to all cache entries.
+- When an HR policy document is updated, publish a cache invalidation event to clear affected keys.
 
 ---
 
-## 4. Code Example: A Simple In-Memory Semantic Cache
+### Step 5: Code Example
 
-The following builds a minimal semantic cache using exactly the cosine similarity formula from Phase 2's `02-Vector-Similarity-and-Distance-Metrics.md`. It's deliberately in-memory and single-process — a real production system would back this with a shared store (e.g. Redis) so multiple server instances share the same cache — but the matching logic is identical either way.
+Here is a Python implementation of an in-memory Semantic Cache using cosine similarity:
 
 ```python
+"""
+Semantic Cache Implementation for RAG
+"""
+
 import numpy as np
+from typing import Optional, Dict, Any
 
-
-def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
-    """Same formula as Phase 2: dot product divided by the product of magnitudes."""
-    return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
-
+def cosine_similarity(v1: np.ndarray, v2: np.ndarray) -> float:
+    return float(np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2)))
 
 class SemanticCache:
-    """A minimal semantic cache: reuse a prior answer if a new query's
-    embedding is similar enough (by cosine similarity) to a cached query's
-    embedding. `threshold` controls how strict "similar enough" is."""
+    def __init__(self, similarity_threshold: float = 0.92):
+        self.threshold = similarity_threshold
+        # Stores list of: {"query_text": str, "vector": np.ndarray, "answer": str}
+        self.cache_entries = []
 
-    def __init__(self, threshold: float = 0.95):
-        self.threshold = threshold
-        # Each entry is a dict: {"query": str, "vector": np.ndarray, "answer": str}
-        self.entries: list[dict] = []
-
-    def get(self, query_vector: np.ndarray) -> str | None:
-        """Return a cached answer if a similar-enough query was seen before,
-        else None. `str | None` means the return value is either a string
-        or the literal None -- Python's way of writing "optional string"."""
+    def lookup(self, query_vector: np.ndarray) -> Optional[Dict[str, Any]]:
+        """Checks if a semantically equivalent question was already answered."""
+        best_match = None
         best_score = -1.0
-        best_answer = None
-        for entry in self.entries:
-            score = cosine_similarity(query_vector, entry["vector"])
-            if score > best_score:
-                best_score = score
-                best_answer = entry["answer"]
 
-        if best_score >= self.threshold:
-            return best_answer
-        return None  # no cached entry was similar enough -- caller must run the full pipeline
+        for entry in self.cache_entries:
+            sim = cosine_similarity(query_vector, entry["vector"])
+            if sim > best_score:
+                best_score = sim
+                best_match = entry
 
-    def set(self, query: str, query_vector: np.ndarray, answer: str) -> None:
-        self.entries.append({"query": query, "vector": query_vector, "answer": answer})
+        if best_match and best_score >= self.threshold:
+            return {"answer": best_match["answer"], "score": best_score, "original_query": best_match["query_text"]}
+        return None
 
+    def store(self, query_text: str, query_vector: np.ndarray, answer: str):
+        """Saves new question and answer to cache."""
+        self.cache_entries.append({
+            "query_text": query_text,
+            "vector": query_vector,
+            "answer": answer
+        })
 
-def embed(text: str) -> np.ndarray:
-    """Stand-in for a real embedding-model call (Phase 2). In production this
-    calls an embedding API/model; here we fake deterministic vectors so the
-    example runs standalone."""
-    # A real system would call e.g. an embedding model here and get back a
-    # vector of hundreds of dimensions -- this stub exists only so the example
-    # is runnable without an API key.
-    rng = np.random.default_rng(abs(hash(text)) % (2**32))
-    return rng.random(8)
+if __name__ == "__main__":
+    cache = SemanticCache(similarity_threshold=0.90)
 
+    # 1. First user asks a question (Cache Miss -> Calls LLM -> Stores in Cache)
+    v_original = np.array([0.95, 0.10, 0.05])
+    cache.store(
+        query_text="How do I reset my password?",
+        query_vector=v_original,
+        answer="Go to Settings > Security > Reset Password to change your credentials."
+    )
+    print("Stored original question in Semantic Cache.")
 
-def run_full_pipeline(query: str) -> str:
-    """Stand-in for the real embed -> retrieve -> augment -> generate pipeline
-    from Phases 1-10. Expensive: this is exactly the work we want to avoid
-    repeating for near-duplicate queries."""
-    return f"[generated answer for: {query}]"
-
-
-def answer_query(query: str, cache: SemanticCache) -> str:
-    query_vector = embed(query)
-
-    cached = cache.get(query_vector)
-    if cached is not None:
-        return cached  # cache hit -- skipped retrieval AND generation entirely
-
-    # Cache miss: run the real pipeline, then store the result for next time.
-    answer = run_full_pipeline(query)
-    cache.set(query, query_vector, answer)
-    return answer
+    # 2. Second user asks a paraphrased question:
+    # "Steps to change forgotten password" (Embeds very close to original: sim ~0.94)
+    v_paraphrase = np.array([0.93, 0.12, 0.04])
+    
+    hit = cache.lookup(v_paraphrase)
+    if hit:
+        print("\n--- CACHE HIT! (0ms LLM Cost) ---")
+        print(f"Matched Original: '{hit['original_query']}' (Sim: {hit['score']:.4f})")
+        print(f"Returned Answer: {hit['answer']}")
+    else:
+        print("Cache Miss. Executing full RAG pipeline...")
 ```
 
-The important line is `if best_score >= self.threshold`. Setting `threshold` too low (e.g. 0.80) risks treating meaningfully different questions as "the same" and returning a wrong cached answer. Setting it too high (e.g. 0.999) means almost nothing gets a cache hit except near-exact duplicates, which limits how much cost and latency you actually save. In a real system this threshold is tuned empirically against your own query traffic and evaluated the same way you'd evaluate retrieval quality in Phase 11 — by checking cache-hit answers against ground truth, not just trusting a chosen number.
+---
+
+### Step 6: How Is It Used in Production?
+
+| Caching Strategy | What Breaks | The Production Fix | Real Impact |
+| :--- | :--- | :--- | :--- |
+| **Threshold Set Too Low (< 0.85)** | *"How to cancel Pro plan?"* returns cached answer for *"How to upgrade to Pro plan?"* | Keep semantic cache threshold strictly between **0.92 and 0.96** | Prevents serving completely wrong answers |
+| **No TTL / Stale Answers** | Policy changes on Tuesday, but cache keeps serving the old 2023 policy for months | Enforce maximum 7-day TTL; trigger programmatic invalidation on document updates | Guarantees up-to-date answers |
+| **Caching User-Specific PII** | User A asks *"What is my account balance?"*, User B gets User A's private balance! | Never cache queries containing personal pronouns or private session data | 100% security against cross-user data leaks |
+| **Re-embedding Unchanged Docs** | Ingestion pipeline re-embeds 50,000 files daily | Calculate SHA-256 hash of file content; skip embedding if hash matches database record | Saves 90% in ingestion embedding costs |
 
 ---
 
-## 5. Comparing the Caching Layers
+### Step 7: Quick Revision
 
-| Layer | What it catches | Risk if wrong | Typical cost saved |
-|---|---|---|---|
-| **Embedding cache** | Re-embedding the exact same document chunk | Very low — identical text always produces an identical embedding | Embedding-model API cost during re-indexing |
-| **Semantic cache** | Paraphrased or near-duplicate *queries* | Highest — a "close enough" match can still be a meaningfully different question | Retrieval + LLM generation cost (the most expensive step) |
-| **Response cache (TTL)** | Exact repeated queries, with automatic staleness expiry | Low if TTL is short enough relative to how often source documents change | Retrieval + LLM generation cost for literal repeats |
-
----
-
-## 6. Common Mistakes
-
-**Mistake 1: Caching answers too aggressively and serving stale or wrong answers for subtly different queries.**
-
-A semantic cache threshold set too loosely can conflate genuinely different questions that merely *sound* similar. "What's the refund policy for opened items?" and "What's the refund policy for unopened items?" can produce highly similar embeddings — the surrounding words are nearly identical — while having opposite correct answers. A cache that returns the "unopened" answer for the "opened" question because cosine similarity crossed the threshold is a silent, confident, wrong answer — arguably worse than no cache at all, because a user has no signal that anything went wrong.
-
-**Mistake 2: Not invalidating the cache when underlying documents change.**
-
-If a document backing a cached answer gets updated or deleted (a policy changes, a price changes), a cache with no TTL and no invalidation hook keeps serving the old answer indefinitely, because nothing ever told it the source data moved. Production systems need either a TTL short enough to bound how stale an answer can get, or an explicit invalidation step tied to the document-ingestion pipeline (Phase 3) — when a document is re-indexed, any cache entries that depended on it should be evicted, not left to expire naturally on their own schedule.
-
-**Interview angle:** "How would you cache a RAG pipeline without serving wrong answers?" is a common systems-design follow-up once a candidate mentions caching for cost savings. The strong answer distinguishes exact-match response caching (safe, cheap, needs only a TTL) from semantic caching (higher payoff, but introduces a real correctness risk that has to be actively managed via threshold tuning, monitoring cache-hit accuracy, and invalidating on document change) — a candidate who says "just cache everything" without acknowledging this tradeoff hasn't thought through the failure mode.
+- **60-80% of Enterprise Queries Are Repetitive:** Caching them saves thousands of dollars and delivers sub-15ms response times.
+- **Three Caching Layers:**
+  1. Ingestion Hash Cache (prevents re-embedding unchanged files).
+  2. Exact-Match Response Cache (Redis string lookup in 1ms).
+  3. Semantic Response Cache (Vector similarity lookup in 12ms).
+- **Conservative Threshold:** Set semantic similarity cutoff between **0.92 and 0.96** to avoid false matches.
+- **Never Cache PII:** Exclude user-specific or account-balance queries from the shared response cache.
+- **Interview Answer:** *"In production RAG systems, we implement a multi-tier caching strategy comprising document hash deduplication during ingestion, exact Redis string caching, and vector-based semantic caching. Setting a high similarity threshold (0.93+) and strict TTL invalidation policies reduces LLM inference costs by over 60% while maintaining sub-15ms latency on common queries."*
 
 ---
 
-## 7. Hands-On Exercises
+### Step 8: Final Flow Diagram
 
-### Exercise 1 — Trigger a cache hit and a cache miss
+```mermaid
+flowchart TD
+    classDef startEnd fill:#2563eb,stroke:#1d4ed8,color:#ffffff,stroke-width:2px;
+    classDef decision fill:#f59e0b,stroke:#d97706,color:#ffffff,stroke-width:2px;
+    classDef success fill:#10b981,stroke:#059669,color:#ffffff,stroke-width:2px;
+    classDef process fill:#3b82f6,stroke:#1d4ed8,color:#ffffff,stroke-width:2px;
 
-**Goal:** Confirm the `SemanticCache` from Section 4 behaves as expected on both a near-duplicate and a genuinely different query.
+    A([User Query Arrives]) --> B{Does exact string match in Redis?}:::decision
 
-Using the code from Section 4, call `answer_query("How do I reset my password?", cache)`, then call it again with a reworded version like `"How can I reset my password?"` and confirm you get a cache hit (same cached answer returned, no new `run_full_pipeline` call). Then call it with a clearly unrelated query like `"What's your shipping time to Canada?"` and confirm it triggers a cache miss instead. (Note: because `embed()` in this example uses a text-hash-seeded random vector rather than a real embedding model, near-duplicate phrasings won't actually score high on cosine similarity — replace `embed()` with a call to a real embedding model, or a small hand-picked vector dict as in Phase 2's exercises, to see realistic hit/miss behavior.)
+    B -- Yes: Cache Hit --> C[Return Cached Answer in 1ms]:::success
+    B -- No: Cache Miss --> D[Compute Query Embedding]:::process
 
-### Exercise 2 — Break the cache with a threshold that's too loose
+    D --> E{Semantic Cache: Cosine Similarity >= 0.94?}:::decision
+    E -- Yes: Semantic Hit --> F[Return Semantically Equivalent Answer in 12ms]:::success
+    
+    E -- No: Complete Miss --> G[Full RAG Pipeline: Vector Search + Reranker + LLM]:::process
+    G --> H[Store Result in Exact & Semantic Cache with 7-Day TTL]
+    H --> I([Deliver Fresh Answer to User]):::startEnd
 
-**Goal:** Reproduce Mistake 1 directly.
-
-Lower `threshold` to something very permissive (e.g. `0.5`), and feed the cache two queries you'd expect to have *different* correct answers (e.g. "refund policy for opened items" vs. "refund policy for unopened items", using real or hand-picked embeddings that are close but not identical). Confirm the second query gets served the first query's cached (and wrong) answer. This is the exact failure mode Mistake 1 describes, made concrete.
-
-### Exercise 3 — Add a TTL to the semantic cache
-
-**Goal:** Extend `SemanticCache` from Section 4 to store a timestamp with each entry and treat entries older than a given TTL as expired (skip them in `get()`, or evict them). This closes the gap identified in Mistake 2 — cached answers eventually get forced to recompute even without an explicit invalidation signal.
-
----
-
-## 8. Interview Q&A
-
-### Q1. Why does caching matter for a production RAG system specifically?
-
-**Answer:** Every query in a naive RAG pipeline re-embeds the query, re-runs retrieval, and re-calls the LLM — even for repeated or near-duplicate questions. At production scale, popular questions get asked constantly, so redoing this full pipeline every time wastes money (embedding and LLM API costs) and adds unnecessary latency for work whose answer is often still valid.
-
-### Q2. What's the difference between a response cache and a semantic cache?
-
-**Answer:** A response cache matches on the literal query string (or a hash of it) and only produces a hit for exact repeats. A semantic cache embeds the incoming query and compares it, via cosine similarity, against previously cached queries' embeddings, producing a hit for paraphrased or reworded questions that mean the same thing even if the wording differs. Semantic caching catches more repeated work but introduces a real risk of false-positive matches that a literal string match never would.
-
-### Q3. What cosine similarity threshold should a semantic cache use?
-
-**Answer:** There's no universal number — it has to be tuned empirically against real query traffic and evaluated by checking whether cache hits actually produce correct answers, the same way retrieval quality is evaluated in Phase 11. Too low a threshold risks conflating meaningfully different questions (a correctness risk); too high a threshold produces very few cache hits (limiting the cost/latency benefit).
-
-### Q4. How do you keep a semantic cache from serving stale answers after a source document changes?
-
-**Answer:** Two complementary mechanisms: a TTL that automatically expires cache entries after a bounded amount of time regardless of whether anything explicitly invalidated them, and an explicit invalidation step tied to document re-ingestion, so that when a document is updated, any cache entries derived from it are evicted immediately rather than waiting out their TTL.
-
-### Q5. Which is riskier to get wrong: an embedding cache or a semantic cache, and why?
-
-**Answer:** A semantic cache is riskier. An embedding cache only ever reuses a vector for text that is byte-for-byte identical to text it's seen before, so there's no ambiguity — identical input guarantees an identical, correct embedding. A semantic cache reuses an *answer* based on a similarity score crossing a threshold, which is a judgment call rather than a guarantee, so it can serve a wrong answer for a query that merely resembles a previously cached one without meaning the same thing.
+    C --> J([Instant User Delivery]):::startEnd
+    F --> J
+```
 
 ---
 
-> 🧠 **Memory hook:** "Cache the kitchen's popular orders, not a guess at what the customer meant — a semantic cache saves money exactly to the degree you trust its threshold."
+### Step 9: Quiz
+
+Test your understanding of caching and cost control. Submit your answers as `1-A, 2-B, 3-C, 4-D`:
+
+**1. What is the fundamental advantage of a 'Semantic Cache' over a traditional exact-string cache like Redis?**
+- A) A semantic cache can recognize paraphrased questions (e.g. *"reset password"* vs *"change forgotten password"*) and return the cached answer without calling the LLM.
+- B) A semantic cache deletes the user's password.
+- C) A semantic cache makes the database run on battery power.
+- D) A semantic cache converts English into binary code.
+
+**2. What happens if you set the similarity threshold on a semantic cache too low (for example, 0.70)?**
+- A) The computer will shut down.
+- B) The cache will suffer from false positives, returning cached answers for questions that were actually about different topics (e.g. confusing upgrade with cancel).
+- C) The database will delete its files.
+- D) The API bill will increase by 1000x.
+
+**3. Why must user-specific questions (like *"What is my credit card balance?"*) be excluded from shared response caching?**
+- A) Because credit cards are illegal in Python.
+- B) To prevent private personal data from User A being leaked to User B when they ask a similar question.
+- C) Because numbers cannot be cached.
+- D) Because the LLM only understands words.
+
+**4. How does an 'Ingestion Hash Cache' save money when updating company documents?**
+- A) It deletes the new documents.
+- B) It computes a hash (e.g. SHA-256) of each text chunk and skips embedding calls for any chunks that haven't changed since the last build.
+- C) It translates files into Spanish.
+- D) It formats the server hard drive.
+
+*(Submit your answers to check your progress!)*

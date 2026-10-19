@@ -1,199 +1,239 @@
-# 02 — GraphRAG Retrieval Patterns
+# Lesson 2: GraphRAG Retrieval Patterns (Local vs Global Search)
 
-> How to actually use a knowledge graph at query time — walking outward from matched entities and combining that context with standard vector retrieval.
+Man, in Lesson 1 we saw how to build a knowledge graph. Now the question is: **how do you search a knowledge graph during a RAG query?**
 
----
+Microsoft's GraphRAG framework introduced two game-changing retrieval patterns: **Local Search** (for entity-specific questions) and **Global Search** (for answering big-picture questions about an entire dataset).
 
-## Table of Contents
-
-1. [The Problem: A Graph Is Useless Until You Query It](#1-the-problem-a-graph-is-useless-until-you-query-it)
-2. [The Analogy: Following a Trail vs. Checking the Nearest Dot](#2-the-analogy-following-a-trail-vs-checking-the-nearest-dot)
-3. [Graph Traversal Retrieval, Step by Step](#3-graph-traversal-retrieval-step-by-step)
-4. [Implementing Graph Traversal in networkx](#4-implementing-graph-traversal-in-networkx)
-5. [Pure Vector RAG vs. GraphRAG](#5-pure-vector-rag-vs-graphrag)
-6. [Common Mistakes](#6-common-mistakes)
-7. [Hands-On Exercises](#7-hands-on-exercises)
-8. [Interview Q&A](#8-interview-qa)
+Let's explore both patterns and how they upgrade standard RAG.
 
 ---
 
-## 1. The Problem: A Graph Is Useless Until You Query It
+### Step 1: Why Do We Need This?
 
-Lesson 01 built a knowledge graph — entities as nodes, relationships as labeled edges, extracted from text via an LLM. But a graph sitting in memory (or in a graph database) doesn't answer any questions by itself. Given a user's question at query time, you need a concrete procedure for turning that question into a walk through the graph, and turning that walk into text you can hand to an LLM alongside — or instead of — the usual vector-retrieved chunks.
+Standard vector search has a massive architectural flaw: **it cannot answer holistic, dataset-wide questions**.
 
-This is a genuinely different problem from anything in Phases 5 through 9. Vector retrieval is a single step: embed the query, run a similarity search, get back the top-k chunks. Graph-based retrieval is inherently multi-step: first figure out *which entities* the query is even talking about, then decide *how far to walk* from those entities and *along which relationships*, then turn whatever you collected along the way back into text. Get any of those steps wrong — match the wrong entity, walk too few hops, or walk in every direction indiscriminately — and you either miss the answer entirely or drown the LLM in irrelevant graph context.
+Try asking a traditional RAG system loaded with 5,000 internal documents this question:
+> *"What are the top 5 operational risks across our entire supply chain?"*
 
----
+Look at how standard RAG fails:
+1. Vector search embeds the question *"top 5 operational risks"*.
+2. It fetches 4 random chunks that mention the word "risk".
+3. The LLM reads those 4 local chunks and pretends they represent the entire company!
+4. The remaining 4,996 documents are completely ignored. The answer is hopelessly narrow and incomplete.
 
-## 2. The Analogy: Following a Trail vs. Checking the Nearest Dot
+Standard RAG can answer local lookups (*"What is the return policy for laptops?"*), but it completely fails at corpus-level sensemaking (*"What are the overarching themes in our customer feedback?"*).
 
-**Real-world analogy:** imagine you're looking at a subway map (not a straight-line geographic map — the kind where stations are dots and lines connect them).
-
-Plain vector search is like being handed a list of all stations sorted by how close their *names* sound to the one you asked about — useful if you're trying to find "Kings Cross" and there are three similarly-named stations, but useless if what you actually need is "how do I get from here to Kings Cross." GraphRAG is like actually looking at the map and tracing the connected line from your current station to the destination, stop by stop. You're not asking "which single dot is closest to what I said" — you're asking "which dots are *reachable* from here, and by which route."
-
-That's the essential shift graph traversal retrieval makes: instead of scoring every chunk independently against the query and taking the top few, you anchor on the entity or entities the query is actually about, and then follow the graph's edges outward from there, collecting whatever is *connected* rather than whatever is merely *similar*.
-
-> 🧠 Use this analogy when explaining GraphRAG's retrieval step specifically (as opposed to Lesson 01's "why build a graph at all"): *"Vector search checks which dot is closest. GraphRAG follows the trail of connected dots from where you are to where the answer lives."*
-
----
-
-## 3. Graph Traversal Retrieval, Step by Step
-
-A GraphRAG query-time retrieval pass, at the introductory level this course covers, has three stages:
-
-**Stage 1 — Entity matching.** Given the user's question, identify which node(s) in the graph it refers to. In a simple system, this can be done with a case-insensitive substring or fuzzy match against node names (e.g., does the question mention "Priya" or "Sydney office"?). More sophisticated systems use an LLM call, or the same embedding techniques from Phase 2, to map ambiguous or partial mentions in the question to the correct graph node.
-
-**Stage 2 — Bounded traversal.** Starting from the matched node(s), walk outward along the graph's edges for a small, fixed number of hops — typically 1 or 2. Each hop visits the neighboring nodes connected to the current node and collects the relationship (edge) that connects them. Two hops is usually the practical ceiling for an introductory system: each additional hop multiplies how many nodes you might touch, and a graph is exactly as "connected" as a real social network — three or four hops away, you can often reach almost the entire graph, at which point "traversal" degenerates into "everything," and the result is no more useful than dumping the whole graph into the prompt.
-
-**Stage 3 — Combine with vector retrieval.** The text you collected from the graph walk (the entities and relationships encountered) is not a replacement for vector-retrieved chunks — it's additional structured context. In practice, most GraphRAG systems run *both* a standard vector similarity search (Phase 8) and a graph traversal, and include the results of both in the final prompt sent to the LLM. The graph context answers "how are these things connected"; the vector-retrieved chunks answer "what does the source text actually say about them."
+GraphRAG solves this by grouping the graph into **communities** and summarizing them hierarchically.
 
 ---
 
-## 4. Implementing Graph Traversal in networkx
+### Step 2: What Is It?
 
-The following function takes a query entity name and a `networkx.DiGraph` (built the way Lesson 01 built one), and returns the connected context found by walking outward 1-2 hops.
+GraphRAG supports two complementary retrieval patterns:
 
-```python
-import networkx as nx
+1. **Local Search (Entity-Centric):**
+   - Best for narrow questions about specific people, products, or concepts.
+   - Example: *"What projects is Sarah Chen working on, and who are her collaborators?"*
+   - It finds the `Sarah Chen` node, gathers her direct 1-hop and 2-hop neighboring nodes, retrieves the raw document chunks tied to those edges, and answers.
 
-def walk_graph_context(graph: nx.DiGraph, start_entity: str, max_hops: int = 2) -> list[str]:
-    """Walk outward from start_entity up to max_hops edges, collecting a
-    human-readable sentence for every relationship encountered.
+2. **Global Search (Dataset-Centric / Macro):**
+   - Best for high-level thematic questions across the whole document collection.
+   - Example: *"What are the recurring complaints about our mobile app over the last 12 months?"*
+   - Uses graph algorithms (like Leiden clustering) to group related nodes into **Communities**, generates pre-computed summaries for each community, and combines those summaries into a comprehensive macro-answer.
 
-    Returns a list of strings like "Priya Anand manages Sydney office", ready
-    to be joined into a block of text alongside vector-retrieved chunks.
-    """
-    if start_entity not in graph:
-        return []
+#### The Everyday Analogy: The City Street Map vs The Satellite Photo
+- **Local Search is a street-level GPS:** You zoom into corner of 5th Avenue and Main Street to see which coffee shops are next door.
+- **Global Search is a weather satellite view:** You zoom out to see the entire hurricane moving across the continent. You don't see individual coffee shops, but you understand the massive pattern affecting the whole state.
 
-    collected: list[str] = []
-    # `visited` tracks nodes we've already expanded from, so a cycle in the
-    # graph (A connects to B connects back to A) doesn't loop forever.
-    visited = {start_entity}
-    frontier = [start_entity]  # nodes to expand on this hop
+---
 
-    for _ in range(max_hops):
-        next_frontier = []
-        for node in frontier:
-            # graph.edges(node, data=True) returns every OUTGOING edge from
-            # `node` as a (source, target, attributes_dict) tuple -- for a
-            # DiGraph this only follows edges in their stored direction.
-            for source, target, attrs in graph.edges(node, data=True):
-                relation = attrs.get("relation", "is related to")
-                collected.append(f"{source} {relation} {target}")
-                if target not in visited:
-                    visited.add(target)
-                    next_frontier.append(target)
-        frontier = next_frontier
-        if not frontier:
-            break  # nothing new to expand -- stop early
+### Step 3: Real-World Example
 
-    return collected
+Imagine analyzing 10,000 patient feedback surveys from a national hospital network:
 
+- **Query A (Needs Local Search):**
+  - *"How many complaints did Dr. Gregory receive regarding bedside manner in the Seattle clinic?"*
+  - Local search zooms in on node `Dr. Gregory` and node `Seattle Clinic`, traverses the complaint edges, and gives exact dates and facts.
 
-def graphrag_retrieve(graph: nx.DiGraph, query_entity: str, vector_retrieve_fn, query: str) -> str:
-    """Combine graph-walk context with standard vector retrieval into one
-    context block, ready to insert into the augment step of the RAG prompt
-    (Phase 1, Stage 3).
-    """
-    graph_facts = walk_graph_context(graph, query_entity, max_hops=2)
-    # `vector_retrieve_fn` stands in for whatever Phase 8 retriever you're
-    # already using (e.g. a populated Chroma collection's .query() call) --
-    # it's passed in here so this function stays independent of any one
-    # vector store implementation.
-    vector_chunks = vector_retrieve_fn(query)
+- **Query B (Needs Global Search):**
+  - *"What are the systemic issues causing nurse burnout across all hospital branches?"*
+  - Global search scans the pre-computed **Community Summaries** across HR, Scheduling, Emergency, and Intensive Care clusters.
+  - It synthesizes findings from all 10,000 surveys to report: 1) 12-hour shift overruns, 2) charting software bugs, 3) understaffed night shifts.
 
-    # "x or y": if graph_facts is empty, "\n".join(graph_facts) produces an
-    # empty string, which Python treats as falsy — so the expression falls
-    # through to the fallback message on the right instead of returning "".
-    graph_section = "\n".join(graph_facts) or "No connected graph facts found."
-    vector_section = "\n\n".join(vector_chunks) or "No matching text chunks found."
+---
 
-    return f"Known relationships:\n{graph_section}\n\nRelevant passages:\n{vector_section}"
+### Step 4: How Does It Work?
+
+Here is the GraphRAG indexing and global search workflow:
+
+```
+[INGESTION: Community Detection & Pre-Summarization]
+Raw Documents ──► Extract Graph Triples ──► Build Complete Knowledge Graph
+                                                    │
+                                [Leiden Community Clustering Algorithm]
+                                Groups graph into high-density topic clusters
+                                                    │
+                                 Cluster 1          Cluster 2          Cluster 3
+                               (Billing Team)     (Mobile App)      (Cloud Infra)
+                                                    │
+                                [Pre-Generate Community Summaries]
+                                LLM writes a 1-page summary for each cluster
+
+[QUERY: Global Search Execution]
+User Macro Question: "What are the major pain points across the company?"
+                                                    │
+              [Map Step: Parallel Community Evaluations]
+              Score each Community Summary for relevance to the question
+                                                    │
+              [Reduce Step: Executive Synthesis]
+              LLM synthesizes the top community summaries into a unified report
 ```
 
-`graph.edges(node, data=True)` is the key `networkx` call here: for a `DiGraph`, it returns only the edges *going out from* `node`, each as a `(source, target, attrs)` tuple, where `attrs` is the dictionary of keyword arguments you passed to `add_edge` (in Lesson 01's case, `{"relation": "manages"}`). This is different from `graph.neighbors(node)`, which returns just the target node names with no edge data — useful when you only care *which* nodes are reachable, not *how* they're connected, but for building a readable context string you need the relationship label too, so `edges(node, data=True)` is the right call here.
+---
 
-Note that `graphrag_retrieve` takes `vector_retrieve_fn` as a parameter rather than hard-coding a specific vector store call — this keeps the function decoupled from whichever vector database you're using (Chroma, Pinecone, or pgvector from Phases 5-7), as long as that store has already been populated with your document chunks before this function runs (an empty, unpopulated collection would return nothing to combine with the graph facts, defeating the whole point of Stage 3).
+### Step 5: Code Example
+
+Here is a Python demonstration showing Local Subgraph Extraction vs Global Community Search:
+
+```python
+"""
+GraphRAG Retrieval Patterns: Local Subgraph Extraction & Community Summary
+Requires: pip install networkx
+"""
+
+import networkx as nx
+from typing import List, Dict
+
+# Build a sample graph representing an engineering organization
+G = nx.Graph()
+
+# Community 1: Frontend Team
+G.add_edge("Alice", "React_App", relation="develops")
+G.add_edge("Bob", "React_App", relation="maintains")
+G.add_edge("React_App", "TailwindCSS", relation="uses")
+
+# Community 2: Backend Team
+G.add_edge("Charlie", "Postgres_DB", relation="manages")
+G.add_edge("Diana", "Payment_API", relation="builds")
+G.add_edge("Payment_API", "Postgres_DB", relation="queries")
+
+# Bridge between teams
+G.add_edge("React_App", "Payment_API", relation="calls")
+
+def local_search(graph: nx.Graph, entity: str, depth: int = 1) -> List[str]:
+    """Finds the local 1-hop or 2-hop neighborhood around an entity."""
+    if entity not in graph:
+        return [f"Entity '{entity}' not found in knowledge graph."]
+
+    neighborhood_edges = []
+    # Get 1-hop neighbors
+    for neighbor in graph.neighbors(entity):
+        rel = graph.get_edge_data(entity, neighbor).get("relation", "connected_to")
+        neighborhood_edges.append(f"({entity}) --[{rel}]--> ({neighbor})")
+
+    return neighborhood_edges
+
+def global_search_simulation(community_summaries: Dict[str, str], macro_query: str) -> str:
+    """Combines high-level community summaries to answer broad questions."""
+    synthesis = "Global GraphRAG Executive Synthesis:\n"
+    for comm_name, summary in community_summaries.items():
+        synthesis += f"\n[Community: {comm_name}]\n{summary}\n"
+    return synthesis
+
+if __name__ == "__main__":
+    # 1. Local Search Demo
+    print("--- 1. LOCAL SEARCH (Around 'React_App') ---")
+    local_facts = local_search(G, "React_App")
+    for fact in local_facts:
+        print(f"  {fact}")
+
+    # 2. Global Search Demo
+    mock_community_summaries = {
+        "Frontend_Cluster": "Focuses on React UI performance, component design, and API integrations with payment services.",
+        "Backend_Cluster": "Focuses on PostgreSQL connection pooling, database reliability, and payment transaction APIs."
+    }
+    print("\n--- 2. GLOBAL SEARCH (Broad Architectural Overview) ---")
+    report = global_search_simulation(mock_community_summaries, "What are the main technology domains?")
+    print(report)
+```
 
 ---
 
-## 5. Pure Vector RAG vs. GraphRAG
+### Step 6: How Is It Used in Production?
 
-| Question type | Pure vector RAG | GraphRAG |
-|---|---|---|
-| "What is our refund policy?" (topic lookup) | Handles well — one chunk is directly about this | Unnecessary — no relationship to traverse |
-| "Summarize the onboarding process" (topic lookup) | Handles well | Unnecessary |
-| "Who reports to the person who manages the Sydney office?" (multi-hop relationship) | Struggles — no single chunk connects these two facts | Handles well — two hops from "Sydney office" |
-| "Which projects does Priya's team own?" (entity-to-entity) | Struggles unless one document happens to state this directly | Handles well — traverse from "Priya" through "team" to "projects" |
-| "What's the average latency mentioned across our incident reports?" (aggregation across many chunks) | Partial — depends on retrieving enough of the right chunks | Doesn't help — this isn't a relationship question at all |
-
-The pattern in this table is the whole point: GraphRAG doesn't make retrieval better in general — it makes a *specific class* of relationship-shaped question answerable at all, at the cost of being irrelevant (or actively unhelpful — see Common Mistakes) for the topic-lookup questions that plain vector search already handles well.
+| Architecture Concern | What Breaks | The Production Fix | Real Impact |
+| :--- | :--- | :--- | :--- |
+| **High Ingestion Cost** | Pre-generating summaries for 500 communities with GPT-4 costs hundreds of dollars | Use hierarchical clustering (Level 0, Level 1) and summarize only higher-level communities | Cuts pre-computation cost by 75% |
+| **Outdated Graph Summaries** | Adding 10 new documents invalidates pre-computed community summaries | Run incremental graph clustering and re-summarize only affected sub-communities | Enables real-time updates |
+| **Local Search Context Bloat** | Expanding 3 hops in a dense graph retrieves 2,000 nodes, overwhelming prompt tokens | Cap local search at 1 or 2 hops with degree centrality filtering | Keeps prompt context under 1,500 tokens |
+| **Combining Graph with Vectors** | Using only Graph misses nuanced unstructured passages | Always implement Hybrid GraphRAG (retrieve text chunks alongside graph facts) | Maximum accuracy and detail |
 
 ---
 
-## 6. Common Mistakes
+### Step 7: Quick Revision
 
-**Mistake 1: Reaching for GraphRAG on simple lookup questions plain vector search already handles.** If most of your actual query traffic is "what does policy X say" or "summarize document Y," running a graph traversal on top of vector retrieval adds latency (Stage 1's entity-matching step alone is extra work) and complexity without improving any of those answers — the graph facts collected will typically be empty or irrelevant for a question that was never about relationships in the first place. Reserve the graph traversal path for questions your entity-matching step actually recognizes as being anchored on a specific entity.
-
-**Mistake 2: Letting `max_hops` grow unchecked.** Because real-world graphs tend to be densely connected, 3+ hops from a starting node often reaches a very large fraction of the entire graph. At that point the "connected context" you collect stops being a targeted answer to the question and starts being nearly the whole knowledge base restated as sentences — exactly the "more context is always better" misconception Phase 1 already warned against, just arrived at via a different mechanism. Keep `max_hops` small (1-2) and let Stage 1's entity matching do the work of narrowing scope, rather than compensating for a poor starting point with a wider walk.
-
-**Interview angle:** A frequent follow-up after "what is GraphRAG" is "how do you decide when to actually use it in a real system?" The strong answer names both halves of the tradeoff from the comparison table: GraphRAG earns its complexity specifically on relationship/multi-hop questions, and for everything else it's pure overhead layered on top of a vector search path that was already sufficient. Naming a concrete signal for the decision — e.g., "look at real user query logs and check what fraction of questions require chaining facts about named entities together" — shows you'd validate the need rather than add GraphRAG because it sounds sophisticated.
-
----
-
-## 7. Hands-On Exercises
-
-### Exercise 1 — Trace a 1-hop and a 2-hop walk by hand
-
-**Goal:** Build intuition for what `max_hops` actually controls before trusting the code to do it.
-
-Using the graph you built in Lesson 01's Exercise 2, pick a starting entity and manually write down (on paper or in a comment) every fact reachable at exactly 1 hop, then every *additional* fact reachable at exactly 2 hops. Then run `walk_graph_context` with `max_hops=1` and `max_hops=2` and confirm your hand-traced answer matches the function's output.
-
-### Exercise 2 — Combine graph and vector context
-
-**Goal:** See Stage 3 actually working end to end, not just in isolation.
-
-Using a populated Chroma collection from Phase 5 (a handful of short text chunks is enough — don't query an empty collection) and the graph from Exercise 1, write a small `vector_retrieve_fn` wrapper around `collection.query(...)` that returns a list of chunk text strings. Call `graphrag_retrieve` with a query that has a clear entity anchor, and print the combined context block. Confirm both sections (graph facts and vector chunks) are populated.
-
-### Exercise 3 — Decide: graph, vector, or both?
-
-**Goal:** Practice the judgment call from Mistake 1, on realistic-sounding queries.
-
-For each of the following, decide whether you'd route it through graph traversal, plain vector retrieval, or both, and justify your answer in one sentence: (a) "What's our PTO policy?" (b) "Who are all the people on teams managed by someone who reports directly to the CTO?" (c) "Does the onboarding doc mention who the Sydney office manager is?"
+- **Local Search:** Entity-centric. Traverses 1-hop and 2-hop neighbors around specific people, places, or products.
+- **Global Search:** Dataset-centric. Groups the graph into communities (via Leiden algorithm) and synthesizes pre-computed summaries.
+- **Solves the 'Big Picture' Problem:** Global Search enables answering corpus-wide questions that vector search cannot answer.
+- **Hybrid GraphRAG:** Combines vector search on raw chunks with graph traversal on structured entities.
+- **Interview Answer:** *"GraphRAG distinguishes between Local Search for entity-level multi-hop questions and Global Search for corpus-wide sensemaking. Global Search leverages hierarchical community clustering algorithms like Leiden to pre-generate modular summaries, allowing systems to answer thematic questions across millions of documents without exhausting context windows."*
 
 ---
 
-## 8. Interview Q&A
+### Step 8: Final Flow Diagram
 
-### Q1. What are the three stages of graph traversal retrieval?
+```mermaid
+flowchart TD
+    classDef startEnd fill:#2563eb,stroke:#1d4ed8,color:#ffffff,stroke-width:2px;
+    classDef decision fill:#f59e0b,stroke:#d97706,color:#ffffff,stroke-width:2px;
+    classDef success fill:#10b981,stroke:#059669,color:#ffffff,stroke-width:2px;
+    classDef process fill:#3b82f6,stroke:#1d4ed8,color:#ffffff,stroke-width:2px;
 
-**Answer:** Entity matching — figuring out which graph node(s) the query refers to; bounded traversal — walking a small, fixed number of hops (typically 1-2) outward from the matched node(s), collecting the relationships encountered; and combining that graph-derived context with standard vector-retrieved chunks in the final prompt, since the graph answers "how are these connected" while the chunks answer "what does the source text say."
+    A([User Submits Question]) --> B{What type of query is this?}:::decision
 
----
+    B -- Specific Entity / Person / Product --> C[Local Search Pattern]:::process
+    C --> D[Identify Target Entity Nodes in Knowledge Graph]
+    D --> E[Extract 1-Hop and 2-Hop Subgraph Neighborhood]
+    E --> F[Collect Related Raw Document Chunks]
+    F --> G[Generate Entity-Grounded Answer]:::success
 
-### Q2. In `networkx`, what's the difference between `graph.neighbors(node)` and `graph.edges(node, data=True)`?
+    B -- Broad / Thematic / Macro Query --> H[Global Search Pattern]:::process
+    H --> I[Fetch Pre-Computed Community Summaries]
+    I --> J[Map Step: Score & Filter Relevant Communities]
+    J --> K[Reduce Step: Synthesize Cross-Community Report]:::success
 
-**Answer:** `graph.neighbors(node)` returns just the names of nodes reachable via an outgoing edge from `node`, with no information about the relationship itself. `graph.edges(node, data=True)` returns each outgoing edge as a `(source, target, attributes_dict)` tuple, including whatever attributes were passed to `add_edge` (such as a `relation` label) — which is what you need to build a human-readable "X relation Y" sentence rather than just a list of reachable node names.
-
----
-
-### Q3. Why cap graph traversal at 1-2 hops instead of walking until there's nothing left to explore?
-
-**Answer:** Real-world graphs tend to be densely connected, so each additional hop can reach a much larger fraction of the whole graph — at 3+ hops the "connected context" collected often approaches the entire knowledge base, which stops being a targeted answer and starts being an unfiltered dump of everything, burning context-window budget and potentially confusing the LLM the same way excessive vector-retrieved context does.
-
----
-
-### Q4. When would you skip GraphRAG and just use plain vector retrieval?
-
-**Answer:** When the query is a topic-lookup question rather than a relationship question — "what is our refund policy," "summarize the onboarding doc" — plain vector search already finds the relevant chunk directly, and running a graph traversal on top adds latency and complexity without improving the answer, since there's no meaningful relationship for the traversal to surface.
-
----
-
-### Q5. How does GraphRAG's Stage 3 (combining graph and vector context) actually improve the final answer?
-
-**Answer:** The graph-walk context supplies facts about how specific named entities connect to each other — information a single retrieved chunk typically can't express on its own. The vector-retrieved chunks supply the actual source text and nuance around those entities. Combined in the same prompt, the LLM can both follow the relationship chain the graph surfaced and ground its answer in the specific wording of the source documents, rather than having to do one without the other.
+    G --> L([Deliver Final Verified Response]):::startEnd
+    K --> L
+```
 
 ---
 
-> 🧠 **Memory hook:** "Vector search checks the nearest dot. GraphRAG follows the trail of connected dots — and it's worth following only when the question is actually about the trail."
+### Step 9: Quiz
+
+Test your understanding of GraphRAG retrieval patterns. Submit your answers as `1-A, 2-B, 3-C, 4-D`:
+
+**1. What major limitation of standard vector search does GraphRAG's Global Search solve?**
+- A) Vector search is too fast.
+- B) Standard vector search cannot answer broad, corpus-wide thematic questions across thousands of documents because it only samples a few local chunks.
+- C) Vector databases cannot store English text.
+- D) GraphRAG makes databases run without electricity.
+
+**2. In GraphRAG, what algorithm is commonly used to cluster connected nodes into communities?**
+- A) The Leiden (or Louvain) community detection algorithm.
+- B) QuickSort.
+- C) Binary Search.
+- D) Dijkstra's shortest path.
+
+**3. When should you choose Local Search over Global Search?**
+- A) When the user asks a specific question centered on a named entity (e.g. *"What are the dependencies of Module X?"*).
+- B) When you want to summarize all 10,000 files in the company.
+- C) Only when searching for video files.
+- D) When the internet is disconnected.
+
+**4. How does the 'Map-Reduce' step operate during a Global Search query?**
+- A) It deletes the database files.
+- B) It evaluates relevant community summaries in parallel (Map), and then synthesizes them into an executive overview report (Reduce).
+- C) It translates documents into C++.
+- D) It formats the hard drive.
+
+*(Submit your answers to check your progress!)*

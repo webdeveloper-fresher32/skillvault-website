@@ -1,189 +1,265 @@
-# 01 — Fixed-Size and Recursive Chunking
+# Lesson 1: Fixed-Size and Recursive Chunking
 
-> How to break a document into pieces small enough to embed and retrieve precisely, without slicing through the sentences that matter.
+Man, welcome to Phase 4! You cleaned your document text in Phase 3. Now comes the single most critical engineering decision in your RAG pipeline: **how to break that long text into pieces (chunks)**.
 
----
-
-## Table of Contents
-
-1. [The Problem: Too Big to Embed, Too Coarse to Retrieve](#1-the-problem-too-big-to-embed-too-coarse-to-retrieve)
-2. [The Analogy: Slicing a Loaf of Bread](#2-the-analogy-slicing-a-loaf-of-bread)
-3. [Fixed-Size Chunking with Overlap](#3-fixed-size-chunking-with-overlap)
-4. [Recursive Character Splitting](#4-recursive-character-splitting)
-5. [Code Example: Hand-Rolled vs RecursiveCharacterTextSplitter](#5-code-example-hand-rolled-vs-recursivecharactertextsplitter)
-6. [Comparison Table: Fixed-Size vs Recursive](#6-comparison-table-fixed-size-vs-recursive)
-7. [Common Mistakes](#7-common-mistakes)
-8. [Hands-On Exercises](#8-hands-on-exercises)
-9. [Interview Q&A](#9-interview-qa)
+If your chunks are too big, search gets blurry and expensive. If your chunks are too small, sentences get cut in half and lose their meaning. Let's learn how fixed-size and recursive chunking solve this.
 
 ---
 
-## 1. The Problem: Too Big to Embed, Too Coarse to Retrieve
+### Step 1: Why Do We Need This?
 
-In Phase 3, you loaded and cleaned a document — say, a 40-page product manual — into one long string of text. Now you need to turn it into something a RAG system can retrieve against, and here's the tension you run straight into:
+Why can't we just embed an entire 50-page PDF document as one single vector?
 
-**Too big:** you can't embed the entire 40-page manual as a single vector and expect that vector to usefully represent "what this document is about" for retrieval purposes. Embedding models also have hard input-length limits (Phase 2), and even where they don't, cramming an entire document into one vector averages away all the specific detail a query might be asking about. A query about "return shipping labels" and a query about "warranty claims" would both retrieve the exact same one giant chunk — the manual — telling the LLM nothing about *where* in the manual to look.
+1. **Averaged-Out Blurry Vectors:** When an embedding model compresses 50 pages into 1,536 numbers, specific details get diluted away. If a user asks about *"warranty shipping fees"*, that tiny detail gets drowned out by the other 49 pages.
+2. **Context Window Limits:** Models have token limits. You cannot fit twenty 50-page documents into a single prompt.
+3. **The Sawn-in-Half Sentence Disaster:** If you slice text blindly by counting 500 characters, you will cut sentences in half:
+   - Chunk 1: *"...all customers are entitled to a full ref"*
+   - Chunk 2: *"und if requested within 14 days of purchase."*
+   - Neither chunk has the complete idea! Chunk 1 does not mention 14 days, and Chunk 2 does not say what happens within 14 days.
 
-**Too coarse:** so you split it up. But split carelessly — say, by cutting every 500 characters no matter what's there — and you get chunks like: `"...the return window is 30 days from the date of purch"` followed by a new chunk starting with `"ase. Items must be unworn and..."`. The sentence that answers your query has been sawn in half, and neither half alone captures the full meaning. Worse, the embedding of a truncated sentence is often *not* close to the embedding of a query about that sentence's actual meaning, so the chunk that would have answered the question perfectly might not even get retrieved.
-
-So the real problem chunking has to solve: **break a document into pieces small enough that each one is specific and embeds well, without cutting through the natural units of meaning (sentences, ideas, sections) that make each piece coherent on its own.**
-
----
-
-## 2. The Analogy: Slicing a Loaf of Bread
-
-**Real-world analogy:** imagine you're slicing a loaf of bread that has raisins and walnuts baked unevenly throughout it.
-
-A careless baker with a ruler slices exactly every 2 centimeters, no matter what's underneath the knife. Most slices come out fine, but every so often the knife lands right on a walnut, splitting it in half across two slices — neither slice has the whole walnut, and biting into either one gives you an incomplete, slightly wrong sense of what was actually in the loaf at that point.
-
-A good baker looks at the loaf first, and slices along the loaf's natural give — between the denser walnut clusters, along the seams where the dough naturally separates — while still keeping each slice a reasonable, similar-ish size for a sandwich. The slices aren't perfectly uniform, but nothing important gets cut in half.
-
-Fixed-size chunking is the careless baker: fast, predictable, occasionally slices right through the good part. Recursive character splitting is the baker who looks for natural seams first — paragraph breaks, then sentence breaks, then word breaks — and only resorts to a blind cut if no natural seam is available nearby.
-
-> 🧠 Reach for this analogy whenever chunking strategy comes up: *"Fixed-size chunking slices by the ruler; recursive chunking slices along the seams."*
+Chunking breaks documents into focused, digestible units that capture a single complete thought.
 
 ---
 
-## 3. Fixed-Size Chunking with Overlap
+### Step 2: What Is It?
 
-The simplest possible chunking strategy: pick a chunk size (say, 500 characters or roughly 100-150 tokens — more on that distinction below), and cut the text into consecutive pieces of that size, moving straight through the document with no regard for what's at each cut point.
+There are two primary ways to split text:
 
-The one refinement almost everyone adds on top of pure fixed-size chunking is **overlap**: instead of starting each new chunk exactly where the previous one ended, you back up a little — say, 50 of the last 500 characters — and start the next chunk from there. The reasoning: if an important sentence happens to straddle a cut boundary, overlap increases the odds that the *full* sentence appears intact in at least one of the two chunks around the cut, even if it's still split in the other.
+1. **Fixed-Size Chunking:**
+   - Cuts text strictly by counting characters or tokens (e.g. exactly 500 characters per chunk).
+   - Usually adds an **overlap** (e.g. 50 characters) so each chunk shares a little text with the previous chunk.
+   - *Problem:* It cuts blindly, often slicing right through words or middle of sentences.
 
-Overlap doesn't eliminate the "cut through the walnut" problem — it just increases the chance that somewhere in your chunk set, the important sentence appears whole. It's a mitigation, not a fix, and it comes at a real cost: overlapping text gets embedded and stored twice, inflating your vector database size and (in Phase 8) sometimes causing near-duplicate chunks to compete for the same top-k retrieval slots.
+2. **Recursive Character Chunking (The Production Industry Standard):**
+   - Tries to split text along **natural human writing boundaries** first:
+     1. Double newlines (`\n\n`) -> splits between paragraphs.
+     2. Single newline (`\n`) -> splits between lines or sentences.
+     3. Spaces (` `) -> splits between words.
+     4. Empty string (`""`) -> splits characters as an absolute last resort.
+   - Keeps paragraphs and sentences intact while guaranteeing no chunk exceeds the maximum size limit.
 
----
-
-## 4. Recursive Character Splitting
-
-Recursive character splitting (the strategy behind LangChain's `RecursiveCharacterTextSplitter`, and conceptually similar in most RAG frameworks) tries to respect document structure instead of ignoring it, while still guaranteeing every chunk stays under your target size.
-
-The trick is an ordered list of separators it tries, from "most meaningful break" to "least meaningful break" — typically something like:
-
-1. Double newline (`\n\n`) — paragraph breaks
-2. Single newline (`\n`) — line breaks
-3. Sentence-ending punctuation followed by a space (`". "`, `"! "`, `"? "`) — sentence breaks
-4. Space (`" "`) — word breaks
-5. Empty string (`""`) — a hard character-by-character cut, the last resort
-
-The algorithm works recursively (a function that calls a smaller version of itself on each piece it produces — here, on each half of a text after a split): it first tries splitting the whole text on paragraph breaks. If any resulting paragraph is still bigger than your target chunk size, it recurses *into that oversized paragraph* and tries splitting it on the next separator down the list (sentence breaks), and so on, only falling all the way to a hard character cut if a single "sentence" (or a run of text with no punctuation, like a long URL) is itself bigger than the target size. Chunks that come out under the size limit are then reassembled up to (but not exceeding) the target size, so you still get consistently-sized chunks — they just land on natural boundaries whenever one is available nearby.
-
-This is why recursive splitting is the default, sensible starting point for most RAG systems: it costs almost nothing extra computationally (it's just string splitting, no ML involved) and it dramatically reduces mid-sentence cuts compared to naive fixed-size chunking.
+#### The Everyday Analogy: Slicing a Loaf of Bread
+- **Fixed-size chunking is a robotic knife with a ruler:** It slices down exactly every 2 centimeters, even if it cuts right through a walnut in the middle.
+- **Recursive chunking is a skilled baker:** It slices along the natural seams and score lines of the bread, keeping the crust and ingredients whole while making even slices.
 
 ---
 
-## 5. Code Example: Hand-Rolled vs RecursiveCharacterTextSplitter
+### Step 3: Real-World Example
 
-First, a hand-rolled fixed-size chunker with overlap, so you can see exactly what it's doing under the hood:
+Look at how both splitters handle this policy paragraph:
+
+```text
+Return Policy: Customers can return items within 30 days. However, opened electronics have a 14-day limit and require a 15% restocking fee.
+```
+
+- **Fixed-Size Split (size = 65 chars):**
+  - Chunk 1: `"Return Policy: Customers can return items within 30 days. However,"`
+  - Chunk 2: `" opened electronics have a 14-day limit and require a 15% restock"`
+  - *Failure:* If someone asks about opened electronics fees, Chunk 1 gives wrong 30-day hope, and Chunk 2 is missing the word "fee"!
+
+- **Recursive Split (size = 120 chars, separator `.` or `\n`):**
+  - Chunk 1: `"Return Policy: Customers can return items within 30 days."`
+  - Chunk 2: `"However, opened electronics have a 14-day limit and require a 15% restocking fee."`
+  - *Success:* Both sentences remain complete, coherent, and mathematically clear.
+
+---
+
+### Step 4: How Does It Work?
+
+Here is how the Recursive Splitting algorithm works internally:
+
+```
+[Start Document Text]
+         │
+Is text size <= chunk_size (e.g. 500 chars)?
+   ├── Yes ──► Save as Chunk!
+   └── No  ──► Try splitting by 1st separator: "\n\n" (Paragraphs)
+                 │
+           Did pieces fit within chunk_size?
+             ├── Yes ──► Merge pieces up to chunk_size (with overlap)
+             └── No  ──► Recursively try 2nd separator: "\n" (Sentences)
+                           │
+                     Did pieces fit?
+                       ├── Yes ──► Merge pieces
+                       └── No  ──► Recursively try 3rd separator: " " (Words)
+```
+
+#### Why Chunk Overlap Matters:
+- Typical overlap is **10% to 15%** of chunk size (e.g., 500-token chunk with 50-token overlap).
+- Overlap creates a sliding window: the last 50 tokens of Chunk 1 become the first 50 tokens of Chunk 2.
+- This ensures that if an idea spans across the boundary of two chunks, the full context is preserved in at least one chunk.
+
+---
+
+### Step 5: Code Example
+
+Here is a Python demonstration showing how recursive character splitting works compared to fixed-size:
 
 ```python
-def fixed_size_chunk(text: str, chunk_size: int = 120, overlap: int = 20) -> list[str]:
-    """Split text into fixed-size chunks with a character overlap between consecutive chunks."""
+"""
+Comparing Fixed-Size vs Recursive Text Splitting
+"""
+
+from typing import List
+
+def naive_fixed_chunker(text: str, chunk_size: int, overlap: int) -> List[str]:
+    """Slices text strictly by character count."""
     chunks = []
     start = 0
     while start < len(text):
         end = start + chunk_size
         chunks.append(text[start:end])
-        start = end - overlap  # back up by `overlap` chars before starting the next chunk
-        if end >= len(text):
-            break
+        start += chunk_size - overlap
     return chunks
 
-sample_text = (
-    "Our return policy allows returns within 30 days of purchase. Items must be "
-    "unworn, unwashed, and in original packaging with tags attached. Refunds are "
-    "issued to the original payment method within 5-7 business days of us "
-    "receiving the item. Store credit is available immediately upon request."
-)
+def simple_recursive_chunker(text: str, chunk_size: int = 100, separators: List[str] = None) -> List[str]:
+    """Splits along natural boundaries (paragraphs, then newlines, then spaces)."""
+    if separators is None:
+        separators = ["\n\n", "\n", " "]
 
-for i, c in enumerate(fixed_size_chunk(sample_text)):
-    print(f"--- chunk {i} ---\n{c}\n")
+    # Base case: text is already small enough
+    if len(text) <= chunk_size:
+        return [text]
+
+    # Find the highest priority separator present in the text
+    chosen_sep = ""
+    for sep in separators:
+        if sep in text:
+            chosen_sep = sep
+            break
+
+    if not chosen_sep:
+        # No separator found, must slice by character
+        return [text[:chunk_size]] + simple_recursive_chunker(text[chunk_size:], chunk_size, separators)
+
+    # Split by the chosen separator and merge small pieces together
+    parts = text.split(chosen_sep)
+    chunks = []
+    current_chunk = ""
+
+    for part in parts:
+        candidate = f"{current_chunk}{chosen_sep}{part}".strip() if current_chunk else part
+        if len(candidate) <= chunk_size:
+            current_chunk = candidate
+        else:
+            if current_chunk:
+                chunks.append(current_chunk)
+            # If a single part is still too big, recursively split it with remaining separators
+            if len(part) > chunk_size:
+                next_separators = separators[separators.index(chosen_sep) + 1:]
+                chunks.extend(simple_recursive_chunker(part, chunk_size, next_separators))
+                current_chunk = ""
+            else:
+                current_chunk = part
+
+    if current_chunk:
+        chunks.append(current_chunk)
+
+    return chunks
+
+if __name__ == "__main__":
+    sample_text = (
+        "Refund Policy Overview.\n\n"
+        "Customers can return physical products within 30 days of purchase.\n"
+        "Items must be unused and in original retail packaging.\n\n"
+        "Digital downloads and gift cards are strictly non-refundable."
+    )
+
+    print("--- 1. FIXED-SIZE SLICES (Blind Cuts) ---")
+    fixed_chunks = naive_fixed_chunker(sample_text, chunk_size=80, overlap=10)
+    for i, c in enumerate(fixed_chunks):
+        print(f"Chunk {i+1}: {repr(c)}")
+
+    print("\n--- 2. RECURSIVE CHUNKS (Preserves Paragraphs & Lines) ---")
+    rec_chunks = simple_recursive_chunker(sample_text, chunk_size=120)
+    for i, c in enumerate(rec_chunks):
+        print(f"Chunk {i+1}: {repr(c)}")
 ```
 
-Running this, you'll see at least one chunk boundary land mid-word — for example, chunk 0 ends `"...unworn, unwashed, and in original packaging w"`, and chunk 1 (after backing up 20 characters for overlap) begins `"original packaging with tags attached..."`. The overlap means the full word "with" does show up intact in the *next* chunk, but the first chunk itself still ends on a jagged, meaning-broken fragment ("w").
+---
 
-Now the same text through `RecursiveCharacterTextSplitter`:
+### Step 6: How Is It Used in Production?
 
-```python
-from langchain_text_splitters import RecursiveCharacterTextSplitter
+| Chunk Parameter | Trade-off / Risk | Production Best Practice | Impact |
+| :--- | :--- | :--- | :--- |
+| **Chunk Size Too Small (< 100 tokens)** | Sentences lack surrounding context; retriever misses the bigger picture | Use 300 to 500 tokens for general text | Balanced semantic focus and context |
+| **Chunk Size Too Large (> 1,500 tokens)** | Specific answers get buried in irrelevant text; prompt tokens wasted | Keep chunks <= 600 tokens; use Parent Document Retrieval if broad context is needed | Higher retrieval precision |
+| **Zero Overlap (`overlap = 0`)** | Facts that span the cut boundary are cut off and lost | Set overlap to 10-15% (e.g. 50 tokens for 500-token chunk) | Eliminates edge boundary information loss |
+| **Splitting Code & Tables** | Standard character splitters cut right through SQL tables or Python functions | Use specialized Markdown / Code splitters with language-aware syntax | Preserves executable code and tabular logic |
 
-splitter = RecursiveCharacterTextSplitter(
-    chunk_size=120,
-    chunk_overlap=20,
-    separators=["\n\n", "\n", ". ", " ", ""],  # tried in this order, most meaningful first
-    keep_separator="end",  # keep the matched separator attached to the end of the preceding chunk
-)
+---
 
-recursive_chunks = splitter.split_text(sample_text)
-for i, c in enumerate(recursive_chunks):
-    print(f"--- chunk {i} ---\n{c}\n")
+### Step 7: Quick Revision
+
+- **Why Chunk?** Embeddings of huge documents become blurry; models have token limits; smaller chunks provide high-precision answers.
+- **Fixed-Size Slices:** Cuts strictly by numbers; fast but cuts words and sentences in half.
+- **Recursive Splitting:** Slices by paragraphs (`\n\n`), then sentences (`\n`), then words (` `); keeps thoughts whole.
+- **Standard Sizing:** 300–600 tokens per chunk with 10–15% overlap is the recommended starting point for text.
+- **Interview Answer:** *"Recursive chunking attempts to split text hierarchically using natural document boundaries—paragraphs, lines, and words—before falling back to raw character counts. This preserves semantic coherence while ensuring each chunk fits comfortably inside the embedding model's context window."*
+
+---
+
+### Step 8: Final Flow Diagram
+
+```mermaid
+flowchart TD
+    classDef startEnd fill:#2563eb,stroke:#1d4ed8,color:#ffffff,stroke-width:2px;
+    classDef decision fill:#f59e0b,stroke:#d97706,color:#ffffff,stroke-width:2px;
+    classDef success fill:#10b981,stroke:#059669,color:#ffffff,stroke-width:2px;
+    classDef process fill:#3b82f6,stroke:#1d4ed8,color:#ffffff,stroke-width:2px;
+
+    A([Clean Document Text]) --> B{Is text <= chunk_size?}:::decision
+
+    B -- Yes --> C[Output Single Chunk]:::success
+    B -- No --> D[Split by Paragraphs: \n\n]
+
+    D --> E{Do paragraphs fit within chunk_size?}:::decision
+    E -- Yes --> F[Group paragraphs + apply 10% overlap]:::success
+    E -- No --> G[Split by Sentence Newlines: \n]
+
+    G --> H{Do sentences fit within chunk_size?}:::decision
+    H -- Yes --> I[Group sentences + apply overlap]:::success
+    H -- No --> J[Split by Word Spaces: ' ']
+
+    J --> K{Do words fit within chunk_size?}:::decision
+    K -- Yes --> L[Group words + apply overlap]:::success
+    K -- No --> M[Hard character split as last resort]
+
+    C --> N([Store Chunks in Vector DB]):::startEnd
+    F --> N
+    I --> N
+    L --> N
+    M --> N
 ```
 
-Comparing the two outputs on the same input: the recursive splitter's chunks reliably end on a sentence boundary (`"...within 30 days of purchase."`) wherever the text allows it within the size budget, instead of cutting wherever the character count happens to land. The fixed-size version is faster to reason about and produces perfectly uniform lengths, but at the cost of chunk boundaries that don't respect the content at all.
-
 ---
 
-## 6. Comparison Table: Fixed-Size vs Recursive
+### Step 9: Quiz
 
-| Dimension | Fixed-size chunking | Recursive character splitting |
-|---|---|---|
-| Simplicity | Extremely simple — one loop, one formula | Slightly more complex — ordered separator list, recursive logic |
-| Boundary awareness | None — cuts wherever the count lands | High — prefers paragraph/sentence/word breaks before a hard cut |
-| Chunk size uniformity | Perfectly uniform | Variable — length yields to boundary respect, so chunks can differ noticeably in size, especially on short/irregular text |
-| Speed | Fastest — pure arithmetic | Still very fast — string operations only, no ML |
-| Risk of mid-sentence cuts | High | Low (but not zero — very long "sentences" can still get force-split) |
-| Good default choice? | Only for structureless text (e.g. raw logs) | Yes — the sensible default for most prose documents |
+Test your understanding of chunking strategies. Submit your answers as `1-A, 2-B, 3-C, 4-D`:
 
----
+**1. What is the primary drawback of using naive fixed-size chunking without looking at text structure?**
+- A) It makes the file size negative.
+- B) It can slice words and critical sentences in half mid-thought, destroying semantic meaning.
+- C) It requires an internet connection to run.
+- D) It only works on Linux.
 
-## 7. Common Mistakes
+**2. In recursive character splitting, what separator is checked first by default?**
+- A) A single character `""`.
+- B) A single space `" "`.
+- C) Double newlines `"\n\n"` to keep complete paragraphs together.
+- D) A comma `","`.
 
-**Mistake 1: Overlap set too high.** Setting overlap to 40-50% of chunk size (instead of the more typical 10-20%) means nearly half of every chunk's content is duplicated in a neighboring chunk. This bloats your vector database, wastes retrieval budget on near-duplicate chunks competing for the same top-k slots (Phase 8), and adds embedding cost for no real gain in boundary safety past a certain point.
+**3. Why do production RAG systems include an overlap (e.g. 10-15%) between consecutive chunks?**
+- A) To make the database run out of storage twice as fast.
+- B) To ensure that facts and sentences straddling the boundary of two chunks remain intact in at least one chunk.
+- C) To translate the text into multiple languages.
+- D) To encrypt the chunks against hackers.
 
-**Mistake 2: Overlap set too low or zero.** The opposite failure: with no overlap, a sentence or idea that straddles a chunk boundary is genuinely split with no safety net anywhere in your chunk set. This is especially damaging for fixed-size chunking, where boundary cuts are already unavoidable — zero overlap there means guaranteed lost context at every single boundary.
+**4. What is a typical recommended chunk size for general English technical documentation?**
+- A) 1 to 5 tokens.
+- B) 300 to 600 tokens.
+- C) 50,000 to 100,000 tokens.
+- D) Exactly 1 character.
 
-**Mistake 3: Confusing token count with character count.** Chunk size is usually specified as characters in tooling defaults, but embedding models and LLMs have limits measured in *tokens* (Phase 2) — and the character-to-token ratio varies by language and content (roughly 4 characters per token for English prose, but code, URLs, and non-English text can differ significantly). A chunk that looks safely under a character limit can silently exceed a model's token limit, causing truncation or an outright API error at embed time. Always verify chunk sizes against the actual tokenizer of the embedding model you're using, not just character counts.
-
----
-
-## 8. Hands-On Exercises
-
-### Exercise 1 — Break the naive chunker on purpose
-
-Take the `fixed_size_chunk` function above and run it on a paragraph of your own choosing with `chunk_size=50, overlap=0`. Find and print the specific chunk boundary that cuts through a word. Then re-run with `overlap=15` and confirm the full word now appears intact in at least one chunk.
-
-### Exercise 2 — Compare chunk counts
-
-Run both `fixed_size_chunk` and `RecursiveCharacterTextSplitter` on the same 500+ word passage of real prose (a Wikipedia paragraph works well) with the same `chunk_size` and `overlap`. Count how many chunks each produces, and manually inspect how many chunk boundaries in each land mid-sentence. Report the difference.
-
-### Exercise 3 — Token vs character mismatch
-
-Pick a short piece of code (not prose) and a short piece of English prose of roughly the same character length. Use a tokenizer (e.g. `tiktoken` for OpenAI models) to count tokens in each. Confirm that the code sample has a noticeably different character-per-token ratio than the prose sample, and explain in one sentence why this matters when picking a `chunk_size`.
-
----
-
-## 9. Interview Q&A
-
-### Q1. Why can't you just embed an entire document as a single chunk?
-
-**Answer:** Embedding models have input length limits, and even where a document fits, a single vector for an entire document averages away the specific detail needed to distinguish "what part of this document is relevant to this particular query." A query about one narrow topic and a query about a completely different narrow topic within the same document would both retrieve the identical single chunk, giving the LLM the whole document instead of the specific passage it needs.
-
-### Q2. What problem does overlap solve in fixed-size chunking, and what's the tradeoff?
-
-**Answer:** Overlap increases the odds that a sentence or idea straddling a chunk boundary appears intact in at least one chunk, by having each new chunk start slightly before where the previous one ended rather than exactly at that point. The tradeoff is duplicated content: too much overlap bloats storage and can cause near-duplicate chunks to compete for the same retrieval slots, while too little overlap leaves boundary content genuinely and irrecoverably split.
-
-### Q3. How does `RecursiveCharacterTextSplitter` decide where to cut?
-
-**Answer:** It tries an ordered list of separators from most to least meaningful — typically paragraph breaks, then line breaks, then sentence-ending punctuation, then spaces, and only as a last resort a hard character-by-character cut. It recursively re-splits any piece that's still too big using the next separator down the list, so chunks stay under the target size while preferring to land on natural content boundaries whenever one exists nearby.
-
-### Q4. Why might a chunk that looks fine by character count still fail at embedding time?
-
-**Answer:** Because embedding models enforce limits in tokens, not characters, and the character-to-token ratio isn't fixed — it varies by content type (English prose vs. code vs. non-English text) and can differ meaningfully from the ~4-characters-per-token rule of thumb. A chunk sized purely by character count can silently exceed the model's actual token limit, leading to truncation or an API error.
-
-### Q5. When would you choose plain fixed-size chunking over recursive splitting?
-
-**Answer:** When the text has no meaningful structure for a recursive splitter to exploit — raw logs, sensor data dumps, or other structureless streams where paragraph/sentence boundaries don't carry semantic meaning anyway. For ordinary prose documents, recursive splitting is almost always the better default since it costs barely more and produces much cleaner boundaries.
-
----
-
-> 🧠 **Memory hook:** "Fixed-size slices by the ruler; recursive slices along the seams — same loaf, very different walnuts survive intact."
+*(Submit your answers to check your progress!)*

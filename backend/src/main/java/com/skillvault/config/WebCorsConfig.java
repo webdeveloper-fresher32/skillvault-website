@@ -15,4 +15,10 @@ public class WebCorsConfig implements WebMvcConfigurer {
                 .allowedHeaders("*")
                 .allowCredentials(true);
     }
+
+    @Override
+    public void addResourceHandlers(org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry registry) {
+        registry.addResourceHandler("/images/**")
+                .addResourceLocations("file:../frontend/public/images/", "file:frontend/public/images/", "file:./images/", "classpath:/static/images/");
+    }
 }

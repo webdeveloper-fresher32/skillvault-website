@@ -1,246 +1,244 @@
-# Loop Control and Recursion Limits — Complete Guide
+# Loop Control and Recursion Limits in LangGraph
 
-> "An industrial emergency circuit breaker cuts electricity to a high-speed assembly line whenever a motor spins beyond safety limits, preventing catastrophic factory floor fires."
-
----
-
-## Table of Contents
-
-1. [The Problem: Runaway Agent Loops and Token Drainage](#1-the-problem-runaway-agent-loops-and-token-drainage)
-2. [The Emergency Circuit Breaker Analogy](#2-the-emergency-circuit-breaker-analogy)
-3. [The Mechanism: recursion_limit and State Iteration Circuit Breakers](#3-the-mechanism-recursion_limit-and-state-iteration-circuit-breakers)
-4. [Diagram: Dual-Layer Loop Boundary Architecture](#4-diagram-dual-layer-loop-boundary-architecture)
-5. [Code Walkthrough: Production Agent with Cycle Detection and Iteration Bounds](#5-code-walkthrough-production-agent-with-cycle-detection-and-iteration-bounds)
-6. [Comparing Engine Limits vs In-Graph Circuit Breakers](#6-comparing-engine-limits-vs-in-graph-circuit-breakers)
-7. [Common Mistakes](#7-common-mistakes)
-8. [Hands-On Exercises](#8-hands-on-exercises)
-9. [Interview Q&A](#9-interview-qa)
+> "An agent without a recursion limit is a credit card with no spending limit. A single stuck loop can burn through thousands of dollars in an hour."
 
 ---
 
-## 1. The Problem: Runaway Agent Loops and Token Drainage
+### Step 1: Why Do We Need This?
 
-When an LLM gets stuck in an unresolvable tool-call failure loop (e.g. repeated SQL syntax errors or hallucinated tool arguments), an unbounded graph will cycle endlessly, burning hundreds of dollars in API credits.
+#### The Real Problem
 
-### The Infinite Loop Vulnerability
+Because LangGraph allows cycles (nodes looping back to previous nodes), your system can get trapped in an **infinite loop**:
+1. An LLM calls a web search tool with a query that returns 0 results.
+2. The LLM gets confused and calls the exact same search again.
+3. The tool returns 0 results again.
+4. Without a stopping mechanism, this continues forever.
 
-```text
-Turn 1: Agent calls search("latest stock price") ──▶ Tool returns empty
-Turn 2: Agent calls search("latest stock price") ──▶ Tool returns empty
-Turn 3: Agent calls search("latest stock price") ──▶ Tool returns empty
-...
-Turn 100: Consumed $50 in API credits and exhausted rate limits!
-```
+In production, runaway loops cause:
+- **Massive API Bills:** Calling GPT-4 or Claude 500 times in 3 minutes costs serious money.
+- **Worker Hangs:** The background task never completes, exhausting server threads.
+- **User Frustration:** The user stares at a loading spinner indefinitely.
 
-### The Solution: Multi-Layered Loop Bounds
+#### Why LangGraph Solves It
 
-LangGraph combines an engine-level `recursion_limit` (hard crash safeguard) with state-tracked iteration counters (graceful synthesis on max iterations).
-
----
-
-## 2. The Emergency Circuit Breaker Analogy
-
-An industrial power plant does not rely on human operators noticing an overheating turbine.
-
-### Unmonitored Turbine vs Dual Breakers
-
-```text
-Unmonitored Motor   → Motor overheats; friction ignites grease;
-                      entire manufacturing floor burns down.
-
-Dual Circuit System → 1. Primary Governor: Software governor limits motor to 3,000 RPM (In-Graph Counter).
-                      2. Hard Fuse: Physical magnetic breaker trips power at 3,500 RPM (Engine Recursion Limit).
-```
-
-### Mapping to LangGraph
-
-The In-Graph Counter is the software governor (synthesizes partial answer); the `recursion_limit` is the hard physical fuse (throws `GraphRecursionError`).
+LangGraph provides built-in safety controls:
+1. **Configurable Recursion Limit:** Halts graph execution if total node transitions exceed a threshold (default is 25).
+2. **Explicit Loop Counters in State:** Tracks iteration counts inside nodes to implement graceful fallbacks.
+3. **GraphRecursionError:** LangGraph raises a distinct exception that you can catch to return an apology or fallback message.
 
 ---
 
-## 3. The Mechanism: recursion_limit and State Iteration Circuit Breakers
+### Step 2: What Is It?
 
-### 1. Engine-Level Hard Limit (`recursion_limit`)
+#### Simple Explanation
 
-Configured via the invocation `config` dictionary (default is 25 steps).
+Think of an **arcade claw machine**:
+- When you insert a coin, the machine gives you a timer of 60 seconds (the recursion limit).
+- You can move the joystick back and forth as many times as you want (cyclic loop).
+- But if the timer hits zero before you grab a prize, the game automatically stops and asks if you want to try again, rather than letting you play forever for free.
+
+#### Loop Control Strategies Comparison
+
+| Strategy | How It Works | Best For |
+| :--- | :--- | :--- |
+| **Global `recursion_limit`** | Hard stop enforced by LangGraph runtime. Raises `GraphRecursionError`. | Safety net against infinite loops across the entire graph. |
+| **State Step Counter** | Custom `step_count` key in state, incremented each turn. | Graceful degradation: draft an answer with partial data before crashing. |
+| **Edge Router Check** | Conditional edge checks `if state["retries"] > 3: return "fallback"`. | Controlled diversion to human review or simpler fallback models. |
+
+---
+
+### Step 3: Real-World Example
+
+#### Autonomous Research Agent with Graceful Fallback
+
+Imagine a market researcher agent collecting competitor data:
+- **What it receives:** An obscure search query: *"Find 2026 pricing for StealthStartupX"*.
+- **What decision it makes:**
+  1. Turn 1: Searches Google -> No results.
+  2. Turn 2: Searches LinkedIn -> No results.
+  3. Turn 3: Searches GitHub -> No results.
+  4. The loop counter in state reaches `attempt_count = 3`.
+  5. The conditional edge detects that max retries were reached. Instead of calling Google again or crashing, it routes to `fallback_node`.
+- **What it outputs:** A friendly response: *"I searched 3 sources but StealthStartupX has not published public pricing. Here is an overview of what is currently known."*
+
+---
+
+### Step 4: How Does It Work?
+
+1. **Config Parameter:** When calling `graph.invoke(input, config={"recursion_limit": 10})`, LangGraph initializes an internal step counter.
+2. **Step Increment:** Each time ANY node executes, the internal counter increases by 1.
+3. **Threshold Check:** If counter > `recursion_limit`, LangGraph halts immediately and raises `langgraph.errors.GraphRecursionError`.
+4. **State-Level Control:** Alternatively, maintain `attempt: int` in your state schema. Your router function checks `if state["attempt"] >= MAX: return "stop"`.
+
+---
+
+### Step 5: Code Example
+
+Here is a complete, runnable LangGraph example showing both state-based loop control and catching `GraphRecursionError`:
 
 ```python
-# Hard stop at 10 graph node transitions
-config = {"recursion_limit": 10}
-response = app.invoke(inputs, config=config)
-```
-
-### 2. State-Tracked Graceful Degradation Counter
-
-Track iteration counts inside state and branch to a fallback synthesizer node when limits are approached.
-
-```python
-def route_with_guard(state: AgentState):
-    if state.get("loop_count", 0) >= 4:
-        return "fallback_synthesizer"  # Graceful exit without throwing an error
-    if state["messages"][-1].tool_calls:
-        return "tools"
-    return END
-```
-
----
-
-## 4. Diagram: Dual-Layer Loop Boundary Architecture
-
-### Safety Hierarchy
-
-```text
-Incoming User Query
-         │
-         ▼
-┌─────────────────────────────────────────────────────────────┐
-│ Outer Safety Net: LangGraph Engine recursion_limit=10       │
-│ (Triggers GraphRecursionError if exceeded)                  │
-│                                                             │
-│   ┌─────────────────────────────────────────────────────┐   │
-│   │ Inner Circuit Breaker: loop_count >= 4              │   │
-│   │                                                     │   │
-│   │       (loop_count < 4)           (loop_count >= 4)  │   │
-│   │       ┌───────────────┐          ┌────────────────┐ │   │
-│   │       │ Execute Tools │          │ Fallback Model │ │   │
-│   │       │ & Loop Back   │          │ Synthesis Node │ │   │
-│   │       └───────┬───────┘          └───────┬────────┘ │   │
-│   │               │                          │          │   │
-│   └───────────────┼──────────────────────────┼──────────┘   │
-│                   │                          │              │
-└───────────────────┼──────────────────────────┼──────────────┘
-                    │                          │
-                    ▼                          ▼
-            [Next Cycle]                     [END]
-```
-
----
-
-## 5. Code Walkthrough: Production Agent with Cycle Detection and Iteration Bounds
-
-A self-correcting agent graph with duplicate action detection and graceful fallback synthesis:
-
-```python
-# loop_guard_demo.py
-from typing import TypedDict, Annotated, Sequence
-from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, ToolMessage
-from langchain_core.tools import tool
-from langchain_openai import ChatOpenAI
+from typing import TypedDict, Optional
 from langgraph.graph import StateGraph, START, END
-from langgraph.graph.message import add_messages
+from langgraph.errors import GraphRecursionError
 
-@tool
-def flaky_search(query: str) -> str:
-    """Simulates a search tool that repeatedly fails."""
-    return "Error: Database connection refused."
+# 1. State definition with loop counter
+class ScraperState(TypedDict):
+    url: str
+    attempt_count: int
+    data_found: bool
+    final_message: Optional[str]
 
-tools = [flaky_search]
-tools_dict = {t.name: t for t in tools}
-model = ChatOpenAI(model="gpt-4o", temperature=0).bind_tools(tools)
+# 2. Node that simulates intermittent network failures
+def attempt_scrape_node(state: ScraperState) -> dict:
+    attempts = state.get("attempt_count", 0) + 1
+    print(f"-> Executing attempt_scrape_node (Attempt #{attempts})")
+    
+    # Simulate data found only on attempt 5
+    found = True if attempts >= 5 else False
+    
+    return {
+        "attempt_count": attempts,
+        "data_found": found
+    }
 
-class GuardedState(TypedDict):
-    messages: Annotated[Sequence[BaseMessage], add_messages]
-    loop_count: int
+# 3. Fallback node when retries are exhausted
+def fallback_node(state: ScraperState) -> dict:
+    return {
+        "final_message": f"Unable to reach {state['url']} after {state['attempt_count']} retries. Saved to retry queue."
+    }
 
-def call_model_node(state: GuardedState) -> dict:
-    count = state.get("loop_count", 0) + 1
-    resp = model.invoke(state["messages"])
-    return {"messages": [resp], "loop_count": count}
+# 4. Success node
+def success_node(state: ScraperState) -> dict:
+    return {
+        "final_message": f"Successfully scraped {state['url']} on attempt {state['attempt_count']}!"
+    }
 
-def call_tools_node(state: GuardedState) -> dict:
-    last_msg = state["messages"][-1]
-    res = []
-    for tc in last_msg.tool_calls:
-        func = tools_dict[tc["name"]]
-        out = func.invoke(tc["args"])
-        res.append(ToolMessage(content=str(out), tool_call_id=tc["id"]))
-    return {"messages": res}
+# 5. Router with built-in loop limit
+def route_scraper_loop(state: ScraperState) -> str:
+    if state["data_found"]:
+        return "success"
+    elif state["attempt_count"] < 3:  # Hard limit of 3 loops
+        return "retry"
+    else:
+        return "fallback"
 
-def fallback_synthesizer_node(state: GuardedState) -> dict:
-    # Graceful degradation message instead of crashing
-    msg = AIMessage(content="I apologize, but after several attempts the search service is unavailable. Please try again later.")
-    return {"messages": [msg]}
+# Build Graph
+builder = StateGraph(ScraperState)
+builder.add_node("scraper", attempt_scrape_node)
+builder.add_node("success", success_node)
+builder.add_node("fallback", fallback_node)
 
-def guarded_router(state: GuardedState):
-    if state.get("loop_count", 0) >= 3:
-        return "fallback"  # Trigger graceful fallback!
-    last_msg = state["messages"][-1]
-    if hasattr(last_msg, "tool_calls") and last_msg.tool_calls:
-        return "tools"
-    return END
+builder.add_edge(START, "scraper")
 
-def build_guarded_graph():
-    b = StateGraph(GuardedState)
-    b.add_node("agent", call_model_node)
-    b.add_node("tools", call_tools_node)
-    b.add_node("fallback", fallback_synthesizer_node)
+builder.add_conditional_edges(
+    "scraper",
+    route_scraper_loop,
+    {
+        "retry": "scraper",      # Loop back!
+        "success": "success",
+        "fallback": "fallback"
+    }
+)
 
-    b.add_edge(START, "agent")
-    b.add_conditional_edges("agent", guarded_router, {"tools": "tools", "fallback": "fallback", END: END})
-    b.add_edge("tools", "agent")
-    b.add_edge("fallback", END)
+builder.add_edge("success", END)
+builder.add_edge("fallback", END)
 
-    return b.compile()
+scraper_graph = builder.compile()
 
 if __name__ == "__main__":
-    app = build_guarded_graph()
-    initial = {"messages": [HumanMessage(content="Find latest revenue data")], "loop_count": 0}
-    # Pass engine hard recursion_limit as emergency fallback
-    result = app.invoke(initial, config={"recursion_limit": 10})
-    print("Final Output:\n", result["messages"][-1].content)
+    # Test 1: Graceful loop exit via state counter
+    print("=== TEST 1: STATE-CONTROLLED RETRY LIMIT ===")
+    result = scraper_graph.invoke({
+        "url": "https://api.internal.service/data",
+        "attempt_count": 0,
+        "data_found": False,
+        "final_message": None
+    })
+    print("Result:", result["final_message"])
+
+    # Test 2: Runtime recursion_limit configuration
+    print("\n=== TEST 2: GLOBAL RECURSION LIMIT ===")
+    try:
+        # Enforce an aggressive recursion limit of only 2 steps
+        scraper_graph.invoke(
+            {"url": "https://api.internal.service/data", "attempt_count": 0, "data_found": False, "final_message": None},
+            config={"recursion_limit": 2}
+        )
+    except GraphRecursionError:
+        print("Caught GraphRecursionError! LangGraph successfully halted the runaway loop.")
 ```
 
 ---
 
-## 6. Comparing Engine Limits vs In-Graph Circuit Breakers
+### Step 6: How Is It Used in Production?
 
-| Feature | Engine Limit (`recursion_limit`) | In-Graph Circuit Breaker (State Counter) |
-|---|---|---|
-| Trigger Condition | Total node transitions exceed threshold | Specific cycle count exceeds threshold |
-| Termination Behavior | Throws unhandled `GraphRecursionError` | Routes cleanly to fallback synthesizer node |
-| User Experience | 500 Server Error | Helpful apology / Partial answer synthesis |
-| Granularity | Global across entire graph | Per-agent, per-tool, or per-subgraph |
-| Best Used For | Emergency infrastructure safeguard | Production UX and business logic resilience |
+#### Production Patterns & Edge Cases
 
----
-
-## 7. Common Mistakes
-
-- **Relying solely on `recursion_limit=25`.** Letting the engine hit `recursion_limit` crashes the application with an unhandled exception; always implement in-graph loop counters.
-- **Counting user turns instead of graph cycles.** A user conversation can last 50 turns (`thread_id`), but an individual reasoning step should be limited to 4–6 cycles; reset loop counters at the start of each user request.
-- **Ignoring identical tool call loops.** If an agent issues the exact same tool name and arguments 3 times in a row, a cycle detector should break the loop immediately.
-- **Setting `recursion_limit` too low for multi-agent graphs.** In a multi-agent supervisor graph with 4 sub-agents, setting `recursion_limit=5` causes premature crashes.
-- **Not logging loop threshold breaches.** When an agent hits a circuit breaker, emit a high-priority alert to LangSmith or Datadog for engineering investigation.
+| Scenario | Production Challenge | Recommended Solution |
+| :--- | :--- | :--- |
+| **Runaway Billing Spikes** | A rogue agent gets stuck in a 100-step loop during the night. | Always set an explicit `recursion_limit` (e.g. 15-25) in production invocations. |
+| **Crashing on User Webhook** | `GraphRecursionError` bubbles up as an unhandled 500 server error to the user. | Wrap `graph.invoke()` or `graph.ainvoke()` in a try/except block catching `GraphRecursionError`. |
+| **Degraded Partial Answers** | The model runs out of steps while researching. Crashing loses all previous research. | Design your router to divert to a `draft_partial_summary` node when attempts reach limit. |
 
 ---
 
-## 8. Hands-On Exercises
+### Step 7: Quick Revision
 
-**Exercise 1:** Trigger a `GraphRecursionError` by configuring `recursion_limit=3` on a 4-step cyclical graph.
-
-**Exercise 2:** Implement an in-graph loop counter that gracefully terminates with a partial answer on iteration 3.
-
-**Exercise 3:** Build a repeat-action detector that checks if `(tool_name, args)` matches the previous turn and halts the loop.
-
-**Exercise 4:** Test a multi-agent supervisor graph and calculate the required `recursion_limit` based on agent depth.
-
-**Exercise 5:** Add a retry delay or exponential backoff node before cycling back to a failing tool.
+- Cycles in LangGraph can cause infinite loops if exit conditions are never met.
+- Use `config={"recursion_limit": N}` to set a hard ceiling on total graph steps (default is 25).
+- Exceeding the limit raises `langgraph.errors.GraphRecursionError`.
+- For the best user experience, track `attempts` in state and route to a fallback node before the hard limit is hit.
+- Always catch `GraphRecursionError` at your FastAPI / backend entry points.
 
 ---
 
-## 9. Interview Q&A
+### Step 8: Final Flow Diagram
 
-**Q: What happens when a LangGraph execution exceeds `recursion_limit`?**
-LangGraph immediately halts execution and raises a `langgraph.errors.GraphRecursionError`. The invocation fails and no further nodes are executed.
+```mermaid
+flowchart TD
+    StartNode([START]):::startStyle --> ScraperNode["attempt_scrape_node"]:::nodeStyle
+    ScraperNode --> Check{"route_scraper_loop"}:::decisionStyle
+    Check -->|Data Found| Success["success_node: Format Output"]:::nodeStyle
+    Check -->|Not Found and attempt < 3| ScraperNode
+    Check -->|Not Found and attempt >= 3| Fallback["fallback_node: Graceful Apology"]:::errorStyle
+    Success --> EndNode([END]):::endStyle
+    Fallback --> EndNode
 
-**Q: What is the default `recursion_limit` in LangGraph and how is it customized?**
-The default `recursion_limit` is 25 node transitions. It can be customized per invocation via the `config` argument: `app.invoke(inputs, config={"recursion_limit": 50})`.
+    classDef startStyle fill:#0284c7,stroke:#38bdf8,stroke-width:2px,color:#ffffff;
+    classDef nodeStyle fill:#0f172a,stroke:#38bdf8,stroke-width:1px,color:#f8fafc;
+    classDef decisionStyle fill:#334155,stroke:#38bdf8,stroke-width:2px,color:#ffffff;
+    classDef errorStyle fill:#7f1d1d,stroke:#f87171,stroke-width:2px,color:#ffffff;
+    classDef endStyle fill:#10b981,stroke:#34d399,stroke-width:2px,color:#ffffff;
+```
 
-**Q: Why is an in-graph circuit breaker preferable to relying on `recursion_limit`?**
-`recursion_limit` raises a hard exception that returns a 500 error to users. An in-graph circuit breaker intercepts runaway loops before the engine limit is reached, allowing the graph to route to a fallback synthesis node that returns a polite apology or partial result.
+---
 
-**Q: What is "Repeat Action Detection" in agent architectures?**
-Repeat Action Detection is an algorithmic guardrail that inspects the agent's recent tool calls. If the agent repeatedly calls the exact same tool with identical parameters and receives the same error, the detector intervenes to prevent wasting API tokens.
+### Step 9: Quiz
 
-**Q: How does `recursion_limit` interact with persistent checkpoints?**
-The `recursion_limit` counts node transitions *within a single invocation*. If a user interacts over 100 conversation turns across multiple days, `recursion_limit` does not trigger because it resets to 0 on each new `.invoke()` call on that thread.
+Try answering these questions to check your understanding:
+
+1. What is the default `recursion_limit` in LangGraph if you do not specify one?
+   - A) 1,000,000
+   - B) 25
+   - C) Unlimited
+   - D) 3
+
+2. What exception does LangGraph raise when the number of graph steps exceeds the limit?
+   - A) `ValueError`
+   - B) `OutOfMemoryError`
+   - C) `GraphRecursionError`
+   - D) `RecursionError` from the Python C-runtime
+
+3. How do you configure a custom recursion limit when invoking a graph?
+   - A) `graph.invoke(input, config={"recursion_limit": 10})`
+   - B) `graph.set_max_loops(10)`
+   - C) `import recursion_limit = 10`
+   - D) Passing `--max-loops 10` in terminal
+
+4. Why is routing to a `fallback_node` inside your router function better than letting `GraphRecursionError` raise?
+   - A) It costs more money
+   - B) It allows the agent to return a polite apology or partial draft to the user instead of an unexpected 500 error
+   - C) Fallback nodes make the database run faster
+   - D) Python does not allow catching exceptions
+
+*Submit your answers (e.g. 1-B, 2-C, 3-A, 4-B) to verify your score!*

@@ -1,173 +1,218 @@
-# 01 — Similarity Search and Top-K Tuning
+# Lesson 1: Similarity Search and Top-K Tuning
 
-> How many chunks should you actually retrieve — the tradeoffs of k, the "lost in the middle" phenomenon, and how to tune k empirically instead of guessing.
+Man, welcome to Phase 8! In previous phases, we set up our vector databases. Now let's explore **retrieval strategies**—how to search intelligently so the LLM gets the exact facts it needs without drowning in noise.
 
----
+The first and most critical tuning knob in any RAG system is **Top-K**. Let's learn how to choose and tune $k$ scientifically instead of guessing.
 
-## Table of Contents
-
-1. [The Problem: How Many Chunks Is Enough?](#1-the-problem-how-many-chunks-is-enough)
-2. [The Analogy: The Research Assistant, Not the Whole Library](#2-the-analogy-the-research-assistant-not-the-whole-library)
-3. [Internal Flow: Top-K Recap and the Cost of Getting K Wrong](#3-internal-flow-top-k-recap-and-the-cost-of-getting-k-wrong)
-4. [Lost in the Middle](#4-lost-in-the-middle)
-5. [Code Example: Comparing Retrieved Chunks Across Different K Values](#5-code-example-comparing-retrieved-chunks-across-different-k-values)
-6. [Common Mistakes](#6-common-mistakes)
-7. [Hands-On Exercises](#7-hands-on-exercises)
-8. [Interview Q&A](#8-interview-qa)
+![Advanced Retrieval Pipeline](/images/production-rag/advanced-retrieval-pipeline.png)
 
 ---
 
-## 1. The Problem: How Many Chunks Is Enough?
+### Step 1: Why Do We Need This?
 
-Every retrieval step in a RAG pipeline ends with the same decision: how many chunks do we hand to the LLM? So far in this course, that number — `k` — has mostly been an afterthought, a parameter set to some default like 3 or 5 and never revisited. But k is one of the highest-leverage tuning knobs in the entire system, and getting it wrong produces two very different, equally bad failure modes.
+Every retrieval request ends with the same question: *How many chunks ($k$) should we return to the LLM?*
 
-Set k **too low** (say, k=1) and you risk missing the answer entirely — not because it isn't in your document store, but because the fact the user needs is split across two chunks, or the single most-similar chunk isn't actually the one containing the answer (it's merely the closest by embedding distance). Set k **too high** (say, k=50 "just to be safe") and you drown the model in irrelevant text: more tokens to pay for, more latency waiting on a longer generation call, and — counterintuitively — a *worse* answer, because the LLM now has to sift signal from noise across a much longer context window.
+Beginners treat $k$ as an afterthought and leave it at a default like 3 or 10. In production, getting $k$ wrong breaks your application in two distinct ways:
 
-There's no universally correct k. The right value depends on your chunk size, your corpus, and how spread out answers tend to be across chunks — which means tuning k is an empirical exercise, not a one-time default you set and forget.
+1. **If $k$ is too small (e.g. $k=1$):** You suffer from **Low Recall**. If the answer to a question spans across two sections, or if the top-ranked chunk is merely introductory text, the LLM misses the actual answer and hallucinates.
+2. **If $k$ is too large (e.g. $k=25$):** You suffer from **Context Dilution & Token Waste**.
+   - Input token costs multiply by 5x.
+   - Response latency spikes from 1 second to 4 seconds.
+   - **The "Lost in the Middle" Effect:** Research proves LLMs pay close attention to the beginning and end of long prompts, but overlook critical facts buried in the middle chunks.
 
----
-
-## 2. The Analogy: The Research Assistant, Not the Whole Library
-
-**Real-world analogy:** imagine asking a research assistant to help you answer a question. You wouldn't say "bring me the entire library" — you'd drown in irrelevant material and never find the answer. You also wouldn't say "bring me exactly one page, no matter what" — sometimes the answer genuinely spans two or three pages, and a single page might not be enough.
-
-What you actually want is: *"bring me the 5 most relevant pages you can find."* Enough material to reliably contain the answer, but curated enough that you (or in RAG's case, the LLM) can actually read and use all of it without wading through noise. Top-k similarity search is that instruction to the assistant — and k is the number you write in place of "5."
-
-> 🧠 The instinct to reach for: k isn't "how much context can I afford to send" — it's "how many relevant pages does this research assistant need to reliably find the answer, and not one page more."
+You need a systematic way to tune $k$ to maximize answer accuracy while keeping latency and costs low.
 
 ---
 
-## 3. Internal Flow: Top-K Recap and the Cost of Getting K Wrong
+### Step 2: What Is It?
 
-Recall from earlier phases how top-k similarity search actually works at query time: the user's query is embedded into a vector, that vector is compared (typically via cosine similarity or a similar distance metric) against every stored chunk vector, and the k chunks with the highest similarity scores are returned, ranked from most to least similar.
+**Top-K** is the parameter that determines the maximum number of most similar document chunks returned from the vector store for a given query.
 
-**What happens as you increase k:**
+- **Precision vs Recall Trade-Off:**
+  - As $k$ increases, **Recall** goes up (higher chance of including the right fact somewhere).
+  - As $k$ increases, **Precision** drops (chunks #8, #9, and #10 are inherently less relevant than chunk #1).
 
-- **Recall goes up.** With more chunks returned, you're more likely to have included the one that actually contains the answer — especially for questions whose answer is scattered across multiple source passages.
-- **Precision (on average) goes down.** The chunks beyond the first few are, by definition, less similar to the query than the top ones — that's what "ranked by similarity" means. Chunk #20 is there because it scored higher than chunk #21, not because it's actually relevant to the question.
-- **Token cost and latency go up linearly.** Every additional chunk is more tokens in the prompt, which costs more (most LLM APIs charge per input token) and takes longer to process before generation even starts.
-- **Answer quality doesn't just plateau — it can degrade.** This is the counterintuitive part, and it's the subject of the next section: past a certain point, adding more "maybe relevant" chunks makes the model's actual answer *worse*, not just more expensive.
-
-So the tuning problem is: find the smallest k that reliably contains the answer for your typical queries, without needlessly padding the prompt with lower-relevance chunks that add cost and can actively hurt quality.
-
----
-
-## 4. Lost in the Middle
-
-Here's the mechanism behind "more context can make the answer worse," and it's specific to how LLMs process long inputs.
-
-Research on long-context LLM behavior has repeatedly found that models are noticeably better at using information placed at the **very beginning** or the **very end** of their context window than information buried in the **middle**. This effect is commonly called **"lost in the middle."** Intuitively: think of skimming a long document under time pressure — you tend to remember the opening and the conclusion far better than paragraph 40 of 80. LLMs exhibit an analogous attention pattern, even though nothing forces them to.
-
-The practical consequence for RAG: if you retrieve a large k, and the single chunk that actually answers the question happens to land in the middle of the assembled context (rather than first or last), the model may effectively "skim past" it — even though the correct text is technically present in the prompt. This is a real, measurable way that a *too-large* k can hurt answer quality, distinct from the token-cost argument. It's not just "extra chunks cost money" — extra chunks in the middle of the prompt can actively cause the model to underweight the chunk that mattered.
-
-This is also why retrieval strategy and prompt-assembly order interact: some RAG systems deliberately place the highest-similarity chunk first *and* last, or reorder retrieved chunks so the most relevant one isn't buried mid-context — a mitigation, not a full fix, for the lost-in-the-middle effect.
+#### The Everyday Analogy: The Research Assistant
+- You ask an assistant: *"Find me the proof that our competitor launched a feature in July."*
+- If the assistant brings back **1 single sticky note** ($k=1$), it might just be the cover page of the report, missing the date.
+- If the assistant dumps **50 heavy binders** onto your desk ($k=50$), you will waste hours reading filler text, miss the key date in the middle, and be late for your meeting.
+- What you actually need is **3 to 5 curated pages** ($k=4$) containing the exact announcement and press release.
 
 ---
 
-## 5. Code Example: Comparing Retrieved Chunks Across Different K Values
+### Step 3: Real-World Example
 
-The most direct way to build intuition for k is to actually query a vector store with several different k values and look at how the similarity scores fall off. A steep drop-off after the first few results suggests a small k is enough; a gentle, slow decline suggests there's no sharp cutoff and you may need a larger k (or a different retrieval strategy entirely — see Lesson 2).
+Imagine an internal HR knowledge assistant:
 
-```python
-# Using Chroma from Phase 5 as the vector store, but this pattern applies
-# to any vector store client that returns (chunk, score) pairs.
-import chromadb
+- **User asks:** *"Can I carry over unused vacation days into next year?"*
+- **Policy facts:** 
+  - Fact A (Chunk 1): *"Employees receive 20 days of annual leave."* (High vector match to 'vacation days')
+  - Fact B (Chunk 4): *"A maximum of 5 unused days may be carried over into the following calendar year with manager approval."*
 
-# Reopen the same persistent collection populated in Phase 5 — an in-memory
-# chromadb.Client() would start empty and every query below would return
-# nothing, so make sure you're pointed at the same path used to build it.
-client = chromadb.PersistentClient(path="./chroma_data")
-collection = client.get_or_create_collection(name="support_docs")
+Results across different $k$ settings:
+- **At $k=2$:** The retriever returns Chunks 1 and 2. It misses Chunk 4! The LLM answers: *"I don't have information about carrying over vacation days."* (Recall failure!)
+- **At $k=5$:** The retriever returns Chunks 1 through 5. Chunk 4 is included. The LLM answers: *"Yes, you can carry over up to 5 days with manager approval."* (Perfect!)
+- **At $k=30$:** The retriever includes 25 irrelevant chunks about parental leave, sick leave, and bereavement. The LLM hallucinates and blends rules together.
 
-# If you're running this fresh without Phase 5's data on hand, add a few
-# documents first, e.g.:
-# collection.add(
-#     ids=["doc1", "doc2", "doc3"],
-#     documents=[
-#         "Our refund policy allows returns within 30 days of purchase.",
-#         "Password resets are handled through the account settings page.",
-#         "Refunds are processed within 5-7 business days after approval.",
-#     ],
-# )
+---
 
-query = "How do I get a refund for something I bought two weeks ago?"
+### Step 4: How Does It Work?
 
-# Try several k values and compare the similarity scores side by side.
-for k in [1, 3, 5, 10]:
-    results = collection.query(query_texts=[query], n_results=k)
+Here is the precision-recall curve that governs Top-K tuning:
 
-    # Chroma returns parallel lists: documents, distances (lower = more similar
-    # for the default distance metric), one sub-list per query text.
-    docs = results["documents"][0]
-    distances = results["distances"][0]
+```
+Accuracy / Recall %
+ 100% ┼                     ╭───────────── Safe Plateau (k = 3 to 6)
+      │                   ╭─╯
+  70% ┼               ╭───╯
+      │           ╭───╯
+  30% ┼       ╭───╯
+      │   ╭───╯
+   0% ┴───┴───────┴───────┴───────┴───────┴───────►
+         k=1     k=3     k=5     k=10    k=25     Number of Chunks (k)
 
-    print(f"\n--- k={k} ---")
-    for rank, (doc, dist) in enumerate(zip(docs, distances), start=1):
-        # Truncate long chunks for readable side-by-side comparison.
-        preview = doc[:60].replace("\n", " ")
-        print(f"  rank {rank}: distance={dist:.4f}  chunk='{preview}...'")
+Latency / Cost:
+         $       $$      $$$     $$$$    $$$$$$$
 ```
 
-Running this against a real corpus typically reveals one of two patterns: either the distance jumps sharply after the top 2-3 results (a strong signal that a small k, like 3, is sufficient and the rest are noise), or it declines gradually with no clear elbow (a signal that similarity search alone isn't cleanly separating relevant from irrelevant chunks — often because the corpus has many topically-similar documents, which is exactly the situation Lesson 3's MMR addresses). Looking at this score curve across a representative sample of your real user queries — not just one example — is the actual empirical process for choosing a production k, rather than picking a number by intuition.
+#### How to Pick the Ideal $k$:
+1. **Correlate with Chunk Size:**
+   - Small chunks (100–200 tokens) -> Higher $k$ (e.g. $k=5$ to $8$).
+   - Large chunks (500–800 tokens) -> Lower $k$ (e.g. $k=2$ to $4$).
+2. **Score Thresholding:** Combine Top-K with a minimum similarity cutoff (e.g. *"take up to 5 chunks, but only if similarity > 0.70"*). This prevents padding the prompt with irrelevant noise when only 1 good chunk exists.
 
 ---
 
-## 6. Common Mistakes
+### Step 5: Code Example
 
-**Mistake 1: Picking k=1 and missing an answer split across chunks.** If a document was chunked (Phase 4) such that the fact a user needs spans a boundary — the setup is in one chunk, the conclusion in the next — a k=1 retrieval might grab only one half. The model then either answers incompletely or says it doesn't know, even though the full answer *was* in the document store, just split across two chunks that k=1 never gave it access to.
+Here is a Python script showing how to implement dynamic score thresholding on top of Top-K:
 
-**Mistake 2: Picking a huge k "to be safe."** It feels conservative to think "just retrieve 30 chunks, surely the answer is in there somewhere." In practice this trades a false sense of safety for real, measurable costs: higher token spend on every single query, higher latency, and — because of lost-in-the-middle — a real chance the correct chunk gets buried and effectively ignored by the model anyway. "Safe" here is an illusion; it's neither cheaper nor obviously more accurate than a well-tuned small k.
+```python
+"""
+Dynamic Top-K with Similarity Score Thresholding
+"""
 
-**Interview angle:** when asked "how do you choose k," the strongest answers describe an empirical process — look at the similarity score distribution for representative queries, evaluate answer quality (Phase 11) at a few candidate k values, and pick the smallest k that doesn't sacrifice recall — rather than quoting a single fixed number as if it were universal.
+from typing import List, Dict, Any
 
----
+def dynamic_threshold_retrieval(
+    scored_candidates: List[Dict[str, Any]],
+    max_k: int = 5,
+    min_similarity_threshold: float = 0.75
+) -> List[Dict[str, Any]]:
+    """
+    Returns up to max_k chunks, but strictly filters out low-confidence noise.
+    """
+    # 1. Sort by highest similarity score
+    sorted_chunks = sorted(scored_candidates, key=lambda x: x["score"], reverse=True)
+    
+    # 2. Filter by threshold
+    qualified_chunks = [c for c in sorted_chunks if c["score"] >= min_similarity_threshold]
+    
+    # 3. Cap at max_k
+    final_selection = qualified_chunks[:max_k]
+    
+    # Fallback: if nothing passed threshold, return top 1 with warning or empty
+    return final_selection
 
-## 7. Hands-On Exercises
+if __name__ == "__main__":
+    # Simulated search results with similarity scores (0.0 to 1.0)
+    mock_search_results = [
+        {"id": "doc_1", "text": "Annual carry-over limit is 5 days.", "score": 0.92},
+        {"id": "doc_2", "text": "Manager approval required for carry-over.", "score": 0.88},
+        {"id": "doc_3", "text": "Unused days beyond 5 will expire on Dec 31.", "score": 0.81},
+        {"id": "doc_4", "text": "Office is closed on Christmas Day.", "score": 0.52},
+        {"id": "doc_5", "text": "Catering options for corporate events.", "score": 0.31}
+    ]
 
-### Exercise 1 — Plot the distance curve
+    # Without threshold: top 5 pulls doc_4 and doc_5 (useless noise!)
+    # With threshold:
+    clean_results = dynamic_threshold_retrieval(
+        mock_search_results,
+        max_k=5,
+        min_similarity_threshold=0.75
+    )
 
-Using the code example above (or any vector store you've already populated in Phases 5-7), run the same query at k=20 and plot (or just print) the distance value at each rank. Identify whether there's a sharp "elbow" where distance jumps, and note the rank where it happens.
-
-### Exercise 2 — Construct a split-answer scenario
-
-Write two short chunks such that a fact is split across them (e.g., chunk A: "Our premium plan includes 24/7 support."; chunk B: "24/7 support response time is guaranteed within 1 hour."). Query for a question that needs both facts ("What's the response time guarantee for premium support?") at k=1 and k=2, and observe how the answer quality changes.
-
-### Exercise 3 — Reorder for lost-in-the-middle
-
-Take a k=10 retrieval result and manually try two different orderings when building the prompt: (a) ranked by similarity score as returned, and (b) most-similar chunk placed first *and* a copy of it referenced again at the very end. Compare whether the model's answer changes based on where the key chunk sits in the prompt.
-
----
-
-## 8. Interview Q&A
-
-### Q1. How do you decide what value to use for k in top-k retrieval?
-
-**Answer:** Empirically, not by guessing a fixed default. Run representative queries against your vector store at several k values, look at how the similarity/distance scores fall off (a sharp drop-off after the top few suggests a small k is enough), and evaluate actual answer quality (Phase 11) at each candidate k. Pick the smallest k that reliably contains the answer without needlessly padding the prompt.
-
----
-
-### Q2. Why isn't a very large k always safer?
-
-**Answer:** Because more retrieved chunks means more tokens (higher cost and latency), more noise for the model to sift through, and — due to the "lost in the middle" effect — a real risk that the chunk containing the actual answer gets buried in the middle of a long prompt and effectively underweighted by the model, even though it's technically present in the context.
-
----
-
-### Q3. What is the "lost in the middle" phenomenon?
-
-**Answer:** It's the observed tendency of LLMs to pay more attention to information at the very beginning or end of their context window than information placed in the middle. In RAG, this means a large k can hurt answer quality if the genuinely relevant chunk lands mid-prompt — the model may effectively skim past it, producing a wrong or incomplete answer despite the correct text being present.
-
----
-
-### Q4. Can increasing k actually hurt recall, not just precision?
-
-**Answer:** Not recall in the strict retrieval sense — a larger k, by definition, can only include at least as many relevant chunks as a smaller k. But it can hurt *effective* recall from the model's perspective: if the relevant chunk is present but gets lost in the middle of a long prompt, the model may behave as if it never saw it, which looks identical to a recall failure from the end user's point of view.
-
----
-
-### Q5. Give an example of when k=1 clearly isn't enough.
-
-**Answer:** Any question whose answer is split across chunk boundaries — for example, one chunk states a policy exists and a separate chunk states the specific numeric detail (like a time limit or price). A k=1 retrieval only grabs whichever single chunk is most similar to the query, missing the other half of the answer even though both chunks are in the document store.
+    print(f"Retrieved {len(clean_results)} high-confidence chunks:")
+    for c in clean_results:
+        print(f"  [{c['score']:.2f}] {c['text']}")
+```
 
 ---
 
-> 🧠 **Memory hook:** "k is the size of the stack of pages you hand the assistant — too thin and the answer's missing, too thick and the answer gets lost in the pile."
+### Step 6: How Is It Used in Production?
+
+| Strategy Knob | Common Failure Mode | The Production Fix | Real Impact |
+| :--- | :--- | :--- | :--- |
+| **Fixed $k$ without Threshold** | Asking *"What is the capital of France?"* on an HR database still returns 5 random chunks | Apply a minimum similarity threshold (e.g. `score > 0.70`); decline if empty | Prevents answering nonsense |
+| **Ignoring Chunk Size Ratio** | Setting $k=10$ on 1,000-token chunks consumes 10,000 prompt tokens per query | Set total context token budgets (e.g. max 2,500 tokens) rather than raw chunk counts | Stabilizes API billing |
+| **Lost-in-the-Middle Neglect** | Important chunk #3 is ignored by the LLM in a 10-chunk prompt | Place highest-scoring chunks at the top and bottom of the context window | 20% higher factual recall |
+| **Two-Stage Retrieval (Rerank)** | Forcing initial vector search to be exact with tiny $k$ | Retrieve top 20 candidate chunks with vector search, then rerank down to top 3 | Best of both recall and precision |
+
+---
+
+### Step 7: Quick Revision
+
+- **Top-K Is a Balancing Act:** Too small = missed answers; too large = context dilution, high latency, and high costs.
+- **Rule of Thumb Sizing:**
+  - 500-token chunks: $k = 3$ to $5$.
+  - 150-token chunks: $k = 6$ to $10$.
+- **Score Thresholding:** Always filter out chunks with similarity scores below your quality threshold (e.g. $< 0.70$).
+- **Context Budgeting:** Limit your retrieved context by total tokens (e.g., max 2,000 tokens) rather than just chunk count.
+- **Interview Answer:** *"Tuning Top-K balances retrieval recall against context precision. In production, we combine dynamic score thresholding with a two-stage pipeline: retrieve a wider candidate pool ($k=20$) to ensure high recall, then rerank down to the top 3-5 chunks to prevent context dilution and LLM attention degradation."*
+
+---
+
+### Step 8: Final Flow Diagram
+
+```mermaid
+flowchart TD
+    classDef startEnd fill:#2563eb,stroke:#1d4ed8,color:#ffffff,stroke-width:2px;
+    classDef decision fill:#f59e0b,stroke:#d97706,color:#ffffff,stroke-width:2px;
+    classDef success fill:#10b981,stroke:#059669,color:#ffffff,stroke-width:2px;
+    classDef failure fill:#ef4444,stroke:#dc2626,color:#ffffff,stroke-width:2px;
+
+    A([User Query]) --> B[Vector Similarity Search: Fetch Candidate Chunks k=15]
+    B --> C{Are any chunks above similarity threshold e.g. 0.75?}:::decision
+
+    C -- No --> D[Trigger Abstention: 'No relevant information found']:::failure
+    D --> E([Safe Refusal]):::startEnd
+
+    C -- Yes --> F[Filter Qualified Chunks]:::success
+    F --> G[Sort by Relevance Score]
+    G --> H[Cap at Target Prompt Budget: Top 3-5 Chunks]:::success
+    H --> I[Reorder Chunks: Best at Top & Bottom]
+    I --> J[Augment LLM Prompt]
+    J --> K([Deliver High-Confidence Grounded Answer]):::startEnd
+```
+
+---
+
+### Step 9: Quiz
+
+Test your understanding of similarity search and Top-K tuning. Submit your answers as `1-A, 2-B, 3-C, 4-D`:
+
+**1. What is the danger of setting $k=1$ (retrieving only a single chunk) in a production RAG system?**
+- A) The vector database will run out of disk space.
+- B) If the answer spans multiple chunks, or if the top chunk is merely introductory text, the system fails to answer correctly.
+- C) It makes the API call 100x more expensive.
+- D) The embedding model will delete itself.
+
+**2. What happens to LLM generation quality if you retrieve 40 chunks ($k=40$) for a simple question?**
+- A) Generation speed becomes 10x faster.
+- B) Token costs multiply, latency spikes, and the model can suffer from 'Lost in the Middle', missing the true answer amid irrelevant noise.
+- C) The LLM's parameter count increases.
+- D) The vector database automatically deletes the extra 35 chunks.
+
+**3. What does 'Score Thresholding' do when added to Top-K retrieval?**
+- A) It guarantees that at least 1,000 chunks are returned every time.
+- B) It discards chunks whose similarity score falls below a minimum quality threshold (e.g. 0.75), preventing irrelevant noise from entering the prompt.
+- C) It translates chunks into HTML tables.
+- D) It changes the temperature of the model.
+
+**4. How does chunk size influence your choice of $k$?**
+- A) Smaller chunks contain narrower facts, requiring a higher $k$ (e.g. 6-10), while large chunks contain more context and require a smaller $k$ (e.g. 2-4).
+- B) Chunk size has zero relation to $k$.
+- C) Large chunks always require $k=100$.
+- D) Small chunks cannot be used with Top-K.
+
+*(Submit your answers to check your progress!)*

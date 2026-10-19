@@ -1,208 +1,216 @@
-# Streaming Modes (Values, Updates, and Messages) — Complete Guide
+# Streaming Modes in LangGraph — Values, Updates, and Messages
 
-> "A live television sports broadcast delivers instant scoreboard updates (updates), full game recap statistics (values), and play-by-play audio commentary word-by-word (messages)."
-
----
-
-## Table of Contents
-
-1. [The Problem: Waiting 20 Seconds for Complete Graph Output](#1-the-problem-waiting-20-seconds-for-complete-graph-output)
-2. [The Live Sports Broadcast Analogy](#2-the-live-sports-broadcast-analogy)
-3. [The Mechanism: The Three Core Stream Modes](#3-the-mechanism-the-three-core-stream-modes)
-4. [Diagram: Streaming Modes Output Granularity](#4-diagram-streaming-modes-output-granularity)
-5. [Code Walkthrough: Token-by-Token Streaming with stream_mode="messages"](#5-code-walkthrough-token-by-token-streaming-with-stream_modemessages)
-6. [Comparing stream_mode Options](#6-comparing-stream_mode-options)
-7. [Common Mistakes](#7-common-mistakes)
-8. [Hands-On Exercises](#8-hands-on-exercises)
-9. [Interview Q&A](#9-interview-qa)
+> "Waiting 15 seconds for an agent to finish before showing anything feels broken to users. Streaming turns an opaque wait into a live, interactive experience."
 
 ---
 
-## 1. The Problem: Waiting 20 Seconds for Complete Graph Output
+### Step 1: Why Do We Need This?
 
-Complex agent graphs run multiple tools, search databases, and generate long answers. Calling `app.invoke()` forces users to stare at a blank screen for 15–30 seconds.
+#### The Real Problem
 
-### The Blocking Invocation Experience
+In complex agent workflows, execution takes time:
+- Step 1: Triage question (1 sec).
+- Step 2: Search web database (3 sec).
+- Step 3: Run Python analysis script (2 sec).
+- Step 4: Generate final 500-word report (7 sec).
 
-```text
-User clicks [Submit]: "Write an analysis of global renewable energy trends."
-  Seconds 1–5: Planning node running... (Blank screen)
-  Seconds 6–10: Web search tool running... (Blank screen)
-  Seconds 11–20: Generating 800-word response... (Blank screen)
-  Second 21: Full text suddenly pops onto screen.
-→ Terrible user experience; users assume the web app crashed!
-```
+If you use `graph.invoke()`, the client receives nothing for 13 seconds. The user assumes the app has crashed and refreshes the page.
+To build engaging modern AI products, you need:
+1. Real-time updates showing which node is running right now.
+2. Token-by-token streaming of the LLM's response as words are generated.
+3. Selective streaming that hides internal scratchpad data while exposing customer-facing thoughts.
 
-### The Solution: LangGraph Real-Time Streaming
+#### Why LangGraph Solves It
 
-LangGraph provides granular real-time streaming modes (`stream_mode="values"`, `stream_mode="updates"`, and `stream_mode="messages"`).
-
----
-
-## 2. The Live Sports Broadcast Analogy
-
-A football fan watching a live game does not wait until midnight to read a newspaper summary.
-
-### Delayed Newspaper vs Live TV Broadcast
-
-```text
-Newspaper Recap (invoke)    → Reader gets nothing until 6:00 AM the next day (High latency).
-
-Live Broadcast (streaming)  → 1. Scoreboard flashes: "Goal scored!" (stream_mode="updates")
-                              2. Full quarter statistics dashboard (stream_mode="values")
-                              3. Play-by-play radio commentator speaking word-by-word (stream_mode="messages")
-```
-
-### Mapping to LangGraph
-
-`updates` sends node delta events; `values` sends the complete state snapshot; `messages` streams real-time LLM token chunks.
+LangGraph provides flexible, native streaming via `graph.stream()` and `graph.astream()` with 3 distinct modes:
+- **`values`:** Emits the full state snapshot after every node completes.
+- **`updates`:** Emits only the specific delta (changes) returned by the node that just finished.
+- **`messages`:** Emits individual tokens and chat message chunks in real time as the LLM generates them.
 
 ---
 
-## 3. The Mechanism: The Three Core Stream Modes
+### Step 2: What Is It?
 
-LangGraph's `.stream()` and `.astream()` accept the `stream_mode` parameter.
+#### Simple Explanation
 
-### Core Streaming Modes
+Think of a **package delivery tracking app**:
+- **`values` Mode (Full Status Report):** Every time the driver checks in, the app sends you the full package summary: *Location: Warehouse 4, Weight: 2kg, ETA: 3 PM*.
+- **`updates` Mode (Delta Notifications):** The app sends you only the latest event: *Driver just scanned barcode at exit gate*.
+- **`messages` Mode (Live CCTV Audio):** You listen to the driver talking over the radio word by word in real time.
+
+#### Streaming Modes Comparison
+
+| Mode | Parameter | What It Emits | Best For |
+| :--- | :--- | :--- | :--- |
+| **Values** | `stream_mode="values"` | The complete state dictionary after each step. | Real-time state synchronization, debugging, updating UI state stores. |
+| **Updates** | `stream_mode="updates"` | A dictionary `{node_name: {updated_keys}}`. | Progress bars, step indicators ("Searching...", "Generating..."). |
+| **Messages** | `stream_mode="messages"` | Raw `(AIMessageChunk, metadata)` tuples. | Typing / typewriter text streaming effect in chat boxes. |
+
+---
+
+### Step 3: Real-World Example
+
+#### AI Research Assistant with Live Progress Cards
+
+Imagine an AI report generator in a web browser:
+- **What the user sees:**
+  1. Second 1: A status pill appears: *"Planning research strategy..."* (`stream_mode="updates"`).
+  2. Second 3: The status pill changes to: *"Reading 5 web sources..."*.
+  3. Second 5: A card opens and the text starts streaming word-by-word like ChatGPT (`stream_mode="messages"`).
+- **What it outputs:** Instant visual feedback that keeps the user engaged throughout the entire 15-second process.
+
+---
+
+### Step 4: How Does It Work?
+
+1. **Call `graph.stream()`:** Pass the input payload and your chosen `stream_mode`.
+   ```python
+   for chunk in graph.stream(input_payload, stream_mode="updates"):
+       print(chunk)
+   ```
+2. **Combine Modes:** You can pass multiple modes simultaneously: `stream_mode=["updates", "messages"]`.
+3. **Async Streaming:** In web backends, use `async for chunk in graph.astream()` to avoid blocking the server event loop.
+
+---
+
+### Step 5: Code Example
+
+Here is a complete, runnable example demonstrating `values` and `updates` streaming modes in LangGraph:
 
 ```python
-# 1. stream_mode="values"
-# Yields the COMPLETE state dictionary after each node finishes
-for state_snapshot in app.stream(inputs, stream_mode="values"):
-    print("Full Message Count:", len(state_snapshot["messages"]))
+from typing import TypedDict, Annotated, List
+import operator
+from langgraph.graph import StateGraph, START, END
 
-# 2. stream_mode="updates"
-# Yields ONLY the partial update emitted by each node: {node_name: {channel: val}}
-for node_update in app.stream(inputs, stream_mode="updates"):
-    for node_name, update_dict in node_update.items():
-        print(f"Node '{node_name}' finished: {update_dict}")
+# 1. State definition
+class PipelineState(TypedDict):
+    step_history: Annotated[List[str], operator.add]
+    current_action: str
+    output: str
 
-# 3. stream_mode="messages"
-# Yields token-by-token AIMessageChunk instances as LLMs generate them!
-for msg_chunk, metadata in app.stream(inputs, stream_mode="messages"):
-    if msg_chunk.content:
-        print(msg_chunk.content, end="", flush=True)
-```
+# 2. Node definitions
+def step_research(state: PipelineState) -> dict:
+    return {
+        "step_history": ["Completed Research"],
+        "current_action": "Synthesizing Facts"
+    }
 
----
+def step_draft(state: PipelineState) -> dict:
+    return {
+        "step_history": ["Drafted Article"],
+        "current_action": "Reviewing Guidelines"
+    }
 
-## 4. Diagram: Streaming Modes Output Granularity
+def step_finalize(state: PipelineState) -> dict:
+    return {
+        "step_history": ["Finalized"],
+        "current_action": "Done",
+        "output": "Executive summary is ready."
+    }
 
-### Granularity Comparison
+# 3. Build Graph
+builder = StateGraph(PipelineState)
+builder.add_node("research", step_research)
+builder.add_node("draft", step_draft)
+builder.add_node("finalize", step_finalize)
 
-```text
-Graph Execution Flow: [START] ──▶ [search_node] ──▶ [writer_node (LLM)] ──▶ [END]
-                                         │                    │
-                                         ▼                    ▼
-┌────────────────────────────────────────────────────────────────────────────────────────┐
-│ stream_mode="updates"                                                                  │
-│ Chunk 1: {"search_node": {"docs": ["Doc A"]}}                                          │
-│ Chunk 2: {"writer_node": {"messages": [AIMessage("Global solar capacity...")]}}        │
-├────────────────────────────────────────────────────────────────────────────────────────┤
-│ stream_mode="values"                                                                   │
-│ Snapshot 1: {"query": "Solar", "docs": ["Doc A"], "messages": []}                      │
-│ Snapshot 2: {"query": "Solar", "docs": ["Doc A"], "messages": [AIMessage(...)]}       │
-├────────────────────────────────────────────────────────────────────────────────────────┤
-│ stream_mode="messages"                                                                 │
-│ Stream 1: AIMessageChunk("Global") ──▶ Chunk(" solar") ──▶ Chunk(" capacity") ...      │
-└────────────────────────────────────────────────────────────────────────────────────────┘
-```
+builder.add_edge(START, "research")
+builder.add_edge("research", "draft")
+builder.add_edge("draft", "finalize")
+builder.add_edge("finalize", END)
 
----
-
-## 5. Code Walkthrough: Token-by-Token Streaming with stream_mode="messages"
-
-A complete async streaming agent delivering real-time tokens to stdout:
-
-```python
-# streaming_modes_demo.py
-import asyncio
-from langchain_core.messages import HumanMessage
-from langchain_core.tools import tool
-from langchain_openai import ChatOpenAI
-from langgraph.prebuilt import create_react_agent
-from langgraph.checkpoint.memory import MemorySaver
-
-@tool
-def get_energy_data(region: str) -> str:
-    """Fetch regional renewable energy metrics."""
-    return f"In 2024, {region} generated 48% of electricity from wind and solar."
-
-model = ChatOpenAI(model="gpt-4o", temperature=0)
-checkpointer = MemorySaver()
-app = create_react_agent(model, tools=[get_energy_data], checkpointer=checkpointer)
-
-async def stream_live_response(query: str):
-    config = {"configurable": {"thread_id": "stream_user_01"}}
-    inputs = {"messages": [HumanMessage(content=query)]}
-
-    print(f"User Query: {query}\n--- Live Stream ---")
-    # Stream token chunks in real time
-    async for chunk, metadata in app.astream(inputs, config=config, stream_mode="messages"):
-        # Check node provenance from metadata
-        node_source = metadata.get("langgraph_node", "")
-        if chunk.content:
-            print(chunk.content, end="", flush=True)
-
-    print("\n--- Stream Finished ---")
+graph = builder.compile()
 
 if __name__ == "__main__":
-    asyncio.run(stream_live_response("What is the renewable energy status in Europe?"))
+    initial_input: PipelineState = {
+        "step_history": [],
+        "current_action": "Starting",
+        "output": ""
+    }
+
+    print("=== 1. STREAMING WITH stream_mode='updates' ===")
+    # Updates mode emits only the delta returned by each node!
+    for chunk in graph.stream(initial_input, stream_mode="updates"):
+        node_name = list(chunk.keys())[0]
+        updates = chunk[node_name]
+        print(f"[NODE COMPLETED]: '{node_name}' -> Delta: {updates}")
+
+    print("\n=== 2. STREAMING WITH stream_mode='values' ===")
+    # Values mode emits the full state dictionary at every step!
+    for step_num, full_state in enumerate(graph.stream(initial_input, stream_mode="values")):
+        print(f"Step {step_num}: Action='{full_state.get('current_action')}' | History={full_state.get('step_history')}")
 ```
 
 ---
 
-## 6. Comparing stream_mode Options
+### Step 6: How Is It Used in Production?
 
-| Dimension | `stream_mode="updates"` | `stream_mode="values"` | `stream_mode="messages"` |
-|---|---|---|---|
-| Granularity | Node Completion | Node Completion | Token-by-Token |
-| Payload | `{node: {partial_diff}}` | `{complete_state_dict}` | `(AIMessageChunk, metadata)` |
-| Best For | Progress bars, node logs | State synchronization | Chat UI text typing effects |
-| Frequency | Once per node | Once per node | Tens of tokens per second |
-| Token Overhead | Lowest | Medium | High (requires async processing) |
+#### Production Patterns & Edge Cases
 
----
-
-## 7. Common Mistakes
-
-- **Using `stream_mode="values"` expecting token-by-token typing.** `"values"` only emits after a whole node finishes; use `"messages"` for token streaming.
-- **Forgetting that `stream_mode="messages"` yields tuples.** Each item yielded in `"messages"` mode is a 2-tuple: `(message_chunk, metadata)`.
-- **Mixing synchronous `.stream()` inside async FastAPI handlers.** Always use `async for chunk in app.astream(...)` to avoid blocking the event loop.
-- **Ignoring non-content chunks.** `AIMessageChunk` instances may contain `tool_call_chunks` with empty `.content`; check `if chunk.content:` before printing.
-- **Not passing `thread_id` when streaming checkpointed graphs.** Checkpointed graphs require a `thread_id` even during streaming.
+| Scenario | Production Challenge | Recommended Solution |
+| :--- | :--- | :--- |
+| **Client Disconnects Mid-Stream** | A user closes their browser tab while the graph is streaming. | Use `asyncio.CancelledError` handlers to safely terminate background LLM requests. |
+| **Internal Thoughts Leaking** | Emitting `stream_mode="messages"` reveals internal reasoning prompts to end-users. | Filter message chunks in your streaming generator, emitting only chunks where `node == "customer_facing_node"`. |
+| **Large Payload Network Lag** | Emitting full `values` state over WebSockets every 100ms saturates user bandwidth. | Use `stream_mode="updates"` over network connections to transmit lightweight deltas only. |
 
 ---
 
-## 8. Hands-On Exercises
+### Step 7: Quick Revision
 
-**Exercise 1:** Run a 3-node graph with `stream_mode="updates"` and print the name of each node as it finishes.
-
-**Exercise 2:** Run the same graph with `stream_mode="values"` and print the size of the state dictionary after each step.
-
-**Exercise 3:** Use `stream_mode="messages"` with `ChatOpenAI` and stream the LLM response token-by-token.
-
-**Exercise 4:** Extract `metadata["langgraph_node"]` from the `"messages"` stream to identify which agent emitted each token chunk.
-
-**Exercise 5:** Combine multiple stream modes using a list: `app.stream(inputs, stream_mode=["updates", "messages"])`.
+- `graph.stream()` emits real-time progress instead of waiting for full completion.
+- `stream_mode="values"` emits the complete state snapshot after each node.
+- `stream_mode="updates"` emits only the delta (new keys) produced by the finished node.
+- `stream_mode="messages"` streams LLM tokens word-by-word.
+- You can combine modes using a list: `stream_mode=["updates", "messages"]`.
 
 ---
 
-## 9. Interview Q&A
+### Step 8: Final Flow Diagram
 
-**Q: What are the three primary `stream_mode` options in LangGraph?**
-1. `"updates"`: Emits partial state dictionaries emitted by each node as it completes.
-2. `"values"`: Emits the entire, fully merged state dictionary after every node transition.
-3. `"messages"`: Emits fine-grained LLM token chunks (`AIMessageChunk`) in real time during model generation.
+```mermaid
+flowchart TD
+    StartNode([START]):::startStyle --> Node1["Node 1: Research"]:::nodeStyle
+    Node1 -->|stream_mode: updates| Emit1["Emit: {research: {status: done}}"]:::decisionStyle
+    Node1 --> Node2["Node 2: Draft"]:::nodeStyle
+    Node2 -->|stream_mode: messages| Emit2["Emit: Token Chunks ('Dear', ' valued', ' customer')"]:::decisionStyle
+    Node2 --> Node3["Node 3: Finalize"]:::nodeStyle
+    Node3 -->|stream_mode: values| Emit3["Emit: Full State Snapshot"]:::decisionStyle
+    Node3 --> EndNode([END]):::endStyle
 
-**Q: What is the structure of the data emitted when `stream_mode="messages"` is used?**
-It emits 2-tuples: `(chunk, metadata)`, where `chunk` is an `AIMessageChunk` (or `ToolMessageChunk`) and `metadata` is a dictionary containing execution details like `langgraph_node`, `langgraph_step`, and run IDs.
+    classDef startStyle fill:#0284c7,stroke:#38bdf8,stroke-width:2px,color:#ffffff;
+    classDef nodeStyle fill:#0f172a,stroke:#38bdf8,stroke-width:1px,color:#f8fafc;
+    classDef decisionStyle fill:#334155,stroke:#38bdf8,stroke-width:2px,color:#ffffff;
+    classDef endStyle fill:#10b981,stroke:#34d399,stroke-width:2px,color:#ffffff;
+```
 
-**Q: Can you stream both node updates and token chunks simultaneously?**
-Yes. Passing a list of stream modes (e.g. `stream_mode=["updates", "messages"]`) causes the generator to yield tuples of `(stream_mode, payload)`, allowing frontends to render both progress spinners and live token typing.
+---
 
-**Q: How does `stream_mode="messages"` handle tool calls generated by the LLM?**
-Instead of text in `.content`, the `AIMessageChunk` contains tool call fragments in `.tool_call_chunks`, allowing frontends to display "Agent is invoking search tool..." before tool execution begins.
+### Step 9: Quiz
 
-**Q: Why is streaming critical for Time-To-First-Token (TTFT) metrics?**
-In long-form LLM generation, waiting for the entire generation takes 10–20 seconds. Streaming yields the first token in ~200–500ms, providing instant visual feedback and vastly superior perceived application responsiveness.
+Try answering these questions to check your understanding:
+
+1. Which streaming mode emits only the specific key updates produced by the node that just finished?
+   - A) `stream_mode="values"`
+   - B) `stream_mode="updates"`
+   - C) `stream_mode="everything"`
+   - D) `stream_mode="raw"`
+
+2. Which streaming mode emits token chunks for a typewriter typing effect in a chat interface?
+   - A) `stream_mode="messages"`
+   - B) `stream_mode="tokens"`
+   - C) `stream_mode="keys"`
+   - D) `stream_mode="slow"`
+
+3. Why is `stream_mode="updates"` usually preferred over `stream_mode="values"` when streaming to mobile devices?
+   - A) Because values mode only works in Python 3.12
+   - B) Because updates mode sends only small deltas, conserving mobile data and network bandwidth
+   - C) Because mobile browsers cannot render dictionaries
+   - D) Because updates mode is free
+
+4. How do you stream updates asynchronously in a FastAPI backend?
+   - A) `async for chunk in graph.astream(payload, stream_mode="updates"):`
+   - B) `graph.stream_async()`
+   - C) `time.sleep(1)`
+   - D) `graph.fast_stream()`
+
+*Submit your answers (e.g. 1-B, 2-A, 3-B, 4-A) to verify your score!*

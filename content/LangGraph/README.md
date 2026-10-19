@@ -6,6 +6,8 @@ Welcome to the **LangGraph Mastery Curriculum**, the comprehensive, production-g
 
 ## 🏗️ Architecture Overview
 
+![LangGraph Multi-Agent Architecture](/images/langgraph/04-multi-agent-collaboration.jpg)
+
 ```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                           LANGGRAPH ECOSYSTEM                               │

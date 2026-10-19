@@ -1,250 +1,242 @@
-# 01 — Loading Documents
+# Lesson 1: Loading Documents
 
-> How real-world files — PDFs, HTML pages, plain text — get turned into the plain strings a RAG pipeline actually works with, and where each format quietly breaks that promise.
+Man, welcome to Phase 3! In previous lessons, we assumed documents were already clean Python strings. In the real world, enterprise knowledge is trapped inside PDFs, web pages, Word files, and spreadsheets.
 
----
-
-## Table of Contents
-
-1. [The Problem: Knowledge Doesn't Arrive as Clean Strings](#1-the-problem-knowledge-doesnt-arrive-as-clean-strings)
-2. [The Analogy: A Mailroom Sorting Different Envelopes](#2-the-analogy-a-mailroom-sorting-different-envelopes)
-3. [The Loader Abstraction](#3-the-loader-abstraction)
-4. [Loading a PDF with pypdf](#4-loading-a-pdf-with-pypdf)
-5. [Loading an HTML Page with BeautifulSoup](#5-loading-an-html-page-with-beautifulsoup)
-6. [Loading Plain Text and Markdown](#6-loading-plain-text-and-markdown)
-7. [Comparison Table: Loader Types](#7-comparison-table-loader-types)
-8. [Common Mistakes](#8-common-mistakes)
-9. [Hands-On Exercises](#9-hands-on-exercises)
-10. [Interview Q&A](#10-interview-qa)
+Let's learn how document loaders turn messy files into clean, structured data for your RAG pipeline.
 
 ---
 
-## 1. The Problem: Knowledge Doesn't Arrive as Clean Strings
+### Step 1: Why Do We Need This?
 
-Every example in Phase 1 and Phase 2 quietly assumed you already had documents as Python strings — `"Our refund policy allows returns within 30 days..."` just appeared, ready to embed. In the real world, nothing hands you that string directly. Your organization's actual knowledge lives scattered across:
+You cannot feed raw file bytes directly to an embedding model or LLM.
 
-- **PDFs** — policy documents, research papers, invoices, scanned reports
-- **HTML pages** — your public docs site, a wiki, a knowledge-base article rendered in a browser
-- **Word documents (`.docx`)** — internal memos, specs, contracts
-- **Plain text and Markdown (`.txt`, `.md`)** — READMEs, changelogs, notes
-- **Structured exports** — CSV rows, JSON blobs from a support-ticket system
+Consider what happens if you try to read documents naively:
+1. **Raw PDFs are layout instructions:** A PDF is not plain text. It is a set of drawing commands (*"draw character 'A' at coordinate (150, 420)"*). If you open a PDF with `open('file.pdf').read()`, you get unreadable binary garbage.
+2. **HTML contains website clutter:** Scraping web pages naively brings along navigation bars, cookie banners, footer links, and JavaScript scripts. If you embed this clutter, your retriever will match cookie policies instead of real content.
+3. **Scanned Documents are Images:** A scanned contract or invoice contains zero selectable text. It is just pixels. Without OCR (Optical Character Recognition), the loader extracts an empty string.
 
-Each of these is a *file format* — a specific set of rules for how bytes on disk represent text, images, layout, and metadata. A PDF is not "text with some formatting" the way a `.txt` file is; it's closer to a print instruction sheet ("draw the glyph 'R' at pixel position (120, 340)") that happens to often (not always) let you recover the underlying characters. An HTML page mixes the actual content with navigation bars, ads, scripts, and markup tags that have nothing to do with what a human would call "the text."
-
-**The problem this lesson solves:** before you can chunk anything (Phase 4), embed anything (Phase 2), or retrieve anything (Phase 5+), you first have to answer a much more basic question — *how do I reliably get plain, readable text out of whatever format this document happens to be in?* This step is called **document loading**, and it is the very first stage of the "Index" box from the Phase 1 four-stage diagram.
+Document loaders bridge the gap between raw files on disk and readable text in memory.
 
 ---
 
-## 2. The Analogy: A Mailroom Sorting Different Envelopes
+### Step 2: What Is It?
 
-**Real-world analogy:** picture a corporate mailroom that receives packages in every imaginable shape — thick manila envelopes, padded shipping boxes, thin greeting-card envelopes, oddly-shaped tubes for posters. The mailroom's job isn't to redesign every package into a single shape. Its job is to open *each* package using the technique appropriate to that shape — cut here for a box, tear along the perforation for an envelope, unscrew the cap for a tube — and place the *contents* (not the packaging) into one common, identically-shaped tray that goes to the next department.
+A **Document Loader** is a software component that reads a specific file format and outputs standardized **Document objects**.
 
-A document loader is the mailroom worker. It doesn't matter whether the "package" is a PDF, an HTML page, or a plain text file — a *different* opening technique is needed for each, because each is packaged completely differently at the byte level. But the output that lands in the tray — the loader's return value — is the same shape every time: plain text (plus a little structure, covered more in Lesson 3). Everything downstream in your RAG pipeline (cleaning, chunking, embedding) only ever has to deal with that one common tray shape. It never has to know or care whether the original was a PDF or an HTML page.
+Each standard Document object contains two fields:
+- `page_content`: The extracted string of human-readable text.
+- `metadata`: A dictionary holding context about the source (e.g., `{"source": "annual_report.pdf", "page": 4, "author": "Finance Team"}`).
 
-> 🧠 The one-sentence version: *"Different envelopes, same tray — the loader's whole job is to make every format disappear into one common shape before anything else touches it."*
+#### The Everyday Analogy: The Corporate Mailroom
+- The mailroom receives deliveries in all shapes: cardboard boxes, envelopes, wooden crates, and metal tubes.
+- The mailroom worker knows how to open each package: a box cutter for boxes, a letter opener for envelopes, a screwdriver for crates.
+- Once opened, the worker places only the actual contents into a standardized plastic delivery tray.
+- Downstream workers (cleaners, chunkers, embedders) only ever handle that clean, standard tray, without needing to know what the original container looked like.
 
 ---
 
-## 3. The Loader Abstraction
+### Step 3: Real-World Example
 
-Zooming in on what a loader actually does, the flow is always the same three steps, regardless of format:
+Imagine building an internal Q&A bot for a software company:
+
+- **Sources:**
+  1. Technical documentation hosted on an internal website (`docs.internal.net`).
+  2. Architecture decision records stored in Markdown (`/specs/*.md`).
+  3. Product requirement specifications written in Microsoft Word (`*.docx`).
+  4. Vendor contracts stored in multi-page PDFs (`contracts/*.pdf`).
+
+The document loading layer runs specialized parsers across each source:
+- An HTML loader strips navigation headers and extracts the main `<article>` body.
+- A Markdown loader preserves headings (`#`, `##`) to identify topics.
+- A Word loader extracts bulleted lists and tables.
+- A PDF loader reads page by page and records page numbers in the metadata.
+
+Every file ends up in the same unified format: `Document(page_content="...", metadata={...})`.
+
+---
+
+### Step 4: How Does It Work?
+
+Here is the document loading pipeline:
 
 ```
-   Input file           Parser library            Output
- (PDF / HTML /    ──▶  (format-specific     ──▶  Plain text +
-  .txt / .docx)         parsing logic)             basic structure
-                                                  (e.g. page number,
-                                                   heading tags)
+[Raw Sources]            [Specialized Parsers]             [Standard Document Output]
+PDF Files        ──►  pypdf / pdfplumber / PyMuPDF  ┐
+HTML Webpages    ──►  BeautifulSoup / Trafilatura   ├──►  Document(
+Word (.docx)     ──►  python-docx                   │       page_content="Clean text...",
+Plain / Markdown ──►  Path.read_text()              ┘       metadata={"source": "...", "page": 1}
+                                                          )
 ```
 
-1. **Input file** — bytes on disk (or in memory) in some specific format.
-2. **Parser library** — a piece of code that understands that format's internal rules well enough to extract the human-readable content. You almost never write this parsing logic yourself; you use a battle-tested library (`pypdf` for PDFs, `BeautifulSoup` for HTML) because correctly parsing something like the PDF specification from scratch is a multi-year undertaking.
-3. **Output: plain text + basic structure** — the loader hands back a string (or list of strings, e.g. one per page) plus whatever minimal structural information the format made available "for free" during parsing, like page numbers or heading tags. Note this output is *not yet clean* — that's the whole subject of Lesson 2 — and it's *not yet tagged with rich metadata* — that's Lesson 3. This lesson is purely about getting text *out*, however rough.
-
-Every RAG framework (LangChain's `DocumentLoader`, LlamaIndex's `Reader` classes, or a hand-rolled function) is built around exactly this abstraction: one small class or function per format, all returning the same shape of output so the rest of the pipeline can stay format-agnostic.
+1. **Format Identification:** The loader checks the file extension or MIME type.
+2. **Extraction Engine:** The loader invokes a format-specific library:
+   - For PDFs: `pdfplumber` or `pypdf` extracts text layer glyphs.
+   - For HTML: `BeautifulSoup4` extracts text inside targeted semantic tags (like `<main>` or `<article>`).
+   - For Scanned PDFs: `pytesseract` or cloud OCR converts pixels into letters.
+3. **Metadata Enrichment:** The loader attaches origin data (file path, creation date, page number) so retrieved chunks can cite their sources later.
 
 ---
 
-## 4. Loading a PDF with pypdf
+### Step 5: Code Example
 
-`pypdf` is a pure-Python library for reading (and writing) PDF files. Install it with `pip install pypdf`.
+Here is a clean Python script showing loaders for Markdown, HTML, and PDF files:
 
 ```python
-from pypdf import PdfReader
+"""
+Document Loaders for PDF, HTML, and Plain Text
+"""
 
-reader = PdfReader("employee_handbook.pdf")
-
-print(f"Number of pages: {len(reader.pages)}")
-
-# .pages is a list-like object; each entry is one page of the PDF.
-# We loop with enumerate() so we get both the page's position (starting at 0)
-# and the page object itself in each iteration.
-for page_number, page in enumerate(reader.pages):
-    text = page.extract_text()
-    print(f"--- Page {page_number + 1} ---")
-    print(text[:200])  # just the first 200 characters, to keep output short
-```
-
-Example output (truncated for readability):
-
-```
-Number of pages: 12
---- Page 1 ---
-Employee Handbook
-Section 1: Welcome
-Welcome to the company. This handbook outlines our
-policies regarding time off, conduct, and benefits...
---- Page 2 ---
-Section 2: Time Off Policy
-Full-time employees accrue 1.5 days of paid time off
-per month, up to a maximum of...
-```
-
-Notice `extract_text()` is doing real work here: internally, a PDF stores text as a sequence of positioned glyph-drawing instructions, not as a linear string with line breaks the way a `.txt` file does. `pypdf` reconstructs a best-effort plain-text version by reading those glyph positions and inferring where words, lines, and paragraphs probably are. This inference is usually good for simple, single-column documents — and gets noticeably worse for multi-column layouts, tables, and scanned (image-only) PDFs, which is exactly the gotcha covered in the comparison table below.
-
----
-
-## 5. Loading an HTML Page with BeautifulSoup
-
-`BeautifulSoup` (from the `beautifulsoup4` package, `pip install beautifulsoup4`) parses HTML into a navigable tree structure and lets you pull out just the text, while discarding markup.
-
-```python
-import requests
+from dataclasses import dataclass
+from typing import Dict, Any, List
+from pathlib import Path
 from bs4 import BeautifulSoup
+import pypdf
 
-response = requests.get("https://docs.example.com/refund-policy")
-soup = BeautifulSoup(response.text, "html.parser")
+@dataclass
+class Document:
+    page_content: str
+    metadata: Dict[str, Any]
 
-# .find() returns the first matching tag, or None if nothing matches.
-# Here we grab the main content area and ignore nav bars / footers / scripts.
-main_content = soup.find("main")
+class SimpleDocLoader:
+    @staticmethod
+    def load_text_or_markdown(file_path: Path) -> Document:
+        """Loads plain text or markdown files."""
+        content = file_path.read_text(encoding="utf-8")
+        return Document(
+            page_content=content,
+            metadata={"source": str(file_path), "format": file_path.suffix}
+        )
 
-# get_text() walks the tag tree and concatenates every piece of visible text
-# it finds, inserting the given separator between text nodes that were
-# originally in different tags.
-text = main_content.get_text(separator="\n", strip=True)
-print(text[:300])
+    @staticmethod
+    def load_html(html_content: str, source_url: str) -> Document:
+        """Strips HTML clutter (scripts, nav, styles) and extracts clean text."""
+        soup = BeautifulSoup(html_content, "html.parser")
+        
+        # Remove noisy elements
+        for element in soup(["script", "style", "nav", "footer", "header"]):
+            element.extract()
+            
+        clean_text = soup.get_text(separator="\n").strip()
+        return Document(
+            page_content=clean_text,
+            metadata={"source": source_url, "format": "html"}
+        )
+
+    @staticmethod
+    def load_pdf(pdf_path: Path) -> List[Document]:
+        """Loads a PDF page by page with page number metadata."""
+        docs = []
+        reader = pypdf.PdfReader(str(pdf_path))
+        for page_idx, page in enumerate(reader.pages):
+            text = page.extract_text() or ""
+            docs.append(
+                Document(
+                    page_content=text.strip(),
+                    metadata={"source": str(pdf_path), "page": page_idx + 1}
+                )
+            )
+        return docs
+
+if __name__ == "__main__":
+    # Example HTML loading
+    raw_html = """
+    <html>
+      <head><title>SkillVault Docs</title></head>
+      <body>
+        <nav><a href="/home">Home</a></nav>
+        <main>
+          <h1>API Authentication</h1>
+          <p>Pass your API key in the Authorization header as Bearer token.</p>
+        </main>
+        <footer>Copyright 2026</footer>
+      </body>
+    </html>
+    """
+    doc = SimpleDocLoader.load_html(raw_html, "https://docs.skillvault.com/auth")
+    print(f"Loaded Metadata: {doc.metadata}")
+    print(f"Loaded Content:\n{doc.page_content}")
 ```
 
-Example output:
+---
 
+### Step 6: How Is It Used in Production?
+
+| Loader Type | Common Production Bug | How Engineers Fix It | Impact |
+| :--- | :--- | :--- | :--- |
+| **PDF: Multi-Column Layouts** | Naive readers read horizontally across columns, scrambling sentences | Use layout-aware parsers like `pdfplumber`, `PyMuPDF`, or `LlamaParse` | Preserves correct sentence reading order |
+| **PDF: Scanned Images** | Loader returns empty strings for scanned receipts or signed contracts | Route empty text pages through an OCR fallback (e.g. AWS Textract, Tesseract) | Enables search over scanned documents |
+| **HTML: Boilerplate Pollution** | Navbars, headers, and disclaimers dominate the top vector matches | Use extraction libraries like `Trafilatura` or target CSS selectors (`article`, `main`) | 35% higher search relevance |
+| **Large File OOM (Out Of Memory)** | Loading a 2GB log file into RAM at once crashes the container | Use generator streams (`lazy_load()`) to process documents page by page | Stable memory usage under 100MB |
+
+---
+
+### Step 7: Quick Revision
+
+- **Loaders Standardize Data:** They turn various file formats into standard `Document(page_content, metadata)` objects.
+- **Always Keep Metadata:** Store file name, URL, and page number so users can verify the source of generated answers.
+- **Watch Out for Noisy HTML:** Strip navigation bars, scripts, and footer links before embedding.
+- **Handle Scanned PDFs:** If `extract_text()` returns empty or whitespace, trigger OCR.
+- **Interview Answer:** *"Document loaders parse diverse file formats into standardized document objects containing raw text and metadata. In production, layout-aware PDF parsers and HTML cleaners ensure the extracted text preserves logical reading order without UI noise."*
+
+---
+
+### Step 8: Final Flow Diagram
+
+```mermaid
+flowchart TD
+    classDef startEnd fill:#2563eb,stroke:#1d4ed8,color:#ffffff,stroke-width:2px;
+    classDef decision fill:#f59e0b,stroke:#d97706,color:#ffffff,stroke-width:2px;
+    classDef success fill:#10b981,stroke:#059669,color:#ffffff,stroke-width:2px;
+    classDef failure fill:#ef4444,stroke:#dc2626,color:#ffffff,stroke-width:2px;
+
+    A([Incoming File on Disk]) --> B{What is the file format?}:::decision
+
+    B -- Plain Text / Markdown --> C[Read UTF-8 Text Directly]
+    B -- HTML Page --> D[Strip nav/footer/scripts with BeautifulSoup]
+    B -- Word .docx --> E[Extract paragraphs & tables via python-docx]
+    B -- PDF Document --> F[Read with Layout-Aware PDF Parser]
+
+    F --> G{Is extracted text empty?}:::decision
+    G -- Yes: Scanned PDF --> H[Run OCR Engine Textract/Tesseract]:::failure
+    G -- No: Digital PDF --> I[Extract Page Text & Page Numbers]:::success
+    H --> I
+
+    C --> J[Construct Standard Document Object]:::success
+    D --> J
+    E --> J
+    I --> J
+
+    J --> K([Pass to Preprocessing & Chunking]):::startEnd
 ```
-Refund Policy
-Our refund policy allows returns within 30 days of purchase, provided
-the item is unused and in its original packaging.
-Digital products are non-refundable once downloaded.
-```
-
-Two details worth internalizing here. First, `soup.find("main")` (or `soup.find("article")`, or a specific CSS class) is doing real filtering work — a raw HTML page is full of `<nav>`, `<header>`, `<footer>`, `<script>`, and `<aside>` tags that are not "the content" in any meaningful sense; a naive `soup.get_text()` on the *entire* page would pull in navigation menu text, cookie banners, and JavaScript source code right alongside the actual article. Second, `get_text(separator="\n", strip=True)` is a deliberate choice: without a separator, text from adjacent tags (e.g. a `<h1>` immediately followed by a `<p>`) can get concatenated with no space or newline between them at all, producing garbled output like `"Refund PolicyOur refund policy allows..."`.
 
 ---
 
-## 6. Loading Plain Text and Markdown
+### Step 9: Quiz
 
-Plain text and Markdown files require no parsing library at all — the bytes on disk already *are* the characters, in order, with no packaging to unwrap. The only real subtlety is character encoding.
+Test your understanding of document loading. Submit your answers as `1-A, 2-B, 3-C, 4-D`:
 
-```python
-# encoding="utf-8" is explicit here rather than relying on Python's platform
-# default, because a file saved with a different encoding (e.g. Windows'
-# legacy "cp1252") will otherwise raise a UnicodeDecodeError or, worse,
-# silently produce garbled characters instead of raising anything at all.
-with open("release_notes.md", "r", encoding="utf-8") as f:
-    text = f.read()
+**1. What are the two core fields of a standardized Document object in modern RAG frameworks?**
+- A) `file_size` and `encryption_key`.
+- B) `page_content` (the extracted text) and `metadata` (source, page number, etc.).
+- C) `username` and `ip_address`.
+- D) `gpu_id` and `driver_version`.
 
-print(text[:200])
-```
+**2. Why does loading an HTML page using raw text reading result in poor RAG performance?**
+- A) HTML files cannot be opened in Python.
+- B) Raw HTML contains navigation links, CSS styles, and scripts that pollute vector embeddings with irrelevant noise.
+- C) HTML files automatically delete the vector database.
+- D) Embedding models only read English, but HTML is in Spanish.
 
-Example output:
+**3. What should a production PDF loading pipeline do when a PDF page returns zero text characters?**
+- A) Delete the entire file permanently.
+- B) Trigger an Optical Character Recognition (OCR) engine to extract text from the scanned image.
+- C) Crash the ingestion server.
+- D) Replace the missing text with random Wikipedia articles.
 
-```
-# Release Notes — v2.4.0
+**4. Why is metadata (such as page number and file name) critical to preserve during document loading?**
+- A) It allows the final answer to provide verifiable citations and links back to the original source.
+- B) Metadata is required to turn on the computer monitor.
+- C) Metadata makes the vector embedding smaller in memory.
+- D) Metadata is only used to send marketing emails.
 
-## New Features
-- Added dark mode support
-- Improved search relevance ranking
-
-## Bug Fixes
-- Fixed a crash when...
-```
-
-Markdown loading is intentionally "dumb" here — we are not stripping the `#` headings or `-` bullets at this stage. That's a *cleaning* decision (Lesson 2), not a *loading* decision: Markdown's lightweight syntax is arguably still useful signal (a `#` heading tells you something structural about the text that a stripped-down version would lose), so the loader's job is simply to get the raw characters out correctly, encoding intact, and defer any judgment calls about what to keep or discard to the next stage of the pipeline.
-
----
-
-## 7. Comparison Table: Loader Types
-
-| Format | Library | What you get | Common gotchas |
-|--------|---------|---------------|-----------------|
-| PDF | `pypdf` (or `pdfplumber`, `PyMuPDF`) | Per-page plain text, best-effort reconstructed | Multi-column layouts get interleaved out of reading order; tables collapse into jumbled text; scanned/image-only PDFs return empty strings (need OCR, e.g. `pytesseract`) |
-| HTML | `BeautifulSoup` (+ `requests` for live pages) | Visible text from selected tags, tree-navigable | Navigation/ads/scripts pollute output if you grab the whole page instead of the main content area; JavaScript-rendered content (SPAs) may not be in the raw HTML at all |
-| Plain text (`.txt`) | built-in `open()` | Exact characters, in order | Wrong or unspecified encoding silently corrupts non-ASCII characters (accents, curly quotes, em-dashes) |
-| Markdown (`.md`) | built-in `open()` | Exact characters including syntax (`#`, `-`, `` ``` ``) | Same encoding risk as `.txt`; deciding whether to strip Markdown syntax is a cleaning-stage decision, not a loading-stage one |
-| Word (`.docx`) | `python-docx` | Paragraph-level text, some style info | Tables and embedded images need separate handling; tracked-changes markup can leak into extracted text if not handled |
-
----
-
-## 8. Common Mistakes
-
-**Mistake 1: Assuming PDF text extraction preserves reading order.** A PDF has no inherent concept of "read this text, then this text" the way a `.txt` file's line-by-line layout implies one. `pypdf` and similar libraries do their best to infer order from glyph positions, but a two-column research paper or a page with sidebars and pull-quotes can easily come out with paragraphs interleaved mid-sentence. If you feed that directly into a chunker without ever glancing at the extracted output, you can end up embedding chunks that read as nonsense to a human — and to the LLM.
-
-**Mistake 2: Ignoring encoding issues.** Opening a text file with the wrong encoding (or none specified, relying on a platform default) doesn't always crash loudly — it can silently turn `"café"` into `"cafÃ©"` or drop characters entirely. This kind of corruption is especially insidious because it often survives all the way through cleaning, chunking, and embedding, only surfacing much later as "weirdly bad" retrieval or generation quality that's hard to trace back to its actual cause: a loading bug from Phase 3.
-
-**Interview angle:** a favorite follow-up question after "how do you load documents into a RAG pipeline?" is "what could go wrong with a PDF specifically?" Interviewers are checking whether you understand that PDFs are a *layout* format, not a *text* format — if your answer is "you just call `extract_text()` and you're done," that signals you haven't hit the multi-column, scanned-document, or garbled-table cases that show up constantly in production RAG systems.
-
----
-
-## 9. Hands-On Exercises
-
-### Exercise 1 — Compare raw output across formats
-
-**Goal:** See the "different envelopes, same tray" idea firsthand.
-
-Pick (or create) three small files: a one-page PDF, a saved HTML page, and a `.txt` file, all containing roughly the same short piece of content (e.g. type the same paragraph into each format). Load all three with the code from this lesson and print the results side by side. Note any differences in whitespace, line breaks, or stray characters between the three outputs, even though the underlying content is "the same."
-
-### Exercise 2 — Break a PDF on purpose
-
-**Goal:** Directly observe the reading-order gotcha.
-
-Find (or create) a two-column PDF — many academic papers on arXiv are two-column. Run `pypdf`'s `extract_text()` on it and read the output carefully. Identify at least one spot where text from the two columns got interleaved out of order. Write one sentence describing how you would detect this automatically in a pipeline processing thousands of PDFs (hint: think about what a "reasonable" sentence looks like versus a jumbled one).
-
-### Exercise 3 — Write a tiny format-dispatching loader
-
-**Goal:** Build the seed of a real loader abstraction.
-
-Write a function `load_document(path: str) -> str` that looks at the file extension (`.pdf`, `.html`, `.txt`, `.md`) and calls the appropriate loading logic from this lesson, returning plain text in every case. This is intentionally the simplest possible version of the "loader abstraction" from Section 3 — real frameworks add error handling, page-level metadata (Lesson 3), and many more formats, but the dispatching idea is the same.
-
----
-
-## 10. Interview Q&A
-
-### Q1. Why can't you just treat every document type the same way when loading it?
-
-**Answer:** Because each file format packages its content completely differently at the byte level — a PDF encodes positioned glyph-drawing instructions, HTML encodes a tree of markup tags mixed with content, and plain text is just characters in order. A loader has to use format-specific parsing logic to correctly recover the underlying text from each, even though the *output* of every loader should converge on the same shape: plain text plus a little structure.
-
----
-
-### Q2. What's the biggest risk when extracting text from a PDF?
-
-**Answer:** Losing correct reading order. PDFs have no inherent linear-text structure; multi-column layouts, sidebars, and tables can get extracted with content interleaved or jumbled, because the extraction library is inferring order from glyph positions rather than reading a format that guarantees order the way plain text does. Scanned (image-only) PDFs are an even more extreme case — there's no text layer at all, and you'd need OCR before any of this lesson's code would return anything.
-
----
-
-### Q3. Why did we grab `soup.find("main")` instead of just calling `get_text()` on the whole page?
-
-**Answer:** A raw HTML page usually contains navigation menus, footers, ads, and script tags that aren't part of "the content" a human would want retrieved. Calling `get_text()` on the entire page would pull all of that text in indiscriminately, polluting whatever gets embedded and retrieved later. Scoping to the main content area (or a specific CSS class/id) first is a simple, high-leverage filtering step.
-
----
-
-### Q4. What can go wrong if you don't specify an encoding when opening a text file?
-
-**Answer:** Python may fall back to a platform-default encoding that doesn't match how the file was actually saved. This can raise a `UnicodeDecodeError`, or — more dangerously — silently produce corrupted characters (e.g. mangled accented letters or curly quotes) without raising any error at all, corruption that then propagates invisibly through every later stage of the pipeline.
-
----
-
-### Q5. Is document loading a one-time or ongoing task in a RAG system?
-
-**Answer:** It maps to the "Index" stage from Phase 1's four-stage flow, so it happens whenever the underlying document collection changes — not on every user query. In practice this means loading logic needs to be re-run whenever documents are added, updated, or replaced, which is why it's usually built as a standalone, re-runnable ingestion step rather than code embedded in the query-time path.
-
----
-
-> 🧠 **Memory hook:** "A loader doesn't care what envelope the package came in — PDF, HTML, or plain text, everything lands in the same tray: plain text, ready for the next stage."
+*(Submit your answers to check your progress!)*

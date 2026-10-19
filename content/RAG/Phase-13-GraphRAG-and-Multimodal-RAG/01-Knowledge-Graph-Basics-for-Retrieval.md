@@ -1,200 +1,219 @@
-# 01 — Knowledge Graph Basics for Retrieval
+# Lesson 1: Knowledge Graph Basics for Retrieval (GraphRAG)
 
-> Why vector search struggles with relationship-style questions, and how to extract a simple knowledge graph from text using an LLM.
+Man, welcome to Phase 13! Vector search is amazing for matching topics, but it has a blind spot: **relationship questions**.
 
----
+If a user asks: *"Who reports to the person who manages the Sydney office?"*, vector search fails because no single document is "about" that question. The facts are split across multiple people and departments.
 
-## Table of Contents
-
-1. [The Problem: Similarity Isn't Relationship](#1-the-problem-similarity-isnt-relationship)
-2. [The Analogy: Index Cards vs. a Family Tree](#2-the-analogy-index-cards-vs-a-family-tree)
-3. [Entities and Relationships as Nodes and Edges](#3-entities-and-relationships-as-nodes-and-edges)
-4. [Extracting a Knowledge Graph from Text with an LLM](#4-extracting-a-knowledge-graph-from-text-with-an-llm)
-5. [Common Mistakes](#5-common-mistakes)
-6. [Hands-On Exercises](#6-hands-on-exercises)
-7. [Interview Q&A](#7-interview-qa)
+Let's explore **Knowledge Graphs** and how GraphRAG turns unstructured documents into connected webs of entities and relationships.
 
 ---
 
-## 1. The Problem: Similarity Isn't Relationship
+### Step 1: Why Do We Need This?
 
-Every retrieval technique in Phases 5 through 9 works the same way at its core: embed the query, embed the documents, find the documents whose vectors are closest to the query's vector. This is powerful for one very specific kind of question — "find me the passage that's *about the same thing* as this question." For most support tickets, product docs, and knowledge-base lookups, that's exactly what you need.
+Vector databases store chunks of text independently. They know that "Sydney" and "Australia" are related words, but they do NOT know exact structural relationships:
+- If Doc A says: *"Marcus Vance is the General Manager of the Sydney branch."*
+- And Doc B says: *"Sarah and Liam are direct reports to Marcus Vance."*
 
-But consider a question like: *"Who reports to the person who manages the Sydney office?"*
+When a user asks: *"Who works under the leader of the Sydney branch?"*:
+- Pure vector search finds Doc A (matches "Sydney branch") and Doc B (matches "works under").
+- But the vector retriever has **no structural brain** to connect that the "leader" in Doc A is the exact same Marcus Vance in Doc B!
+- Worse, if you ask global questions like *"What are the top 3 supply chain risks across all our 50 global factories?"*, vector search only fetches 4 local factory chunks and misses the big picture.
 
-There is no single chunk of text that is "about" this question in the way vector search understands "about." Answering it requires two separate facts, chained together: (1) *someone* manages the Sydney office, and (2) *someone else* reports to that person. Even if both facts exist somewhere in your document store — maybe in an org chart PDF and a separate HR wiki page — vector similarity has no mechanism for connecting them. It can retrieve a chunk that mentions "Sydney office manager" and a chunk that mentions "reports to," but it has no way to know that the *specific person* named in the first chunk is the *same specific person* referenced in the second. Similarity search finds topically related text; it does not follow a chain of facts from one entity to another.
-
-This is a structural gap, not a tuning problem. No amount of better chunking (Phase 4) or better embeddings (Phase 2) fixes it, because the underlying representation — a chunk of text scored by how similar it is to the query — was never designed to represent *relationships between specific entities*. You need a different data structure for that: one built explicitly around entities and the connections between them.
-
----
-
-## 2. The Analogy: Index Cards vs. a Family Tree
-
-**Real-world analogy:** imagine two different ways of organizing information about a large extended family.
-
-The first is a shoebox full of index cards, one per person, sorted by topic — cards about "people who live in Sydney," cards about "people who work in sales," cards about "people born in the 1980s." If you want to know who lives in Sydney, you flip to that pile and you're done in seconds. This is a **vector store**: everything is organized by *what it's about*, and finding things that are about the same topic is fast and easy.
-
-The second is an actual family tree drawn on a wall — each person is a labeled box, and lines connect parents to children, spouses to each other, siblings to siblings. There's no "pile of Sydney people" here at all. But if someone asks "who is my grandmother's brother's daughter?", you don't need a pile for that question — you just trace the lines: grandmother → her brother → his daughter. This is a **knowledge graph**: everything is organized by *how it connects to everything else*, and answering multi-hop relationship questions is a matter of following edges, not searching piles.
-
-Neither organization is strictly better — they're built for different questions. A shoebox of topic-sorted cards is useless for "trace this family lineage," and a family tree is a slow, clumsy way to find "everyone who lives in Sydney" (you'd have to walk every single box on the wall). RAG systems, similarly, reach for a knowledge graph specifically when the questions being asked are relationship-shaped, not topic-shaped.
-
-> 🧠 Reach for this analogy whenever you need a one-line answer to "why not just use the vector store for everything?": *"A vector store is a shoebox of cards sorted by topic; a knowledge graph is a family tree — one finds what's similar, the other finds what's connected."*
+We need a data structure that explicitly tracks **Entities** (people, places, products) and the **Relationships** connecting them: a **Knowledge Graph**.
 
 ---
 
-## 3. Entities and Relationships as Nodes and Edges
+### Step 2: What Is It?
 
-A knowledge graph represents information as two things:
+A **Knowledge Graph** represents information as a network of **Nodes** and **Edges**:
+- **Nodes (Entities):** The nouns—people, companies, cities, technologies (e.g., `Priya`, `Sydney Office`, `PostgreSQL`).
+- **Edges (Relationships):** The verbs connecting nodes (e.g., `MANAGES`, `LOCATED_IN`, `BUILT_BY`).
+- **Triples:** The atomic unit of knowledge: `(Subject) ──[Predicate]──► (Object)`.
 
-- **Entities** — the "things" being talked about: people, companies, products, offices, projects. These become **nodes** in the graph.
-- **Relationships** — how two entities are connected: "manages," "reports to," "works at," "is located in." These become **edges** connecting nodes.
-
-The atomic unit of a knowledge graph is the **triple**: `(entity, relation, entity)`. For example, the sentence *"Priya manages the Sydney office"* becomes the triple `("Priya", "manages", "Sydney office")`. A whole knowledge graph is just a large collection of these triples, layered on top of each other so that the same entity can appear in many triples — which is exactly what makes multi-hop traversal possible (Lesson 02 covers the traversal itself; this lesson is about building the graph in the first place).
-
-In Python, the standard tool for representing and working with this kind of node-and-edge structure is `networkx`, a general-purpose graph library. A **directed graph** (`networkx.DiGraph`) is the right choice here, because relationships usually have a direction that matters — "Priya manages the Sydney office" is not the same statement as "the Sydney office manages Priya."
-
-```python
-import networkx as nx
-
-# A directed graph: edges have a "from" and a "to."
-graph = nx.DiGraph()
-
-# add_edge(source, target, **attributes) creates both nodes automatically if
-# they don't already exist, and stores any keyword arguments as edge data --
-# here we use `relation` to label what kind of connection this edge represents.
-graph.add_edge("Priya", "Sydney office", relation="manages")
-graph.add_edge("Marcus", "Priya", relation="reports to")
-
-print(graph.number_of_nodes())  # 3: Priya, Sydney office, Marcus
-print(graph.number_of_edges())  # 2
+```
+(Priya) ──[MANAGES]──► (Sydney Office)
+   ▲
+   │ [REPORTS_TO]
+(Liam)
 ```
 
-Notice that `add_edge` is doing double duty: it creates the two nodes ("Priya", "Sydney office") the first time they're mentioned, and it creates the edge between them, tagged with a `relation` attribute so you know *what kind* of connection it is (as opposed to just *that* a connection exists). This is the entire mechanical foundation of a knowledge graph — everything else in this phase is built out of `add_edge` calls like this one, extracted automatically from text instead of typed by hand.
+#### The Everyday Analogy: Index Cards vs A Family Tree
+- **A Vector Store is a box of index cards:** You have piles of cards sorted by topics ("vacation", "pricing", "engineering"). If you want cards about "vacation", you grab the pile.
+- **A Knowledge Graph is a family tree on a wall:** You don't have topic piles. Instead, you have people with lines connecting parents, children, and cousins.
+- If someone asks *"Who is my grandmother's brother's daughter?"*, you don't search a pile of words—you **trace the lines** on the wall!
 
 ---
 
-## 4. Extracting a Knowledge Graph from Text with an LLM
+### Step 3: Real-World Example
 
-Building a knowledge graph by hand — reading every document and manually typing `add_edge` calls — doesn't scale past a toy example. In practice, you use an LLM to read a passage of text and extract the triples for you, the same way earlier phases used an LLM to generate answers from retrieved context.
+Imagine searching an enterprise pharmaceutical research database:
 
-The prompting pattern is straightforward: ask the model to read a passage and return a **JSON list of `[subject, relation, object]` triples**, then parse that JSON and load it into a graph. Asking for JSON specifically (rather than free-form prose) makes the output mechanically parseable — you don't want to be regex-matching sentences like "Priya manages the Sydney office" back out of a paragraph of the model's own commentary.
+- **Unstructured Text:**
+  - Doc 1: *"Drug-A is an inhibitor of Protein-X."*
+  - Doc 2: *"Overexpression of Protein-X is linked to Glioblastoma tumors."*
+  - Doc 3: *"Drug-A causes severe cardiac toxicity when combined with Statin-B."*
 
-```python
-import json
-import networkx as nx
-from anthropic import Anthropic
+When an oncologist queries: *"Can we prescribe Drug-A to a glioblastoma patient taking Statin-B?"*
+- A standard vector search retrieves pieces of Doc 1 and Doc 2, and might miss the warning in Doc 3.
+- A **Knowledge Graph** links:
+  `Drug-A` ──[INHIBITS]──► `Protein-X` ──[CAUSES]──► `Glioblastoma`
+  `Drug-A` ──[TOXIC_INTERACTION_WITH]──► `Statin-B`
+- The system instantly flags the fatal drug interaction and saves a patient's life!
 
-client = Anthropic()
+---
 
-paragraph = """
-Priya Anand manages the Sydney office. Marcus Chen reports to Priya.
-The Sydney office is part of the APAC division, which Sarah Lin leads.
-"""
+### Step 4: How Does It Work?
 
-extraction_prompt = f"""Read the passage below and extract every factual
-relationship as a (subject, relation, object) triple.
+Here is how an LLM extracts knowledge graph triples from raw document text:
 
-Rules:
-- Return ONLY a JSON array of arrays, each inner array exactly
-  [subject, relation, object].
-- Use short, consistent entity names (e.g. "Priya Anand", not "she" or "Priya").
-- Use a short lowercase verb phrase for relation (e.g. "manages", "reports to").
-- Do not include any text outside the JSON array.
-
-Passage:
-{paragraph}
-"""
-
-response = client.messages.create(
-    model="claude-opus-4-8",
-    max_tokens=1024,
-    messages=[{"role": "user", "content": extraction_prompt}],
-)
-
-# response.content is a list of content blocks; a plain-text response has one
-# "text" block, so response.content[0].text is the raw string the model wrote.
-raw_output = response.content[0].text
-triples = json.loads(raw_output)  # -> [["Priya Anand", "manages", "Sydney office"], ...]
-
-graph = nx.DiGraph()
-for subject, relation, obj in triples:  # tuple unpacking: each 3-item list becomes 3 named variables
-    graph.add_edge(subject, obj, relation=relation)
-
-print(list(graph.edges(data=True)))
-# [('Priya Anand', 'Sydney office', {'relation': 'manages'}),
-#  ('Marcus Chen', 'Priya Anand', {'relation': 'reports to'}),
-#  ('Sydney office', 'APAC division', {'relation': 'is part of'}),
-#  ('Sarah Lin', 'APAC division', {'relation': 'leads'})]
+```
+[Raw Document Text]
+"Sarah Jenkins joined Acme Corp as Head of Security in 2024."
+                          │
+            [LLM Information Extraction Prompt]
+            Extract entities and relationships as JSON triples:
+                          │
+            [Structured Triples Output]
+[
+  {"subject": "Sarah Jenkins", "relation": "WORKS_AT", "object": "Acme Corp"},
+  {"subject": "Sarah Jenkins", "relation": "HAS_ROLE", "object": "Head of Security"},
+  {"subject": "Acme Corp",     "relation": "HIRED",    "object": "Sarah Jenkins", "year": 2024}
+]
+                          │
+         [Inserted into Graph Database (Neo4j / NetworkX)]
 ```
 
-A few things worth calling out about this code. `json.loads(raw_output)` will raise a `json.JSONDecodeError` if the model's response contains anything other than the JSON array — in a production system you'd wrap this call in error handling and possibly retry the request, but for a first working version, assume well-behaved output and add robustness once you've seen how the model actually responds to your prompt. The `for subject, relation, obj in triples:` line is **tuple unpacking**: each element of `triples` is a 3-item list like `["Priya Anand", "manages", "Sydney office"]`, and Python assigns each of its three items to the three loop variables in one step, rather than you indexing `triple[0]`, `triple[1]`, `triple[2]` manually.
-
-The result is a small, queryable graph built automatically from unstructured prose — the same kind of extraction, run across an entire document set, is what produces the knowledge graph that Lesson 02's retrieval patterns traverse at query time.
-
----
-
-## 5. Common Mistakes
-
-**Mistake 1: Building a knowledge graph for every RAG use case.** A knowledge graph is real, ongoing engineering work — an extraction pipeline to run and re-run as documents change, a graph store to maintain, and a whole additional retrieval path (Lesson 02) to build and test. It is worth that cost specifically when relationship-style questions ("who manages X's team," "which projects depend on Y") are a *common, expected* part of your workload. If your system mostly answers "what is our refund policy" style lookup questions, plain vector search (Phases 5-9) already handles them well, and adding a knowledge graph on top is unnecessary complexity that adds a maintenance burden without improving the answers users actually ask for.
-
-**Mistake 2: Trusting extracted entity names to be consistent without normalization.** An LLM extracting triples from many different documents may write "Priya Anand," "Priya," and "P. Anand" as three different node names for the same person, silently fragmenting your graph into disconnected pieces that should have been one connected structure. Production extraction pipelines add an entity-resolution step — matching and merging variant names for the same real-world entity — before trusting the graph's connectivity.
-
-**Interview angle:** A common interview question here is "when would you use a knowledge graph instead of a vector store?" — the answer the interviewer is listening for is not "knowledge graphs are more powerful" (they aren't, for most questions) but a precise statement of the *shape* of question each is built for: vector search for "find text similar to this," knowledge graphs for "find entities connected to this one, possibly several hops away." Naming the added engineering cost of building and maintaining an extraction pipeline, and being explicit that you'd only pay it when relationship questions are a real, recurring part of the workload, signals that you understand this as an engineering tradeoff rather than a strictly-better upgrade.
+#### Directed Graph Traversal:
+Because edges have direction (`Priya` -> `MANAGES` -> `Sydney Office`), an AI can hop across multiple nodes:
+1. Find node: `Sydney Office`.
+2. Follow reverse edge `[MANAGES]`: Lands on `Priya`.
+3. Follow reverse edge `[REPORTS_TO]`: Lands on `Liam` and `Sarah`.
+4. Answer: *"Liam and Sarah report to the person who manages the Sydney office."*
 
 ---
 
-## 6. Hands-On Exercises
+### Step 5: Code Example
 
-### Exercise 1 — Extract triples from your own paragraph
+Here is a clean Python script using `networkx` to build and traverse a knowledge graph:
 
-**Goal:** See the extraction prompt work on text you wrote yourself, not just the example above.
+```python
+"""
+Knowledge Graph Construction and Multi-Hop Traversal
+Requires: pip install networkx
+"""
 
-Write a short paragraph (4-6 sentences) describing a small fictional organization — people, teams, and who reports to or works with whom. Run it through the extraction prompt in Section 4, parse the JSON, and print the resulting triples. Check by hand: did the model miss any relationship that's clearly stated in your paragraph? Did it invent one that isn't there?
+import networkx as nx
 
-### Exercise 2 — Build the graph and inspect it
+def run_knowledge_graph_demo():
+    # 1. Create a directed graph
+    G = nx.DiGraph()
 
-**Goal:** Get comfortable with the basic `networkx` API before Lesson 02 builds traversal on top of it.
+    # 2. Add extracted triples (Entity -> Relation -> Entity)
+    triples = [
+        ("Priya Sharma", "MANAGES", "Sydney Office"),
+        ("Liam O'Connor", "REPORTS_TO", "Priya Sharma"),
+        ("Sarah Chen", "REPORTS_TO", "Priya Sharma"),
+        ("Sydney Office", "LOCATED_IN", "Australia")
+    ]
 
-Using the triples from Exercise 1, build a `nx.DiGraph()` and answer, using only `networkx` calls (not by re-reading your paragraph): How many nodes does the graph have? How many edges? Pick one person in your graph and list all of their outgoing edges using `graph.edges(person_name, data=True)`.
+    for subj, rel, obj in triples:
+        G.add_edge(subj, obj, relation=rel)
 
-### Exercise 3 — Diagnose a graph-vs-vector mismatch
+    print("Knowledge Graph constructed with nodes:", list(G.nodes()))
 
-**Goal:** Practice recognizing when a question needs graph traversal and when it doesn't, since that judgment call is what Mistake 1 above is about.
+    # 3. Multi-Hop Query: "Who reports to the person who manages the Sydney Office?"
+    target_office = "Sydney Office"
+    
+    # Step 1: Find who manages the office (reverse lookup on MANAGES)
+    managers = [u for u, v, d in G.in_edges(target_office, data=True) if d["relation"] == "MANAGES"]
+    manager = managers[0]
+    print(f"\nStep 1: Found Manager of {target_office} -> {manager}")
 
-For each of these three questions, decide whether a plain vector store or a knowledge graph is the better fit, and write one sentence explaining why: (a) "What is our policy on expense reports over $500?" (b) "Which of Sarah Lin's direct reports also worked on the APAC migration project?" (c) "Summarize the onboarding steps for new hires."
+    # Step 2: Find who reports to that manager (reverse lookup on REPORTS_TO)
+    team_members = [u for u, v, d in G.in_edges(manager, data=True) if d["relation"] == "REPORTS_TO"]
+    print(f"Step 2: Found Direct Reports -> {team_members}")
 
----
+    print(f"\nFinal Answer: {', '.join(team_members)} report to {manager}, who manages the {target_office}.")
 
-## 7. Interview Q&A
-
-### Q1. What is a knowledge graph, in one sentence?
-
-**Answer:** A knowledge graph represents information as entities (nodes) connected by labeled relationships (edges), typically built from a collection of `(entity, relation, entity)` triples, so that questions about how specific things are connected can be answered by following edges rather than by comparing text similarity.
-
----
-
-### Q2. Why can't vector search answer relationship-style questions well?
-
-**Answer:** Vector search finds chunks whose embeddings are semantically similar to the query's embedding — it's built to answer "what is this text about," not "how are these two specific entities connected." A question like "who reports to the person who manages the Sydney office" requires chaining two separate facts about specific entities together, and there's no single chunk of text whose *topic* is that chained fact, so similarity scoring has nothing to latch onto.
-
----
-
-### Q3. What does `add_edge(a, b, relation="manages")` actually do in `networkx`?
-
-**Answer:** It creates nodes `a` and `b` in the graph if they don't already exist, creates a directed edge from `a` to `b`, and stores `relation="manages"` as a data attribute on that edge, so you can later inspect what kind of relationship the edge represents (via `graph.edges(a, data=True)`, for example) rather than just knowing that some connection exists.
-
----
-
-### Q4. Why ask the LLM for JSON output when extracting triples, instead of letting it write a free-text description?
-
-**Answer:** JSON output is mechanically parseable with `json.loads()` — you get back exact, structured `[subject, relation, object]` triples you can load directly into `add_edge()` calls. Free-text output would require additional, fragile parsing (regex or another LLM call) to pull the same structured facts back out, adding failure points for no benefit.
-
----
-
-### Q5. Should every RAG system build a knowledge graph?
-
-**Answer:** No. A knowledge graph adds real ongoing engineering cost — an extraction pipeline, entity-name normalization, a graph store, and a separate traversal-based retrieval path. It's worth that cost when relationship-style, multi-hop questions ("who manages the team that owns X") are a common part of the workload. For systems that mostly answer topic-lookup questions, plain vector search already performs well and a knowledge graph is unnecessary complexity.
+if __name__ == "__main__":
+    run_knowledge_graph_demo()
+```
 
 ---
 
-> 🧠 **Memory hook:** "A vector store is a shoebox of index cards sorted by topic; a knowledge graph is a family tree — one finds what's similar, the other finds what's connected."
+### Step 6: How Is It Used in Production?
+
+| GraphRAG Concern | What Fails | The Production Fix | Real Impact |
+| :--- | :--- | :--- | :--- |
+| **Entity Resolution Drift** | The LLM creates 3 different nodes: *"Apple"*, *"Apple Inc."*, and *"Apple Computer"* | Implement Entity Resolution to canonicalize entity names before insertion | Merges duplicate nodes into one |
+| **Extraction Extraction Cost** | Calling GPT-4 to extract triples from 50,000 pages costs $15,000 | Use fine-tuned small models (e.g. `GLiNER` or Llama-3-8B) for entity-relation extraction | 85% cost reduction |
+| **Graph Density Explosion** | Connecting every common noun creates millions of useless edges | Define a strict ontology schema (e.g., only extract: Person, Company, Product, Location) | Keeps graph clean and fast |
+| **Hybrid Graph + Vector Search** | Relying on graph alone misses fuzzy descriptive text | Use GraphRAG (combine vector search to find starting nodes + graph traversal for relationships) | The ultimate search precision |
+
+---
+
+### Step 7: Quick Revision
+
+- **Vector Store = Topic Search; Knowledge Graph = Relationship Search.**
+- **Nodes & Edges:** Entities are nodes; relationships are directed edges.
+- **Triples:** Information is stored as `(Subject, Relation, Object)`.
+- **Entity Resolution:** Merges variations like "Google" and "Google LLC" into a single canonical node.
+- **Interview Answer:** *"Knowledge Graphs represent factual connections as directed entity-relationship triples. While vector search excels at thematic semantic matching, GraphRAG enables deterministic multi-hop traversal to answer relationship-heavy queries that span disjoint documents."*
+
+---
+
+### Step 8: Final Flow Diagram
+
+```mermaid
+flowchart TD
+    classDef startEnd fill:#2563eb,stroke:#1d4ed8,color:#ffffff,stroke-width:2px;
+    classDef decision fill:#f59e0b,stroke:#d97706,color:#ffffff,stroke-width:2px;
+    classDef success fill:#10b981,stroke:#059669,color:#ffffff,stroke-width:2px;
+    classDef process fill:#3b82f6,stroke:#1d4ed8,color:#ffffff,stroke-width:2px;
+
+    A([Unstructured Enterprise Documents]) --> B[LLM Information Extraction: Identify Entities & Verbs]:::process
+    B --> C[Generate Candidate Triples: Subject - Relation - Object]
+    
+    C --> D[Entity Resolution: Canonicalize Names e.g. Apple Inc. -> Apple]:::process
+    D --> E[(Graph Database: Neo4j / NetworkX)]:::success
+
+    F([User Relationship Query]) --> G[Identify Target Starting Node]
+    E -. Graph Schema .-> G
+    G --> H[Traverse Connected Edges 1-Hop & 2-Hop]:::process
+    H --> I[Extract Subgraph of Connected Facts]:::success
+
+    I --> J[Augment LLM Prompt with Factual Graph Triples]
+    J --> K([Deliver Accurate Relationship Answer]):::startEnd
+```
+
+---
+
+### Step 9: Quiz
+
+Test your understanding of knowledge graphs for retrieval. Submit your answers as `1-A, 2-B, 3-C, 4-D`:
+
+**1. Why does pure vector search struggle with a query like: *"Who manages the person who approved our cloud budget?"*?**
+- A) Vector databases do not allow the word 'cloud'.
+- B) Answering requires multi-hop relational chaining between specific named entities across separate records, which vector similarity cannot track.
+- C) Cloud budgets cannot be embedded.
+- D) Graph databases only work in Python 2.
+
+**2. What is a 'Triple' in knowledge graph architecture?**
+- A) A document with three pages.
+- B) A fundamental unit of knowledge composed of `(Subject, Relation/Predicate, Object)`.
+- C) Three database servers running in a cluster.
+- D) An embedding vector with only 3 dimensions.
+
+**3. What is the role of 'Entity Resolution' in building an enterprise knowledge graph?**
+- A) Deleting all entities to save space.
+- B) Recognizing that *"Google"*, *"Google LLC"*, and *"Google Inc."* refer to the exact same real-world entity and merging them into one node.
+- C) Translating entity names into foreign languages.
+- D) Encrypting company names.
+
+**4. How does GraphRAG combine the benefits of vector databases and knowledge graphs?**
+- A) It uses vector search to identify relevant starting nodes or text, then traverses graph edges to discover connected facts across documents.
+- B) It replaces all text with images.
+- C) It eliminates the need for an LLM.
+- D) It only works when offline.
+
+*(Submit your answers to check your progress!)*

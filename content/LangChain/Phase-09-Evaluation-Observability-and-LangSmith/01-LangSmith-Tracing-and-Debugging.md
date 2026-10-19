@@ -1,222 +1,226 @@
-# LangSmith Tracing and Debugging — Complete Guide
+# LangSmith Tracing and Debugging in Production
 
-> "An air traffic control radar screen maps the precise flight path, altitude, airspeed, and radio chatter of every aircraft in the airspace simultaneously."
-
----
-
-## Table of Contents
-
-1. [The Problem: The Black Box of Complex LLM Chains](#1-the-problem-the-black-box-of-complex-llm-chains)
-2. [The Air Traffic Control Radar Analogy](#2-the-air-traffic-control-radar-analogy)
-3. [The Mechanism: Zero-Code Tracing and Metadata Tagging](#3-the-mechanism-zero-code-tracing-and-metadata-tagging)
-4. [Diagram: LangSmith Trace Tree Hierarchy](#4-diagram-langsmith-trace-tree-hierarchy)
-5. [Code Walkthrough: Production Tracing with Custom Metadata](#5-code-walkthrough-production-tracing-with-custom-metadata)
-6. [Comparing Raw Logging vs LangSmith Tracing](#6-comparing-raw-logging-vs-langsmith-tracing)
-7. [Common Mistakes](#7-common-mistakes)
-8. [Hands-On Exercises](#8-hands-on-exercises)
-9. [Interview Q&A](#9-interview-qa)
+> "An air traffic control radar screen maps the precise flight path, altitude, airspeed, and radio chatter of every aircraft in the sky simultaneously. It leaves zero blind spots."
 
 ---
 
-## 1. The Problem: The Black Box of Complex LLM Chains
+### Step 1: Why Do We Need This?
 
-When a conversational agent with 4 tools and 3 sub-chains fails or produces a hallucinated answer, standard Python tracebacks are completely unhelpful.
+#### The Real Problem
 
-### The Debugging Nightmare
+When a user complains that an AI customer service agent gave a completely wrong answer, traditional backend server logs are almost useless:
 
-```text
-User reports: "The bot gave an incorrect price for the enterprise tier!"
-Traditional Logs:
-  INFO: POST /api/chat 200 OK (Latency: 8.4s)
-  → Which prompt was formatted?
-  → What raw chunks did the vector store retrieve?
-  → Did the tool return bad data or did the LLM misinterpret good data?
-  → How many tokens were consumed at each nested step?
+```
+TRADITIONAL SERVER LOGS (Blind to AI Logic):
+INFO: 2026-10-19 14:02:11 - POST /api/chat - 200 OK - Latency: 6.2s
+INFO: 2026-10-19 14:02:18 - POST /api/chat - 200 OK - Latency: 5.8s
+
+→ Did the vector store retrieve the wrong documents?
+→ Did an external API tool return malformed data?
+→ Did the prompt template format properly?
+→ Did the LLM hallucinate or misread good context?
+→ How many tokens were burned on each step?
 ```
 
-### The Solution: LangSmith Distributed Tracing
+Without distributed AI tracing, debugging a failure requires adding manual print statements, redeploying code, and trying to recreate the user's exact inputs.
 
-LangSmith automatically captures the full hierarchical execution tree—prompts, exact token inputs/outputs, latencies, costs, and metadata—with zero code modification.
-
----
-
-## 2. The Air Traffic Control Radar Analogy
-
-An aviation safety investigator does not rely on a pilot's vague verbal summary after an incident.
-
-### Pilot Story vs Radar & Flight Data Recorder
-
-```text
-Pilot Story     → "We flew for 2 hours and landed roughly on schedule."
-                  (Hides altitude drops and near-misses).
-
-Radar & FDR     → Black box records engine throttle, rudder angles,
-                  GPS coordinates, and ATC voice recordings every millisecond.
-```
-
-### Mapping to LangChain
-
-LangSmith is the aviation radar and flight data recorder, visualizing every nested runnable call, tool payload, and model token generation in real time.
+We need a **Flight Data Recorder**: a system that automatically records the full hierarchical execution tree—prompts, exact token inputs and outputs, latencies, and tool calls—with zero code modifications.
 
 ---
 
-## 3. The Mechanism: Zero-Code Tracing and Metadata Tagging
+### Step 2: What Is It?
 
-LangSmith tracing is enabled globally via standard environment variables and enriched via config dictionaries.
+#### Simple Explanation
 
-### Core Configuration Flags
+Think of LangSmith Tracing like a **Hospital X-Ray and MRI Machine**:
 
-```bash
-# Set in .env or deployment environment
-export LANGCHAIN_TRACING_V2="true"
-export LANGCHAIN_API_KEY="lsv2_pt_..."
-export LANGCHAIN_PROJECT="skillvault-production"
-export LANGCHAIN_ENDPOINT="https://api.smith.langchain.com"
+Instead of guessing what is wrong based on surface symptoms, you look inside the running system to see every bone and organ.
+
+In LangSmith:
+- **Root Run:** Represents the entire user request from start to finish.
+- **Child Spans:** Represent the individual steps inside the request:
+  1. The Prompt Template step (shows formatted text).
+  2. The Retriever step (shows the exact document chunks pulled from vector DB).
+  3. The Tool execution step (shows function inputs and outputs).
+  4. The Model call (shows raw prompt tokens, output tokens, latency, and model name).
+
+---
+
+### Step 3: Real-World Example
+
+#### Debugging a False Price Quote
+
+A customer reports: *"Your bot said your Enterprise Plan costs $20/month, but our bill was $2,000!"*
+
+1. **Open LangSmith:** You search for the user's `session_id`.
+2. **Inspect the Trace Tree:**
+   - Step 1 (Vector Retriever): Retrieved Document `pricing_tiers.md`.
+   - Inspection: The chunk states: *"Personal Plan: $20/month. Enterprise Plan: $2,000/month."*
+   - Step 2 (Model Prompt): Shows both prices were clearly provided in context.
+   - Step 3 (Model Output): Shows the model mistakenly matched the personal price to the enterprise tier.
+3. **Root Cause Confirmed:** In 60 seconds, you prove that retrieval was healthy, but the prompt lacked strict grounding instructions. You update the prompt template and fix the issue.
+
+---
+
+### Step 4: How Does It Work?
+
+#### The Hierarchical Flame Graph
+
+```mermaid
+flowchart TD
+    classDef root fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#fff;
+    classDef span fill:#312e81,stroke:#818cf8,stroke-width:1px,color:#fff;
+    classDef leaf fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#fff;
+
+    A["Root Span: User Chat Request (Total: 4.2s | 1,420 tokens)"]:::root --> B["Span 1: Rephrase Query Chain (0.4s | 180 tokens)"]:::span
+    A --> C["Span 2: Vector Store Retrieval (0.2s | Found 3 docs)"]:::span
+    A --> D["Span 3: Tool Execution: check_inventory (0.6s)"]:::span
+    A --> E["Span 4: Final ChatModel Invocation (3.0s | 1,240 tokens)"]:::span
+    
+    E --> F["Inspect Exact Input Messages Array"]:::leaf
+    E --> G["Inspect Exact Generated Output Tokens"]:::leaf
+    E --> H["Inspect Finish Reason ('stop' vs 'length')"]:::leaf
 ```
 
-### Injecting Custom Tags and Metadata at Runtime
+- Every nested function inherits the parent run's ID automatically via Python's `contextvars`.
+- When an error occurs at any depth, the exact traceback is attached to that specific child span.
+- You can filter runs by latency, token cost, tags, and feedback scores.
+
+---
+
+### Step 5: Code Example
+
+#### Attaching Production Tags & Metadata to Traces
+
+Here is a complete, working script in LangChain 1.x showing how to tag traces for easy filtering:
 
 ```python
-from langchain_openai import ChatOpenAI
+import os
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
+from langchain_core.runnables import RunnableConfig
+from langchain.chat_models import init_chat_model
 
-chain = (
-    ChatPromptTemplate.from_template("Summarize: {text}")
-    | ChatOpenAI(model="gpt-4o")
-    | StrOutputParser()
-)
+# 1. Enable Tracing via Environment Variables
+os.environ["LANGCHAIN_TRACING_V2"] = "true"
+os.environ["LANGCHAIN_PROJECT"] = "production-support-bot"
 
-# Runtime trace enrichment
-result = chain.invoke(
-    {"text": "Production incident logs..."},
-    config={
-        "tags": ["tier:enterprise", "env:production"],
-        "metadata": {
-            "user_id": "usr_9981",
-            "conversation_id": "conv_441",
-            "feature_flag_model": "gpt-4o"
-        }
+# 2. Build Standard LCEL Chain
+model = init_chat_model("openai:gpt-4o-mini", temperature=0.0)
+prompt = ChatPromptTemplate.from_template("Answer the customer query: {query}")
+chain = prompt | model | StrOutputParser()
+
+# 3. Attach Rich Metadata in RunnableConfig!
+# Tags and metadata make finding specific runs in LangSmith instant!
+config = RunnableConfig(
+    run_name="CustomerSupportInquiry",
+    tags=["tier:enterprise", "env:production", "department:billing"],
+    metadata={
+        "tenant_id": "org_enterprise_99",
+        "user_email": "cto@company.com",
+        "client_version": "v2.4.1"
     }
 )
-```
 
----
-
-## 4. Diagram: LangSmith Trace Tree Hierarchy
-
-### Hierarchical Run Tree Breakdown
-
-```text
-Root Run: RetrievalQAChain (Total: 1.84s | 850 tokens | $0.0042)
- │
- ├── Step 1: HistoryAwareRetriever (0.42s)
- │    ├── LLM: QueryRephraser (0.35s | 120 tokens) ──▶ "Redis AOF config"
- │    └── VectorStoreRetriever (0.07s) ──▶ Retrieved 2 chunks
- │
- ├── Step 2: PromptTemplate (0.001s)
- │    └── Injects {context} + {chat_history} + {input}
- │
- └── Step 3: ChatOpenAI (1.41s | 730 tokens)
-      └── Generated tokens: "To configure Redis AOF..."
-```
-
----
-
-## 5. Code Walkthrough: Production Tracing with Custom Metadata
-
-A production script wrapping LangSmith tracing with error capture and run URL generation:
-
-```python
-# langsmith_tracing_demo.py
-import os
-from langchain_openai import ChatOpenAI
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.tracers.context import collect_runs
-
-# Ensure environment variables are loaded
-os.environ["LANGCHAIN_TRACING_V2"] = "true"
-os.environ["LANGCHAIN_PROJECT"] = "SkillVault-Demo"
-
-def execute_traced_query(query: str, tenant_id: str):
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", "You are an infrastructure advisor. Answer technically."),
-        ("human", "{question}")
-    ])
-    model = ChatOpenAI(model="gpt-4o", temperature=0)
-    chain = prompt | model
-
-    # Capture the exact LangSmith Run ID programmatically
-    with collect_runs() as cb:
-        response = chain.invoke(
-            {"question": query},
-            config={
-                "tags": ["service:cloud_advisor", f"tenant:{tenant_id}"],
-                "metadata": {"tenant_id": tenant_id, "deployment_region": "us-east-1"}
-            }
-        )
-        run_id = cb.traced_runs[0].id
-        print(f"Run completed! Trace ID: {run_id}")
-        print(f"Inspect in LangSmith UI: https://smith.langchain.com/o/default/projects/p/SkillVault-Demo/r/{run_id}")
-
-    return response.content
-
+# 4. Execute Chain
 if __name__ == "__main__":
-    ans = execute_traced_query("Explain VPC Peering vs Transit Gateway", "org_enterprise_99")
-    print("\nAnswer:\n", ans[:100], "...")
+    print("--- Executing Traced Request ---")
+    response = chain.invoke(
+        {"query": "How do I upgrade from 5 to 50 user seats?"},
+        config=config
+    )
+    print("\nAI Response:")
+    print(response)
+    print("\n[Trace published to LangSmith under project 'production-support-bot']")
+```
+
+#### What Happens When You Run This:
+1. LangChain executes the call.
+2. In your LangSmith dashboard, you can search: `filter: metadata.tenant_id == "org_enterprise_99"` or filter by the tag `tier:enterprise`.
+3. You immediately see the exact prompt, latency, and token cost for that customer.
+
+---
+
+### Step 6: How Is It Used in Production?
+
+#### Real-World Engineering Rules
+
+| Production Mistake | Why it hurts | How to fix it |
+| :--- | :--- | :--- |
+| **Sending Unmasked Passwords or PII to Traces** | If users type social security numbers or credit cards, they get stored in plain text in your telemetry dashboard. | Use LangSmith's client-side masking rules (`hide_inputs=True`, `hide_outputs=True`) or add a PII scrubber middleware. |
+| **Mixing Dev and Prod in the Same Project** | If local developer tests and production user traffic share the project name `"default"`, your production metrics become noisy and inaccurate. | Set `LANGCHAIN_PROJECT=production` in production and `LANGCHAIN_PROJECT=development` on local machines. |
+| **Trace Flooding Under 100,000 QPS** | Tracing every single successful routine classification request in a massive system runs up unnecessary data costs. | Use **trace sampling**: trace 100% of errors and slow requests (>3s), and sample 5% of healthy requests. |
+
+---
+
+### Step 7: Quick Revision
+
+- **The Black Box Solved:** LangSmith traces capture the full hierarchical execution tree—prompts, chunks, tool arguments, and token costs.
+- **Hierarchical Spans:** Inspect parent runs down to child spans to isolate whether an issue was caused by bad retrieval, tool errors, or LLM hallucination.
+- **Metadata Tagging:** Always attach `tenant_id` and environment tags in `RunnableConfig` for instant debugging in production.
+- **Zero Boilerplate:** Turning on `LANGCHAIN_TRACING_V2=true` activates background telemetry without writing manual log code.
+
+#### Short Interview Answer
+
+> *"Debugging production LLM architectures requires distributed tracing because traditional HTTP logs cannot isolate whether failures originate from retrieval noise, malformed tool arguments, or model hallucinations. We mandate LangSmith tracing from day zero, organizing telemetry into hierarchical trace trees. At runtime, we enrich execution spans with metadata tags (`tenant_id`, user tier, environment) via `RunnableConfig`, enabling sub-second filtering during incident triage while configuring client-side masking to protect customer PII."*
+
+---
+
+### Step 8: Final Flow Diagram
+
+```mermaid
+flowchart TD
+    classDef start fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#fff;
+    classDef check fill:#854d0e,stroke:#facc15,stroke-width:2px,color:#fff;
+    classDef trace fill:#312e81,stroke:#818cf8,stroke-width:1px,color:#fff;
+    classDef success fill:#064e3b,stroke:#34d399,stroke-width:2px,color:#fff;
+
+    A["Customer reports issue with Request ID #404"]:::start --> B["Open LangSmith Dashboard"]:::trace
+    B --> C["Filter by metadata.tenant_id or Request ID"]:::trace
+    
+    C --> D["Expand Hierarchical Trace Tree"]:::trace
+    
+    D --> E{"Check Step 1: Retrieval Chunks"}:::check
+    E -- "Irrelevant text" --> F["Root Cause: Vector Store Chunking / Retrieval Failure"]:::start
+    
+    E -- "Relevant text" --> G{"Check Step 2: Tool Execution Payloads"}:::check
+    G -- "Tool returned error" --> H["Root Cause: External API / Database failure"]:::start
+    
+    G -- "Tool returned success" --> I{"Check Step 3: Raw Model Input & Prompt"}:::check
+    I -- "Prompt was truncated / malformed" --> J["Root Cause: Token ceiling or prompt template bug"]:::start
+    I -- "Prompt was accurate" --> K["Root Cause: Model reasoning failure / Hallucination"]:::success
 ```
 
 ---
 
-## 6. Comparing Raw Logging vs LangSmith Tracing
+### Step 9: Quiz
 
-| Dimension | Raw Application Logs (stdout / CloudWatch) | LangSmith Distributed Tracing |
-|---|---|---|
-| Trace Hierarchy | Flat, unstructured string lines | Deeply nested parent-child tree visualization |
-| Prompt Inspection | Difficult to isolate multi-line prompts | Exact rendered inputs & raw API responses |
-| Token / Cost Analytics | Requires manual calculation scripts | Automatic per-step token and dollar cost breakdown |
-| Latency Profiling | Monolithic total request time only | Sub-millisecond timing for every individual step |
-| Search & Filtering | Regex string search | Filter by tag, metadata, latency $> 2\text{s}$, or error status |
+Test your understanding of LangSmith tracing and debugging. Submit your answers as (1-A, 2-B, etc.) and we will review the explanations together!
 
----
+#### Question 1
+A customer support agent gives a completely inaccurate response. An engineer opens the LangSmith trace and sees the `Retriever` child span returned three document chunks containing facts about an unrelated product. What did the trace instantly reveal?
+- A. The LLM model has a hardware failure.
+- B. The issue is a retrieval failure (bad vector search, poor chunking, or wrong metadata filter), completely exonerating the model's reasoning capabilities.
+- C. The user's internet browser is out of date.
+- D. Python 3.10 cannot run searches.
 
-## 7. Common Mistakes
+#### Question 2
+Why should an engineering team pass `tenant_id` and `environment` inside `RunnableConfig(metadata={...})` on every request?
+- A. To make the database write twice as fast.
+- B. To allow engineers to instantly filter and isolate traces for a specific customer or environment in the LangSmith dashboard during an outage.
+- C. Because model providers refuse to answer requests without a tenant ID.
+- D. To turn off API billing.
 
-- **Forgetting `LANGCHAIN_TRACING_V2="true"`.** Setting `LANGCHAIN_API_KEY` without setting `LANGCHAIN_TRACING_V2="true"` prevents traces from uploading.
-- **Leaking Sensitive PII into LangSmith.** Sending unredacted credit cards or passwords in prompts stores them in LangSmith traces; use LangSmith data masking or custom masking runnables.
-- **Using a single default project for all environments.** Mixing development, staging, and production traces in one project corrupts latency and error metrics; configure separate `LANGCHAIN_PROJECT` names.
-- **Not attaching `metadata` for customer support.** Without user IDs or tenant tags in `config={"metadata": ...}`, locating a specific customer's problematic run among 100,000 traces is impossible.
-- **Blocking on trace uploads.** LangChain uploads traces in a background daemon thread; do not force blocking flushes unless shutting down short-lived AWS Lambda functions.
+#### Question 3
+An engineering team is deploying an AI application that handles protected health information (PHI). How do they prevent sensitive patient health data from appearing in cloud trace dashboards?
+- A. Turn off tracing permanently and never look at errors.
+- B. Configure client-side masking rules (`hide_inputs=True`, `hide_outputs=True`) or apply PII-redacting middleware before traces leave the local network.
+- C. Store all medical data in plain text.
+- D. Tell patients not to mention their health conditions.
 
----
-
-## 8. Hands-On Exercises
-
-**Exercise 1:** Set up a free LangSmith account, export your API key, and verify your first traced LCEL chain appears in the dashboard.
-
-**Exercise 2:** Run a chain with custom `tags=["experiment_v2"]` and `metadata={"user": "test_user"}` and filter for that run in the LangSmith web interface.
-
-**Exercise 3:** Use `collect_runs()` context manager to extract the trace UUID programmatically from Python code.
-
-**Exercise 4:** Build an agent that encounters a tool exception and inspect how LangSmith highlights the failed tool node in red.
-
-**Exercise 5:** Compare token counts and estimated costs across `gpt-4o` and `gpt-4o-mini` for the same prompt using the LangSmith run viewer.
-
----
-
-## 9. Interview Q&A
-
-**Q: How does LangSmith capture traces without requiring code modifications across an existing LangChain application?**
-LangSmith hooks directly into LangChain's underlying `Runnable` callback architecture. When `LANGCHAIN_TRACING_V2="true"` is set, a background `LangChainTracer` callback is automatically attached to the root of every chain execution, recording all component inputs, outputs, and timings.
-
-**Q: What is the difference between `tags` and `metadata` in LangSmith run configurations?**
-`tags` are strings used for broad categorization and filtering (e.g. `["production", "model:gpt-4o"]`). `metadata` is a key-value dictionary used for structured data, tracking user IDs, session IDs, git commit hashes, and dynamic configuration flags.
-
-**Q: What is a "Run Tree" in LangSmith?**
-A Run Tree is a hierarchical DAG representation of an execution. The root node represents the top-level pipeline (e.g. `AgentExecutor`), and child nodes represent intermediate steps (retrievers, prompt formatters, LLM calls, tool executions), showing exact parent-child causal relationships.
-
-**Q: How do you prevent tracing overhead from increasing user latency?**
-LangSmith uses an asynchronous, non-blocking background queue and thread pool to batch and upload trace telemetry to the LangSmith API, ensuring zero impact on user-facing request latency.
-
-**Q: What should you do when using LangSmith inside short-lived serverless functions (like AWS Lambda)?**
-Because Lambda freezes container processes immediately after an HTTP response, you must explicitly flush the background tracing queue before function exit using `from langchain_core.tracers.langchain import wait_for_all_tracers; wait_for_all_tracers()`.
+#### Question 4
+In a LangSmith trace tree, what does a child span represent?
+- A. A child user who logged into the website.
+- B. An individual sub-step within the execution—such as a specific prompt formatting, a tool execution, or an LLM call—displaying its own isolated inputs, outputs, latency, and token consumption.
+- C. A deleted file on the server.
+- D. A new git commit.

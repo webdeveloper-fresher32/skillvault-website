@@ -1,263 +1,239 @@
-# 03 — Multi-Step and Iterative Retrieval
+# Lesson 3: Multi-Step and Iterative Retrieval
 
-> How to handle questions that a single retrieval pass can't answer — by looping retrieve → reason → retrieve again until the system has genuinely enough evidence, with termination logic that can't run away.
+Man, in Lessons 1 and 2 we saw how agents choose tools and parse filters. But what happens when a user asks a complex question that cannot be answered in a single search step?
 
----
-
-## Table of Contents
-
-1. [The Problem: Some Questions Need More Than One Retrieval](#1-the-problem-some-questions-need-more-than-one-retrieval)
-2. [The Analogy: The Detective Who Follows One Clue to the Next](#2-the-analogy-the-detective-who-follows-one-clue-to-the-next)
-3. [Internal Flow: The Iterative Retrieval Loop](#3-internal-flow-the-iterative-retrieval-loop)
-4. [Code Example: A Bounded Multi-Step Retrieval Loop](#4-code-example-a-bounded-multi-step-retrieval-loop)
-5. [Common Mistakes](#5-common-mistakes)
-6. [Hands-On Exercises](#6-hands-on-exercises)
-7. [Interview Q&A](#7-interview-qa)
+Some questions require **multi-hop reasoning**, where the answer to the first question gives you the clue to search for the second. Let's learn how **Multi-Step and Iterative Retrieval (Corrective RAG)** solves this.
 
 ---
 
-## 1. The Problem: Some Questions Need More Than One Retrieval
+### Step 1: Why Do We Need This?
 
-Every retrieval pattern covered so far — Phase 8's retrieval strategies, Phase 9's reranking, even Lesson 01's tool-using agent — assumes one retrieval call is enough to gather the evidence needed to answer. That assumption holds for a huge fraction of real questions ("what's our refund policy?") but breaks down completely for questions that require **reasoning across multiple, separately-retrieved pieces of information**.
+Consider a complex enterprise question:
+> *"Did the company that acquired our payment vendor in 2024 update their privacy terms?"*
 
-Take: *"Compare the pricing in these two documents."* A single retrieval pass, no matter how good the embedding or how clever the reranking, returns a fixed top-k list of chunks from *one* search. If document A and document B use different vocabulary to describe pricing, or if the query only clearly identifies document A by name, a single search might surface A's pricing chunk clearly but miss B's entirely — there's no way to search for "the second document" until you already know, from reading A, that a second document even needs to be found and what to look for in it.
+Think about what must happen to answer this:
+1. You first have to find out: *Who is our payment vendor?* (e.g., PayFlow).
+2. Next, you have to find out: *Who acquired PayFlow in 2024?* (e.g., GlobalStripe Corp).
+3. Finally, you have to search for: *GlobalStripe Corp privacy terms update.*
 
-The structural problem: **some questions can only be answered by finding one piece of evidence, reasoning about what that evidence implies you still need, retrieving again based on that new information, and repeating** — not by throwing a bigger `top_k` at a single search. This is often called multi-hop retrieval: each "hop" is a retrieval step informed by what the previous hop found.
+In a standard single-step RAG system:
+- You execute one search on the entire sentence: *"Did the company that acquired our payment vendor in 2024 update their privacy terms?"*
+- The vector database fails completely because none of your documents contain that long, convoluted phrase!
+- The system returns irrelevant chunks and tells the user: *"I don't know."*
 
----
-
-## 2. The Analogy: The Detective Who Follows One Clue to the Next
-
-**Real-world analogy:** think about how a detective actually solves a case, versus how a novice imagines it works.
-
-The novice picture: hand the detective every piece of evidence collected so far, all at once, and expect a solved case in a single leap. That's what a single-shot retrieval pipeline effectively demands — get everything relevant in one search, then generate the final answer.
-
-A real detective doesn't work that way. They find the first clue, examine it, and from what it reveals, decide what to look for *next* — a name, a location, a second piece of evidence that only becomes findable because the first clue pointed at it. They repeat this: follow a clue, form a new question, look for the next piece, and keep going until they genuinely have enough to state a conclusion — not until they've exhausted a predetermined, fixed number of steps, and not forever.
-
-**Multi-step iterative retrieval is that detective's method, applied to a RAG pipeline.** Instead of expecting one search to surface everything a comparison question needs, the system retrieves, looks at what it found, generates a follow-up sub-question based on that, retrieves again, and keeps going until an explicit stopping signal says the case — the question — is actually solved.
-
-> 🧠 One-sentence version: *"Don't expect the whole case solved from one piece of evidence — follow each clue to the next, and stop when you actually have enough, not when you get tired."*
+Single-step RAG breaks whenever answering a question requires following a trail of breadcrumbs across multiple documents.
 
 ---
 
-## 3. Internal Flow: The Iterative Retrieval Loop
+### Step 2: What Is It?
+
+**Multi-Step (Iterative) Retrieval** is an agentic pattern where the AI executes a sequence of search steps, using the information found in Step 1 to formulate the search query for Step 2.
+
+At each step, a **Self-Reflective Grader** asks:
+1. *Do I have enough evidence to answer the user's complete question?*
+2. If **Yes** -> Stop searching and generate the final answer.
+3. If **No** -> Identify the missing clue, write a new targeted search query, and retrieve again!
+
+#### The Everyday Analogy: The Detective Following Clues
+- Imagine a detective investigating a crime scene.
+- A bad detective looks in one room once. If the stolen diamonds aren't on the living room table, they give up and say "Case closed, nothing found."
+- A good detective finds a receipt in the living room for a storage locker. They don't stop! They drive to the storage locker, open it with the key from the receipt, and find the diamonds.
+- Iterative RAG follows the clues from document to document until the complete case is solved.
+
+---
+
+### Step 3: Real-World Example
+
+Let's trace a multi-step financial compliance question:
+
+- **User asks:** *"Is the founder of the company that built our database born in North America?"*
+
+Iterative Execution:
+- **Iteration 1:**
+  - Agent queries: *"What database is used in our stack?"*
+  - Document found: *"Our primary transactional engine is PostgreSQL."*
+- **Iteration 2:**
+  - Agent reasons: *I need to know who created PostgreSQL.*
+  - Agent queries: *"Who created PostgreSQL?"*
+  - Document found: *"PostgreSQL was created by computer scientist Michael Stonebraker at UC Berkeley."*
+- **Iteration 3:**
+  - Agent reasons: *I need to know where Michael Stonebraker was born.*
+  - Agent queries: *"Where was Michael Stonebraker born?"*
+  - Document found: *"Michael Stonebraker was born in Milton, New Hampshire, USA."*
+- **Stop & Synthesize:**
+  - Agent reasons: *I now have all necessary facts. New Hampshire is in North America.*
+  - **Final Answer:** *"Yes. Our database is PostgreSQL, created by Michael Stonebraker, who was born in New Hampshire, USA (North America)."*
+
+Single-step RAG could never solve this, but Iterative RAG solves it smoothly in 3 logical steps!
+
+---
+
+### Step 4: How Does It Work?
+
+Here is the Multi-Step Reasoning loop (often implemented using LangGraph or agent loops):
 
 ```
-   User query: "Compare the pricing in doc A and doc B"
-                       │
-                       ▼
-   ┌───────────────────────────────────────────────┐
-   │  ITERATION 1                                     │
-   │  Retrieve using the original query                │
-   │  → finds Doc A's pricing chunk                     │
-   └───────────────────┬───────────────────────────────┘
-                       ▼
-   ┌───────────────────────────────────────────────┐
-   │  Ask the LLM: "Given what you have so far, do you │
-   │  have enough to answer? If not, what should we      │
-   │  search for next?"                                  │
-   │  → LLM: "Not enough — need Doc B's pricing too.     │
-   │     Next query: 'Doc B pricing'"                    │
-   └───────────────────┬───────────────────────────────┘
-                       ▼
-   ┌───────────────────────────────────────────────┐
-   │  ITERATION 2                                     │
-   │  Retrieve using the LLM's follow-up sub-question   │
-   │  → finds Doc B's pricing chunk                      │
-   └───────────────────┬───────────────────────────────┘
-                       ▼
-   ┌───────────────────────────────────────────────┐
-   │  Ask the LLM again: "Enough now?"                  │
-   │  → LLM: "Yes — I have both documents' pricing."    │
-   └───────────────────┬───────────────────────────────┘
-                       ▼
-   ┌───────────────────────────────────────────────┐
-   │  SYNTHESIZE: generate the final answer using       │
-   │  the ACCUMULATED context from every iteration       │
-   │  (deduplicated), not just the last retrieval         │
-   └───────────────────────────────────────────────────┘
+[User Question]
+       │
+[Agent State: Question + Clues Gathered = []]
+       │
+┌──────▼────────────────────────────────────────────────────────┐
+│ 1. LLM Evaluation: Do we have enough information to answer?    │
+└──────┬────────────────────────────────────────────────────────┘
+       ├── Yes ──► [Synthesize Final Answer with All Citations] ──► DONE!
+       │
+       └── No  ──► Identify Missing Fact
+                     │
+                   Generate Next-Hop Query (e.g. "Who founded X?")
+                     │
+                   [Execute Vector / Web Search Tool]
+                     │
+                   Append New Chunks to Clues Gathered
+                     │
+                   Increment iteration_count
+                     │
+                   {iteration_count < max_hops (e.g. 4)?}
+                     ├── Yes ──► Loop back to Step 1!
+                     └── No  ──► Stop and answer with best available data
 ```
-
-Two things distinguish this from Lesson 01's tool-calling agent loop, even though both loop:
-
-1. **The context accumulates across iterations.** Each retrieval adds to a running pool of evidence, rather than each tool call being an independent, self-contained result. The final synthesis step has to reason over *everything* gathered, not just the most recent retrieval.
-2. **Termination needs two independent conditions, not one.** The loop must stop when the model genuinely believes it has enough evidence (a quality signal), *and* it must stop no matter what once a maximum iteration count is hit (a safety signal). Relying on only one of these is the single most important thing to get right in this pattern — covered in detail in Section 5.
 
 ---
 
-## 4. Code Example: A Bounded Multi-Step Retrieval Loop
+### Step 5: Code Example
 
-**Step 1 — the retrieval and reasoning primitives.** Retrieval reuses the same populated-Chroma pattern from earlier phases; nothing new there. The new piece is the "do you have enough, or what's next" prompt.
+Here is a Python demonstration showing an iterative retrieval loop with reflection:
 
 ```python
-import anthropic
-import chromadb
-
-client = anthropic.Anthropic()
-
-# A previously-populated Chroma collection (Phase 5 pattern) holding chunks
-# from multiple source documents, each tagged with a "source_doc" metadata field.
-chroma_client = chromadb.PersistentClient(path="./chroma_data")
-docs_collection = chroma_client.get_or_create_collection(name="comparison_docs")
-
-
-def retrieve(query: str, top_k: int = 3) -> list[str]:
-    results = docs_collection.query(query_texts=[query], n_results=top_k)
-    return results["documents"][0] if results["documents"] else []
-
-
-DECIDE_PROMPT = """You are answering this question using retrieved context that
-has been gathered so far, one search at a time.
-
-Original question: {question}
-
-Context gathered so far (across all searches):
-{accumulated_context}
-
-Decide ONE of two things:
-1. If the context above is enough to fully answer the original question,
-   respond with exactly: DONE
-2. If it is NOT enough, respond with exactly one line starting with
-   "SEARCH: " followed by a short, specific search query for the ONE most
-   important piece of information still missing.
-
-Respond with nothing else — no explanation, just "DONE" or "SEARCH: ...".
+"""
+Iterative Multi-Step Retrieval Pattern
 """
 
-def decide_next_step(question: str, accumulated_context: list[str]) -> str:
-    prompt = DECIDE_PROMPT.format(
-        question=question,
-        accumulated_context="\n---\n".join(accumulated_context) or "(nothing yet)",
-    )
-    response = client.messages.create(
-        model="claude-opus-4-8",
-        max_tokens=100,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    return next(b.text for b in response.content if b.type == "text").strip()
-```
+from typing import List, Dict
 
-**Step 2 — the loop itself, with both required termination conditions.** This is the part that matters most: a `max_iterations` safety cap **and** a model-decided "DONE" exit, together — not either one alone.
+# Mock knowledge base across separate documents
+KNOWLEDGE_STORE = {
+    "our stack": "Our core API services run on FastAPI and store user sessions in Redis.",
+    "redis creator": "Redis was created by Italian developer Salvatore Sanfilippo (antirez).",
+    "salvatore birth": "Salvatore Sanfilippo was born in Sicily, Italy."
+}
 
-```python
-def iterative_retrieve(question: str, max_iterations: int = 4) -> list[str]:
-    accumulated_context: list[str] = []
-    seen_chunks: set[str] = set()  # dedupe guard — see Common Mistakes
-    current_query = question
+def mock_search_tool(query: str) -> str:
+    for k, v in KNOWLEDGE_STORE.items():
+        if k in query.lower():
+            return v
+    return "No matching records found."
 
-    for iteration in range(max_iterations):
-        new_chunks = retrieve(current_query)
+def iterative_rag_agent(user_question: str, max_hops: int = 3) -> str:
+    collected_evidence = []
+    current_search_query = "our stack"  # Step 1 starting clue
 
-        # Deduplicate before adding: a later sub-query can easily re-surface
-        # a chunk already retrieved in an earlier iteration.
-        for chunk in new_chunks:
-            if chunk not in seen_chunks:
-                seen_chunks.add(chunk)
-                accumulated_context.append(chunk)
+    for hop in range(1, max_hops + 1):
+        print(f"--- HOP {hop}: Searching for '{current_search_query}' ---")
+        retrieved_fact = mock_search_tool(current_search_query)
+        collected_evidence.append(retrieved_fact)
+        print(f"Fact Discovered: {retrieved_fact}")
 
-        decision = decide_next_step(question, accumulated_context)
-
-        if decision == "DONE":
-            break  # model-decided exit: it believes it has enough
-
-        if decision.startswith("SEARCH: "):
-            current_query = decision[len("SEARCH: "):].strip()
-        else:
-            # Model didn't follow the format — treat as "no clear next step"
-            # rather than looping on a malformed instruction.
+        # In production, an LLM evaluates whether the full question is answered
+        if "Sicily, Italy" in retrieved_fact:
+            print("Evaluator: All necessary clues gathered! Stopping search.")
             break
-    # If the loop runs all max_iterations without a "DONE", it exits here via
-    # the `for` loop ending naturally — this is the hard safety cap, and it
-    # fires independently of whatever the model would have decided next.
+        elif "Redis" in retrieved_fact:
+            # Determine next hop query
+            current_search_query = "redis creator"
+        elif "Salvatore" in retrieved_fact:
+            current_search_query = "salvatore birth"
 
-    return accumulated_context
-
-
-def synthesize_answer(question: str, accumulated_context: list[str]) -> str:
-    prompt = (
-        f"Using ONLY the context below, answer the question.\n\n"
-        f"Context:\n" + "\n---\n".join(accumulated_context) +
-        f"\n\nQuestion: {question}"
+    # Final Synthesis
+    all_context = "\n".join(collected_evidence)
+    return (
+        f"Final Synthesized Answer for '{user_question}':\n"
+        f"Based on the trail of evidence:\n{all_context}\n"
+        "Conclusion: The creator of our session database (Redis) was born in Italy (Europe)."
     )
-    response = client.messages.create(
-        model="claude-opus-4-8",
-        max_tokens=1024,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    return next(b.text for b in response.content if b.type == "text")
 
-
-context = iterative_retrieve("Compare the pricing in doc A and doc B")
-answer = synthesize_answer("Compare the pricing in doc A and doc B", context)
-print(answer)
+if __name__ == "__main__":
+    question = "Was the creator of our session cache database born in Europe?"
+    answer = iterative_rag_agent(question)
+    print("\n" + answer)
 ```
 
-Walking through why both termination conditions matter: the `for iteration in range(max_iterations)` loop guarantees the function returns after at most `max_iterations` retrievals *no matter what the model decides* — even if `decide_next_step` never returns "DONE," or returns malformed output every time. The `if decision == "DONE": break` line is what lets the loop stop *early*, before hitting the cap, once the model genuinely has enough — which saves both latency and cost on the common case where two or three hops are plenty. Neither condition alone is sufficient: the cap alone would always run the maximum number of retrievals even on simple questions; "DONE" alone, with no cap, is exactly the runaway-loop risk covered next.
+---
+
+### Step 6: How Is It Used in Production?
+
+| Architecture Concern | What Breaks | The Production Fix | Impact |
+| :--- | :--- | :--- | :--- |
+| **Runaway Query Loops** | The agent gets stuck in an infinite loop searching for an obscure fact | Enforce a hard ceiling: `max_hops = 3` or `max_hops = 4` | Prevents infinite billing loops |
+| **Accumulated Context Window Bloat** | Storing 20 retrieved chunks across 4 hops fills the context window | Summarize intermediate clues after each hop rather than storing raw text | Keeps prompt tokens small |
+| **Compounding Search Errors** | Hop 1 retrieves a false or misleading fact, sending hops 2 and 3 down the wrong path | Use a **Corrective RAG (CRAG)** grader to grade chunk relevance before proceeding | Keeps the reasoning on track |
+| **High Sequential Latency** | 4 sequential LLM calls take 5-8 seconds | Only trigger multi-step routing for complex, multi-hop queries; use standard RAG for simple ones | Preserves fast sub-second speeds for 90% of queries |
 
 ---
 
-## 5. Common Mistakes
+### Step 7: Quick Revision
 
-**Mistake 1: No termination condition at all — or only one of the two required conditions.** The most serious failure mode in this pattern is relying solely on the model to decide when to stop (no hard iteration cap), or solely on a fixed iteration count (no model judgment, so the loop always runs the maximum every time regardless of how simple the question is). A model-only exit condition is dangerous: if the model gets stuck in an unproductive pattern — deciding "not enough" repeatedly on trivially similar sub-queries — the loop runs indefinitely, burning API calls and money with no upper bound. The fix, shown in the code above, is to require **both**: a hard `max_iterations` cap that terminates the loop unconditionally, and a model-decided "I have enough" signal that can exit *early* when it's genuinely warranted. Neither substitutes for the other.
-
-**Mistake 2: Not deduplicating context accumulated across iterations.** Each iteration's retrieval can easily re-surface a chunk that was already added in an earlier round — especially when sub-queries the model generates are only loosely different from the original question. Without deduplication, the accumulated context sent to the final synthesis step grows with repeated copies of the same passage, wasting context-window space and, in the worst case, subtly biasing the final answer toward whatever got duplicated most. The `seen_chunks` set in the code above is the fix: track which chunks (by their text, or better, by a stable chunk ID from Phase 4's chunking metadata) have already been added, and skip re-adding a chunk the loop has already seen.
-
-**Interview angle:** This is one of the most reliably-asked questions about iterative retrieval, because the wrong answer ("just let the model decide when to stop") is a genuine production risk. A strong answer states both required termination pieces explicitly — a hard iteration cap as the non-negotiable safety net, plus a model-decided early exit for efficiency on simple questions — and separately calls out that accumulated context needs deduplication across hops, since naive accumulation without a seen-set silently degrades both cost and answer quality as the loop runs longer.
-
----
-
-## 6. Hands-On Exercises
-
-### Exercise 1 — Trace the loop's decision at each iteration
-
-**Goal:** Confirm the loop actually narrows in on missing information rather than just repeating the same search.
-
-Run `iterative_retrieve("Compare the pricing in doc A and doc B")` with print statements inside the loop showing `current_query`, the raw `decision` string, and the running length of `accumulated_context` at the end of each iteration. Confirm the sub-query changes between iteration 1 and iteration 2 (it should shift from the original comparison question toward something naming the second document specifically).
-
-### Exercise 2 — Force the safety cap to fire
-
-**Goal:** Prove the hard iteration cap works independently of the model's judgment.
-
-Temporarily change `DECIDE_PROMPT` to always instruct the model to respond with a `SEARCH:` line and never `DONE` (simulate a model that never believes it has enough). Run `iterative_retrieve` with `max_iterations=3` and confirm the function still returns after exactly 3 iterations rather than looping forever. This demonstrates why the `for` loop's cap must be unconditional, independent of anything `decide_next_step` returns.
-
-### Exercise 3 — Add deduplication by chunk ID instead of by text
-
-**Goal:** Harden the dedupe guard against a real-world edge case.
-
-The current `seen_chunks` set dedupes on exact chunk *text*, which fails if two chunks have near-identical but not byte-identical content (e.g. trailing whitespace differences from re-chunking). Modify `retrieve()` to also return each chunk's stable ID (Chroma's `results["ids"][0]`, following the id-based patterns from Phase 5), and change `iterative_retrieve` to dedupe on ID instead of text. Explain in your own words why ID-based dedup is more robust than text-based dedup.
+- **Multi-Hop Reasoning:** Complex questions cannot be answered in one retrieval step; clues from step 1 inform step 2.
+- **The Search-Reflect Loop:** Retrieve -> Evaluate evidence -> Identify missing fact -> Generate next-hop query -> Repeat.
+- **Corrective RAG (CRAG):** Evaluates whether retrieved chunks are actually helpful before using them.
+- **Hard Guardrails:** Always enforce a `max_hops = 3` limit to guarantee latency and cost boundaries.
+- **Interview Answer:** *"Multi-step and iterative retrieval uses an agentic loop to resolve multi-hop queries that span disjoint documents. By reflecting on intermediate evidence after each retrieval step, the agent autonomously generates subsequent queries to follow the trail of facts before synthesizing a unified response."*
 
 ---
 
-## 7. Interview Q&A
+### Step 8: Final Flow Diagram
 
-### Q1. Why would a single retrieval pass fail on a question like "compare the pricing in these two documents"?
+```mermaid
+flowchart TD
+    classDef startEnd fill:#2563eb,stroke:#1d4ed8,color:#ffffff,stroke-width:2px;
+    classDef decision fill:#f59e0b,stroke:#d97706,color:#ffffff,stroke-width:2px;
+    classDef success fill:#10b981,stroke:#059669,color:#ffffff,stroke-width:2px;
+    classDef failure fill:#ef4444,stroke:#dc2626,color:#ffffff,stroke-width:2px;
+    classDef process fill:#3b82f6,stroke:#1d4ed8,color:#ffffff,stroke-width:2px;
 
-**Answer:** A single search returns a fixed top-k list from one query, and if the question only clearly names one of the two documents (or the two documents use different vocabulary for the same concept), the search can surface one document's relevant chunk while missing the other's entirely. There's no way to search specifically for "the second document's pricing" until the system has already looked at the first document and realized a second one needs to be found — which requires a reasoning step between two separate retrievals, not a single search no matter how large `top_k` is set.
+    A([User Complex Question]) --> B[Generate Initial Search Query]
+    B --> C[Execute Retrieval Tool: Fetch Chunks]:::process
+    C --> D[Append Evidence to Memory]
 
----
+    D --> E{Does evidence fully answer user question?}:::decision
+    E -- Yes --> F[Synthesize Grounded Answer with All Evidence]:::success
+    F --> G([Deliver Final Answer to User]):::startEnd
 
-### Q2. Describe the iterative retrieval loop end to end.
+    E -- No --> H{Has hop count reached max_hops e.g. 3?}:::decision
+    H -- Yes --> I[Stop searching & answer with best available facts]:::failure
+    I --> G
 
-**Answer:** Retrieve using the original (or current) query, add the results to an accumulated, deduplicated context pool, then ask the LLM whether that accumulated context is enough to answer the original question or what to search for next. If the model says it has enough, stop and synthesize the final answer from everything accumulated. If not, take the model's suggested follow-up sub-question, retrieve again, and repeat — bounded by a hard maximum-iteration cap that fires regardless of what the model decides.
-
----
-
-### Q3. Why is relying only on the model's "I have enough" judgment dangerous, and why is relying only on a fixed iteration count also not ideal?
-
-**Answer:** A model-only stopping condition risks a runaway loop: if the model repeatedly judges "not enough" on unproductive or nearly-identical sub-queries, there's no upper bound on cost or latency. A fixed-count-only condition, with no model judgment, forces every query to run the maximum number of retrievals even when two hops would have been plenty, wasting cost and latency on simple questions. The correct design uses both together: a hard cap as the non-negotiable safety net, and a model-decided early exit for efficiency.
-
----
-
-### Q4. Why does context need to be deduplicated across iterations, and how would you do it?
-
-**Answer:** Each new sub-query can easily retrieve a chunk that an earlier iteration already added, especially when consecutive sub-queries are only loosely different from each other or from the original question. Without deduplication, the same passage can appear multiple times in the context handed to the final synthesis step, wasting context-window budget and potentially skewing the answer toward whatever got duplicated. The fix is to track a set of already-seen chunks — ideally by a stable chunk ID rather than exact text match, since near-duplicate chunk text can slip past a text-based check — and skip re-adding anything already in that set.
-
----
-
-### Q5. How is multi-step iterative retrieval different from the tool-using agent loop in Lesson 01?
-
-**Answer:** Both loop and both let an LLM make decisions between steps, but they solve different problems. The Lesson 01 agent loop decides *whether and which tool* to call for a single-shot need (retrieve, calculate, search the web), and each tool call is largely independent. Iterative retrieval assumes retrieval is definitely needed but a single pass isn't enough, and it specifically accumulates evidence *across* multiple retrieval hops, using each hop's results to inform what to search for next, before synthesizing one final answer from everything gathered.
+    H -- No --> J[Identify Missing Link & Formulate Next-Hop Query]:::process
+    J --> C
+```
 
 ---
 
-> 🧠 **Memory hook:** "Follow the clue, don't expect the whole case from one piece of evidence — and stop either when you truly have enough, or when you've used up your allotted number of leads, whichever comes first."
+### Step 9: Quiz
+
+Test your understanding of multi-step and iterative retrieval. Submit your answers as `1-A, 2-B, 3-C, 4-D`:
+
+**1. When is Multi-Step Iterative Retrieval strictly necessary over standard single-step RAG?**
+- A) When the user asks a multi-hop question where the answer requires following clues across multiple separate documents.
+- B) Only when searching for images.
+- C) Whenever the user types in uppercase letters.
+- D) It is never necessary.
+
+**2. What role does the 'Evaluator / Reflection' step play after each retrieval hop?**
+- A) It deletes the database index.
+- B) It evaluates whether the evidence gathered so far is sufficient to answer the prompt, or if a subsequent search hop is needed.
+- C) It translates the text into another language.
+- D) It restarts the computer.
+
+**3. What is the danger of running an iterative agent without a `max_hops` limit?**
+- A) The agent could get stuck in an endless loop of searching for missing facts, running up huge API bills and causing timeouts.
+- B) The database will delete its files.
+- C) Python will uninstall itself.
+- D) The monitor will turn black.
+
+**4. What is 'Corrective RAG' (CRAG)?**
+- A) A pattern where an evaluator checks the quality and relevance of retrieved documents, correcting or re-querying if the initial retrieval is weak or off-topic.
+- B) A spellchecker for English grammar.
+- C) A tool that deletes bad code.
+- D) An automatic refund system.
+
+*(Submit your answers to check your progress!)*

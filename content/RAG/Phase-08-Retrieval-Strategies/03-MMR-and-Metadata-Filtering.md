@@ -1,179 +1,259 @@
-# 03 — MMR and Metadata Filtering
+# Lesson 3: Maximal Marginal Relevance (MMR) and Diversity
 
-> Top-k similarity search can return five near-duplicate chunks that all say the same thing — Maximal Marginal Relevance (MMR) balances relevance against diversity, and metadata filtering decides what pool that diversity gets chosen from.
+Man, in Lessons 1 and 2 we learned how to retrieve and merge relevant chunks. But there is a silent trap in pure similarity search: **retrieving 5 identical chunks that repeat the exact same sentence**.
 
----
-
-## Table of Contents
-
-1. [The Problem: Five Chunks, One Opinion](#1-the-problem-five-chunks-one-opinion)
-2. [The Analogy: Five Different Perspectives, Not One Repeated Five Times](#2-the-analogy-five-different-perspectives-not-one-repeated-five-times)
-3. [Internal Flow: Maximal Marginal Relevance](#3-internal-flow-maximal-marginal-relevance)
-4. [Code Example: A Simplified MMR Re-Selection Function](#4-code-example-a-simplified-mmr-re-selection-function)
-5. [Metadata Filtering Revisited: Filter-Then-Rank vs. Rank-Then-Filter](#5-metadata-filtering-revisited-filter-then-rank-vs-rank-then-filter)
-6. [Common Mistakes](#6-common-mistakes)
-7. [Hands-On Exercises](#7-hands-on-exercises)
-8. [Interview Q&A](#8-interview-qa)
+When all retrieved chunks say the same thing, you waste your prompt budget and crowd out other important perspectives. Let's learn how **Maximal Marginal Relevance (MMR)** guarantees both high relevance and rich diversity in your search results.
 
 ---
 
-## 1. The Problem: Five Chunks, One Opinion
+### Step 1: Why Do We Need This?
 
-Plain top-k similarity search has a subtle failure mode that has nothing to do with k being too small or too large in absolute terms: it optimizes purely for "closest to the query," with zero awareness of how similar the retrieved chunks are *to each other*. If a document collection contains five near-duplicate passages — say, five slightly different phrasings of the same product description, or five chunks that all restate the same policy — a top-k=5 retrieval can return all five of them, because they're all legitimately close to the query.
+Imagine an employee searching a large company handbook:
+- **User Question:** *"How do I cancel my health insurance coverage?"*
 
-The result: you spend your entire context budget on one idea repeated five times, while a *different*, equally relevant fact that could have completed the picture never makes it into the prompt at all — not because it wasn't similar enough, but because the top 5 slots were already consumed by near-duplicates. This is a distinct problem from k-tuning (Lesson 1) — even a well-tuned k can suffer from this if the retrieved set has no diversity constraint.
+Pure vector similarity search runs and returns the top 4 chunks:
+- Chunk 1 (Score 0.94): *"To cancel health insurance, submit Form 104 in the HR portal."*
+- Chunk 2 (Score 0.93): *"To cancel health insurance, go to the HR portal and submit Form 104."* (From the onboarding guide)
+- Chunk 3 (Score 0.92): *"Health insurance can be canceled via Form 104 in the HR portal."* (From the FAQ summary)
+- Chunk 4 (Score 0.91): *"Submitting Form 104 in the HR portal cancels health insurance."* (From the policy update email)
+
+Look at what happened:
+- All 4 chunks are 100% relevant, but they all repeat the **exact same single fact**!
+- Meanwhile, Chunk 7 (Score 0.81) explained: *"Cancellations take effect on the 1st of the following month, and dental coverage is cancelled automatically alongside it."*
+- Because Chunks 2, 3, and 4 hogged all the prompt slots, the user misses the critical information about effective dates and dental cancellation!
+
+We need a search algorithm that asks: *"Is this next chunk both relevant to the question AND adding new information that wasn't already covered?"* That is what MMR does.
 
 ---
 
-## 2. The Analogy: Five Different Perspectives, Not One Repeated Five Times
+### Step 2: What Is It?
 
-**Real-world analogy:** imagine asking five different colleagues for their opinion on a decision, hoping to get a well-rounded picture. If all five happen to have read the same one article and just repeat its argument back to you, you haven't actually gained five opinions — you've gained one opinion, heard five times. What you actually wanted was for someone to notice "these two are about to say the same thing — let's swap one of them out for a colleague who'll bring something different to the table," even if that colleague's take is, on its own, slightly less directly on-topic than a fourth repeat of the same view.
+**Maximal Marginal Relevance (MMR)** is an algorithm that balances **relevance to the query** with **diversity among the selected chunks**.
 
-Maximal Marginal Relevance is exactly that instinct, encoded as an algorithm: when picking the next chunk to include, don't just ask "how relevant is this to the query" — also ask "how different is this from what I've already picked," and balance the two.
+Instead of picking the top chunks based purely on similarity to the user question, MMR iteratively selects chunks using a dual goal:
+1. It rewards chunks that are similar to the **query**.
+2. It penalizes chunks that are too similar to **chunks already selected**.
 
-> 🧠 The one-line version: MMR asks for relevant *and* different, not just relevant.
+#### The Everyday Analogy: Hiring a Committee
+- Imagine you need to hire a 3-person advisory committee for a startup.
+- If you only look at test scores, you might hire 3 people who all have identical PhDs in theoretical physics. They are all brilliant, but they all think the exact same way.
+- With MMR, you hire the top theoretical physicist first. Then, for the second and third seats, you look for people who are still very smart, but bring different skills—like a software engineer and a marketing director. Your committee is now well-rounded and diverse.
 
 ---
 
-## 3. Internal Flow: Maximal Marginal Relevance
+### Step 3: Real-World Example
 
-MMR builds the retrieved set one chunk at a time, and at each step it scores every remaining candidate using both its relevance to the original query *and* its similarity to chunks already selected so far:
+Imagine searching an investment research repository covering a major tech company:
+
+- **User Query:** *"What are the risks and opportunities for Apple in 2026?"*
+
+Search Results Comparison:
+- **Standard Similarity Search ($k=3$):**
+  - Chunk 1: *"iPhone supply chain constraints in Asia."* (Risk)
+  - Chunk 2: *"Component shortages impact iPhone assembly."* (Duplicate Risk)
+  - Chunk 3: *"Factory delays slow down iPhone hardware production."* (Duplicate Risk)
+  - *Failure:* The LLM only answers about supply chain issues, missing all business opportunities!
+
+- **MMR Search ($\lambda = 0.5, k=3$):**
+  - Chunk 1: *"iPhone supply chain constraints in Asia."* (Selected for top query similarity)
+  - Chunk 2: *"Services revenue (iCloud, Apple Pay) projected to grow 15%."* (Selected because it is different from Chunk 1)
+  - Chunk 3: *"Regulatory antitrust investigations in Europe."* (Selected for novel risk perspective)
+  - *Success:* The LLM provides a comprehensive, balanced answer covering both hardware, services, and regulatory risks!
+
+---
+
+### Step 4: How Does It Work?
+
+Here is the MMR selection loop:
 
 ```
-MMR = argmax over unselected docs d of
-      [ lambda * sim(d, query)  -  (1 - lambda) * max_{s in selected} sim(d, s) ]
+[Candidate Pool: Top 20 Vector Matches]
+                    │
+1. Pick Candidate with highest similarity to query ──► Add to Selected Set S
+                    │
+2. For each remaining Candidate C:
+   Calculate MMR Score:
+   
+   MMR Score = λ * Sim(C, Query) - (1 - λ) * Max_Sim(C, already_selected_in_S)
+                    │
+3. Pick Candidate with highest MMR Score ──► Add to Selected Set S
+                    │
+4. Repeat until target k chunks are selected!
 ```
 
-Reading this term by term: `sim(d, query)` is the ordinary relevance score — how similar candidate `d` is to the original query, exactly what plain top-k similarity search already computes. `max_{s in selected} sim(d, s)` is the *redundancy penalty* — how similar `d` is to the most similar chunk **already chosen**, which captures "would picking this add something new, or just repeat what's already in the selected set." The **lambda** parameter (between 0 and 1) controls the tradeoff between the two:
-
-- **lambda close to 1** → the formula collapses toward pure relevance ranking, mostly ignoring redundancy (behaves close to plain top-k).
-- **lambda close to 0** → the formula prioritizes diversity almost exclusively, potentially selecting chunks that are quite dissimilar to the query just because they're different from what's already picked.
-- **A middle value (commonly around 0.5-0.7)** balances both — favor relevance, but actively avoid picking something that's nearly identical to a chunk you already have.
-
-The algorithm runs iteratively: pick the single most relevant chunk first (there's nothing selected yet to be redundant with), then for each subsequent pick, compute the MMR score above for every remaining candidate against the *already-selected* set, and pick whichever scores highest. Repeat until you have k chunks.
+#### Understanding the Lambda ($\lambda$) Diversity Slider:
+The $\lambda$ parameter (between 0.0 and 1.0) controls the trade-off:
+- **$\lambda = 1.0$:** 100% relevance, 0% diversity. Identical to standard Top-K search.
+- **$\lambda = 0.0$:** 0% relevance, 100% diversity. Returns totally random, disjoint topics.
+- **$\lambda = 0.5$ (Production Standard):** Balanced. Rewards relevant chunks, but penalizes near-duplicate content.
 
 ---
 
-## 4. Code Example: A Simplified MMR Re-Selection Function
+### Step 5: Code Example
+
+Here is a Python implementation showing how MMR selects diverse, non-redundant chunks:
 
 ```python
-import numpy as np
+"""
+Maximal Marginal Relevance (MMR) Implementation
+"""
 
-def cosine_sim(a: np.ndarray, b: np.ndarray) -> float:
+import numpy as np
+from typing import List, Dict
+
+def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
     return float(np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b)))
 
-def mmr_select(
-    candidates: list[tuple[str, np.ndarray, float]],  # (chunk_text, embedding, sim_to_query)
-    query_embedding: np.ndarray,
-    k: int = 5,
-    lambda_param: float = 0.6,
-) -> list[str]:
-    """Re-select k chunks from a larger candidate pool, balancing relevance
-    to the query against diversity from chunks already selected."""
-    remaining = list(candidates)
-    selected: list[tuple[str, np.ndarray, float]] = []
+def maximal_marginal_relevance(
+    query_vector: np.ndarray,
+    candidate_vectors: List[np.ndarray],
+    candidate_docs: List[str],
+    lambda_param: float = 0.5,
+    top_k: int = 2
+) -> List[str]:
+    """
+    Selects top_k chunks balancing query relevance and inter-chunk diversity.
+    """
+    selected_indices = []
+    remaining_indices = list(range(len(candidate_docs)))
 
-    while remaining and len(selected) < k:
-        best_score = float("-inf")
+    # Step 1: Select the single chunk most similar to the query
+    first_choice = max(
+        remaining_indices,
+        key=lambda idx: cosine_similarity(query_vector, candidate_vectors[idx])
+    )
+    selected_indices.append(first_choice)
+    remaining_indices.remove(first_choice)
+
+    # Step 2: Iteratively select remaining chunks using MMR formula
+    while len(selected_indices) < top_k and remaining_indices:
+        best_score = -float("inf")
         best_candidate = None
 
-        for chunk_text, embedding, sim_to_query in remaining:
-            if not selected:
-                # Nothing selected yet -- redundancy penalty is zero,
-                # so this reduces to picking by relevance alone.
-                redundancy = 0.0
-            else:
-                # Penalty is the similarity to the MOST similar already-
-                # selected chunk -- the closest match, not the average.
-                redundancy = max(
-                    cosine_sim(embedding, sel_embedding)
-                    for _, sel_embedding, _ in selected
-                )
+        for idx in remaining_indices:
+            # Query relevance term
+            sim_to_query = cosine_similarity(query_vector, candidate_vectors[idx])
+            
+            # Redundancy penalty term (max similarity to any already selected chunk)
+            max_sim_to_selected = max(
+                cosine_similarity(candidate_vectors[idx], candidate_vectors[s_idx])
+                for s_idx in selected_indices
+            )
 
-            mmr_score = lambda_param * sim_to_query - (1 - lambda_param) * redundancy
+            # MMR formula
+            mmr_score = (lambda_param * sim_to_query) - ((1.0 - lambda_param) * max_sim_to_selected)
 
             if mmr_score > best_score:
                 best_score = mmr_score
-                best_candidate = (chunk_text, embedding, sim_to_query)
+                best_candidate = idx
 
-        selected.append(best_candidate)
-        remaining.remove(best_candidate)
+        selected_indices.append(best_candidate)
+        remaining_indices.remove(best_candidate)
 
-    return [chunk_text for chunk_text, _, _ in selected]
+    return [candidate_docs[i] for i in selected_indices]
+
+if __name__ == "__main__":
+    # Query vector pointing towards customer support cancellation
+    q_vec = np.array([1.0, 0.0, 0.0])
+
+    # Three candidates: Doc 0 and Doc 1 are nearly identical; Doc 2 has different facts
+    docs = [
+        "Cancel insurance using Form 104 in the HR portal.",
+        "Submit Form 104 in HR portal to cancel insurance.",   # Duplicate idea!
+        "Cancellations take effect on the 1st of the next month." # New distinct fact!
+    ]
+    vectors = [
+        np.array([0.98, 0.02, 0.0]),  # Very close to query
+        np.array([0.97, 0.03, 0.0]),  # Very close to query AND very close to Doc 0
+        np.array([0.80, 0.50, 0.0]),  # Good match to query, but very different from Doc 0
+    ]
+
+    # Standard Top-K would pick Doc 0 and Doc 1 (duplicates)
+    # MMR with lambda=0.5 picks Doc 0 and Doc 2:
+    selected = maximal_marginal_relevance(q_vec, vectors, docs, lambda_param=0.5, top_k=2)
+    
+    print("--- MMR DIVERSIFIED SELECTION ---")
+    for idx, doc in enumerate(selected, start=1):
+        print(f"Selection {idx}: {doc}")
 ```
 
-Notice the structure mirrors the formula directly: `sim_to_query` is the relevance term, and `redundancy` (the max similarity to anything already selected) is subtracted, weighted by `(1 - lambda_param)`. The first pick always reduces to plain top-relevance because there's nothing yet to be redundant against — MMR only changes behavior from the second pick onward.
+---
+
+### Step 6: How Is It Used in Production?
+
+| Architecture Knob | Common Mistake | The Production Fix | Impact |
+| :--- | :--- | :--- | :--- |
+| **Over-Diversifying ($\lambda < 0.2$)** | Setting lambda too low returns chunks that are completely unrelated to the query | Keep $\lambda$ between 0.5 and 0.7 for standard RAG | Ensures relevance while removing duplicates |
+| **Running MMR over 100k Vectors** | Calculating all-pairs vector similarity in Python for millions of records is too slow | Retrieve top 20 candidates using fast vector search, then run MMR *only* on those 20 | Sub-10ms diversity execution |
+| **Ignoring Chunk Overlap** | Consecutive chunks generated with 20% overlap naturally repeat sentences | MMR automatically penalizes and skips the overlapping twin chunk | Eliminates boundary repetition |
+| **Combining with Metadata** | Applying MMR without metadata filters can pull diverse chunks from wrong departments | Always execute metadata pre-filtering *before* running MMR | Guarantees compliance and diversity |
 
 ---
 
-## 5. Metadata Filtering Revisited: Filter-Then-Rank vs. Rank-Then-Filter
+### Step 7: Quick Revision
 
-Phases 6 and 7 introduced metadata filtering — restricting a similarity search to chunks matching certain metadata (a date range, a document type, a customer tier, and so on) alongside the vector query. In the context of choosing a retrieval strategy, there are two different orders you can apply filtering and ranking, and they're not equivalent:
-
-**Filter-then-rank:** first narrow the candidate pool to only chunks matching the metadata condition, then run similarity search (or MMR) purely within that narrowed pool. This guarantees every result satisfies the filter, and it's usually what you want when the filter is a hard business requirement (e.g., "only search documents the current user is authorized to see," or "only search this customer's own account history").
-
-**Rank-then-filter:** run similarity search across the *entire* corpus first, then discard results that don't match the metadata condition afterward. This is riskier: if you retrieve top-k=5 and then filter, you might end up with fewer than 5 results (or zero) if most of the top matches happen to fail the filter — you've thrown away ranking budget on candidates that were always going to be discarded.
-
-The practical rule of thumb: filter-then-rank whenever the metadata condition is a hard requirement (especially anything security- or access-control-related, where "rank first" risks even *seeing* unauthorized content pass through scoring); rank-then-filter is occasionally acceptable for soft preferences where you're willing to gracefully degrade the metadata match if similarity is strong enough. And this interacts directly with MMR and k-tuning from this phase: if you filter down to a very small candidate pool first, there may not be enough distinct chunks left for MMR's diversity term to do anything meaningful with — a consideration covered further in the mistakes below.
-
----
-
-## 6. Common Mistakes
-
-**Mistake 1: Setting MMR's diversity weight too high.** Pushing lambda too close to 0 optimizes almost entirely for "different from what's already picked" and can end up selecting chunks that are barely relevant to the query at all, just because they're dissimilar to earlier picks. The retrieved set becomes diverse but useless — diversity without a relevance floor isn't actually helpful. A common practical range is lambda around 0.5-0.7, favoring relevance while still penalizing near-duplicates.
-
-**Mistake 2: Filtering so aggressively that MMR has nothing left to diversify over.** If a metadata filter (Phases 6-7) narrows the candidate pool down to just two or three chunks before MMR ever runs, there's no meaningful diversity to select from — MMR degenerates into just returning whatever tiny pool survived the filter, in whatever order. If a retrieval strategy pairs strict filtering with MMR, it's worth checking that the post-filter candidate pool is meaningfully larger than k; otherwise the diversity mechanism has nothing to work with.
-
-**Interview angle:** a strong answer to "when would you use MMR over plain top-k" names the specific failure mode — near-duplicate chunks consuming the entire retrieved set — rather than a vague "for better results." Being able to state the MMR formula (or at least that it subtracts a redundancy penalty weighted by `1 - lambda` from a relevance term weighted by `lambda`) and correctly explain which direction lambda pushes behavior is what distinguishes real understanding from having only heard the term.
+- **The Duplicate Problem:** Standard similarity search often returns multiple chunks repeating the exact same sentence.
+- **MMR = Relevance - Redundancy:** Maximizes query similarity while penalizing similarity to already chosen chunks.
+- **Lambda ($\lambda$) Tuning:**
+  - $\lambda = 1.0$: Pure similarity (duplicates allowed).
+  - $\lambda = 0.5$: Balanced (the industry standard).
+  - $\lambda = 0.0$: Pure diversity.
+- **Two-Stage Execution:** Fetch candidate pool (e.g. 20 chunks) via database index, then apply MMR in-memory to select top 3-5 diverse chunks.
+- **Interview Answer:** *"Maximal Marginal Relevance (MMR) prevents information redundancy in RAG prompts by penalizing chunks that are mathematically similar to documents already selected. It ensures the retrieved context contains diverse, complementary evidence rather than duplicate variations of a single passage."*
 
 ---
 
-## 7. Hands-On Exercises
+### Step 8: Final Flow Diagram
 
-### Exercise 1 — Run MMR with two different lambda values
+```mermaid
+flowchart TD
+    classDef startEnd fill:#2563eb,stroke:#1d4ed8,color:#ffffff,stroke-width:2px;
+    classDef decision fill:#f59e0b,stroke:#d97706,color:#ffffff,stroke-width:2px;
+    classDef success fill:#10b981,stroke:#059669,color:#ffffff,stroke-width:2px;
+    classDef process fill:#3b82f6,stroke:#1d4ed8,color:#ffffff,stroke-width:2px;
 
-Using the `mmr_select` function above, construct a candidate list where two chunks have nearly identical embeddings (simulate near-duplicates) and a third chunk is meaningfully different but slightly less relevant to the query. Run the selection with `lambda_param=0.9` and `lambda_param=0.3` and compare which chunks get selected in each case.
+    A([User Query]) --> B[Fetch Candidate Pool: e.g. Top 20 via Vector Index]
+    B --> C[Select Candidate #1 with highest query similarity]
+    C --> D[Add Candidate #1 to Selected Set S]:::process
 
-### Exercise 2 — Combine filtering and MMR
+    D --> E{Have we reached target top_k e.g. 4 chunks?}:::decision
+    E -- Yes --> F([Deliver Diverse Context Set to LLM Prompt]):::startEnd
 
-Simulate a metadata filter that narrows a 20-chunk candidate pool down to 3 chunks matching some condition, then run MMR with k=5 over that filtered pool. Observe what happens when k exceeds the size of the filtered candidate pool, and describe in your own words why this is the "filtering too aggressively" mistake from this lesson.
-
-### Exercise 3 — Decide filter-then-rank vs. rank-then-filter
-
-Take a retrieval scenario from a past phase's project (or design a new one) involving an access-control requirement — for example, "users should only retrieve chunks from documents belonging to their own organization." Write out why this specific scenario demands filter-then-rank rather than rank-then-filter, and what could go wrong if it were implemented the other way around.
-
----
-
-## 8. Interview Q&A
-
-### Q1. What problem does MMR solve that plain top-k similarity search doesn't?
-
-**Answer:** Plain top-k similarity search only optimizes for relevance to the query, with no awareness of how similar the retrieved chunks are to each other — it can return several near-duplicate chunks that all restate the same fact, wasting the context budget on redundant information instead of surfacing a diverse, complementary set of relevant facts. MMR explicitly balances relevance against diversity from already-selected results to avoid this.
-
----
-
-### Q2. Write out the MMR formula and explain what lambda controls.
-
-**Answer:** `MMR = argmax over unselected docs d of [ lambda * sim(d, query) - (1 - lambda) * max_{s in selected} sim(d, s) ]`. The first term rewards relevance to the query; the second term penalizes similarity to whatever's already been selected. Lambda close to 1 favors relevance (behaves close to plain top-k); lambda close to 0 favors diversity, potentially at the cost of relevance.
+    E -- No --> G[Evaluate remaining candidates with MMR formula]:::process
+    G --> H[Calculate: λ * sim_query - 1-λ * max_sim_selected]
+    H --> I[Pick candidate with highest MMR score]:::success
+    I --> J[Add to Selected Set S]
+    J --> E
+```
 
 ---
 
-### Q3. What happens if you set MMR's lambda too low?
+### Step 9: Quiz
 
-**Answer:** The algorithm optimizes almost entirely for diversity from already-selected chunks and can end up choosing candidates that are barely relevant to the original query, just because they differ from earlier picks. You get a diverse but low-quality retrieved set — diversity isn't useful on its own if it comes at the cost of relevance.
+Test your understanding of Maximal Marginal Relevance (MMR). Submit your answers as `1-A, 2-B, 3-C, 4-D`:
 
----
+**1. What failure mode in pure vector similarity search does MMR eliminate?**
+- A) Database network timeouts.
+- B) Retrieving multiple redundant chunks that say the exact same thing, which wastes token space and crowds out other helpful facts.
+- C) Accidental deletion of files from the server.
+- D) Embedding dimension mismatches.
 
-### Q4. What's the difference between filter-then-rank and rank-then-filter, and when does it matter?
+**2. What happens if you set the MMR parameter $\lambda = 1.0$?**
+- A) The search becomes identical to standard Top-K similarity search with zero diversity penalty.
+- B) The retriever returns completely random documents.
+- C) The vector database crashes.
+- D) All documents are deleted.
 
-**Answer:** Filter-then-rank narrows the candidate pool to only metadata-matching chunks before running similarity search or MMR, guaranteeing every result satisfies the filter. Rank-then-filter runs similarity search first and discards non-matching results afterward, which can leave you with fewer results than expected. It matters most for hard requirements like access control, where filter-then-rank is essential — rank-then-filter risks scoring, or even exposing, content the user shouldn't see in the first place.
+**3. In the MMR formula, what is the purpose of the term `(1 - λ) * max(similarity to already selected chunks)`?**
+- A) It speeds up the computer processor.
+- B) It penalizes candidates that are too similar to documents already picked, promoting novel and diverse information.
+- C) It translates foreign text.
+- D) It checks if the user is an admin.
 
----
+**4. Why is MMR typically executed on a small candidate pool (e.g. 20 chunks) rather than across the entire database of 100,000 vectors?**
+- A) Running the all-pairs similarity comparisons required by MMR across 100,000 vectors in memory would be far too slow, whereas running it on 20 candidates takes less than 2 milliseconds.
+- B) Python can only count up to 20.
+- C) Embeddings lose their values if compared to more than 20 items.
+- D) Databases do not allow numbers higher than 20.
 
-### Q5. Can combining aggressive metadata filtering with MMR backfire? How?
-
-**Answer:** Yes — if the metadata filter narrows the candidate pool down to only a handful of chunks before MMR runs, there isn't a meaningful diversity to select from, and MMR effectively degenerates into just returning whatever tiny pool survived filtering. The fix is making sure the post-filter candidate pool is meaningfully larger than the target k before applying MMR.
-
----
-
-> 🧠 **Memory hook:** "Relevance gets you in the room; MMR's redundancy penalty makes sure everyone in the room isn't saying the same thing."
+*(Submit your answers to check your progress!)*

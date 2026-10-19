@@ -1,219 +1,225 @@
-# Sub-Graph Streaming — Complete Guide
+# Sub-Graph Streaming in LangGraph
 
-> "A space mission control center monitors real-time telemetry from both the main orbital spacecraft and the detached planetary landing probe on synchronized separate dashboard displays."
-
----
-
-## Table of Contents
-
-1. [The Problem: Telemetry Blackouts in Nested Subgraphs](#1-the-problem-telemetry-blackouts-in-nested-subgraphs)
-2. [The Spacecraft and Landing Probe Analogy](#2-the-spacecraft-and-landing-probe-analogy)
-3. [The Mechanism: Subgraph Namespaces and Streaming Traversal](#3-the-mechanism-subgraph-namespaces-and-streaming-traversal)
-4. [Diagram: Parent and Subgraph Streaming Hierarchy](#4-diagram-parent-and-subgraph-streaming-hierarchy)
-5. [Code Walkthrough: Streaming Multi-Tiered Subgraphs with Namespaces](#5-code-walkthrough-streaming-multi-tiered-subgraphs-with-namespaces)
-6. [Comparing Root Streaming vs Subgraph Streaming](#6-comparing-root-streaming-vs-subgraph-streaming)
-7. [Common Mistakes](#7-common-mistakes)
-8. [Hands-On Exercises](#8-hands-on-exercises)
-9. [Interview Q&A](#9-interview-qa)
+> "When complex parent graphs invoke specialized child graphs, standard streaming only reports the parent. Sub-graph streaming lets you peek inside nested internal steps."
 
 ---
 
-## 1. The Problem: Telemetry Blackouts in Nested Subgraphs
+### Step 1: Why Do We Need This?
 
-When complex enterprise graphs embed child subgraphs (e.g. an autonomous research sub-team), naive root streaming treats the entire child subgraph as a single opaque black-box node.
+#### The Real Problem
 
-### The Nested Black-Box Problem
+In enterprise AI applications, you do not build one giant 50-node graph. You build modular **subgraphs**:
+- A Parent Graph manages high-level routing: `Triage -> Research Subgraph -> Quality Review -> Output`.
+- The `Research Subgraph` is itself a 5-step agent with its own web searches, scrapers, and evaluators.
+
+If you stream only the parent graph:
+- The UI sits on *"Research Subgraph"* for 20 seconds.
+- You cannot see what the child nodes (`search_bing`, `parse_pdf`, `score_relevance`) are doing inside.
+- If a sub-node gets stuck, you have no real-time visibility into which internal step failed.
+
+#### Why LangGraph Solves It
+
+LangGraph supports **Sub-Graph Streaming**:
+- By passing `subgraphs=True` to `graph.stream()`, LangGraph streams events from both the top-level parent graph AND all nested child subgraphs.
+- Each emitted chunk includes a namespace tuple showing the exact execution path (e.g. `("parent", "research_subgraph:node_3")`).
+- Your UI can render nested progress trees with complete transparency.
+
+---
+
+### Step 2: What Is It?
+
+#### Simple Explanation
+
+Think of a **corporate project management hierarchy**:
+- **Parent Only Streaming:** The CEO only tells the board: *"The marketing department is working on the campaign."* (Zero detail for 3 weeks).
+- **Sub-Graph Streaming (`subgraphs=True`):** The CEO provides a live breakdown: *"Within Marketing, Sarah finished the graphics, Dave is drafting ad copy, and Lisa is negotiating TV slots."*
+
+#### Namespace Structure
 
 ```text
-Parent Graph: [Orchestrator] ──▶ [Research Subgraph (runs 5 internal steps)] ──▶ [Summarizer]
-  Without Subgraph Streaming:
-  - Parent stream sits completely silent for 15 seconds while the subgraph runs.
-  - Frontend cannot display the child agent's internal progress or tokens.
+Chunk 1: namespace = ()                           -> Top-level parent node
+Chunk 2: namespace = ("research_team",)           -> Nested inside child subgraph
+Chunk 3: namespace = ("research_team", "scraper") -> Deeply nested worker node
 ```
-
-### The Solution: Subgraph-Aware Streaming
-
-LangGraph's `subgraphs=True` parameter in `.stream()` and `.astream()` streams events from all nested child graphs with explicit namespace hierarchies.
 
 ---
 
-## 2. The Spacecraft and Landing Probe Analogy
+### Step 3: Real-World Example
 
-NASA flight controllers do not turn off radio antennas when the lunar lander separates from the command module.
+#### Multi-Department Enterprise Audit Agent
 
-### Command Module Silence vs Dual-Probe Telemetry
-
-```text
-Single Antenna  → Flight director only receives updates from the mothership;
-                  landing probe telemetry is completely invisible (Blind descent).
-
-Dual Telemetry  → Mothership stream: `[CommandModule]: In Lunar Orbit`.
-                  Lander sub-stream: `[Lander.DescentEngine]: Altitude 500m... 200m... Touchdown!`.
-```
-
-### Mapping to LangGraph
-
-The command module is the Parent Graph; the lunar lander is the Subgraph; the namespace tags distinguish parent telemetry from child telemetry.
+Imagine a compliance verification agent:
+- **What it receives:** An annual report to audit for tax compliance.
+- **What decision it makes:**
+  1. The parent graph calls the `tax_audit_subgraph`.
+  2. With `subgraphs=True`, the frontend telemetry dashboard shows:
+     - `Parent: Dispatched to Tax Department`
+     - `Sub-Graph [tax_audit]: Node 'check_deductions' finished`
+     - `Sub-Graph [tax_audit]: Node 'verify_receipts' running...`
+     - `Parent: Review completed, preparing sign-off`
+- **What it outputs:** A live multi-level dashboard showing both high-level milestones and fine-grained internal node progress.
 
 ---
 
-## 3. The Mechanism: Subgraph Namespaces and Streaming Traversal
+### Step 4: How Does It Work?
 
-Enable child streaming by setting `subgraphs=True` in `.stream()`.
+1. **Define Child Graph:** Build and compile a standard `StateGraph` for the sub-task.
+2. **Add Child to Parent:** In the parent graph, add the compiled child graph directly as a node:
+   `parent_builder.add_node("research_team", child_graph)`.
+3. **Stream with `subgraphs=True`:**
+   ```python
+   for namespace, chunk in graph.stream(input_data, stream_mode="updates", subgraphs=True):
+       print("Current Layer:", namespace)
+       print("Node Output:", chunk)
+   ```
+4. **Tuple Unpacking:** When `subgraphs=True`, each stream iteration yields `(namespace_tuple, chunk)` instead of just `chunk`.
 
-### Subgraph Streaming Syntax
+---
+
+### Step 5: Code Example
+
+Here is a complete, runnable example demonstrating sub-graph streaming in LangGraph:
 
 ```python
-# Pass subgraphs=True to receive events from all nested child graphs
-async for namespace, chunk in app.astream(
-    inputs,
-    stream_mode="updates",
-    subgraphs=True  # Traverses into nested compiled graphs!
-):
-    print(f"Namespace: {namespace} | Update: {chunk}")
-```
-
-### Namespace Format
-
-- Root Graph Events: `namespace = ()` (Empty tuple)
-- Child Subgraph Events: `namespace = ("research_team",)`
-- Grandchild Subgraph Events: `namespace = ("research_team", "web_scraper")`
-
----
-
-## 4. Diagram: Parent and Subgraph Streaming Hierarchy
-
-### Multi-Level Streaming Topology
-
-```text
-Root Graph Execution Stream
- ├── Namespace: () ──▶ [orchestrator_node] (Emits: "Dispatching Research")
- │
- ├── Namespace: ("research_subgraph",)
- │    ├── [search_worker] (Emits: "Querying Wikipedia...")
- │    ├── [analyst_worker] (Emits: "Analyzing 12 sources...")
- │    └── [writer_worker] (Emits token chunks: "Renewable energy...")
- │
- └── Namespace: () ──▶ [final_synthesis_node] (Emits: "Complete report compiled.")
-```
-
----
-
-## 5. Code Walkthrough: Streaming Multi-Tiered Subgraphs with Namespaces
-
-A complete multi-level nested graph demonstrating real-time subgraph streaming:
-
-```python
-# subgraph_streaming_demo.py
-import asyncio
 from typing import TypedDict
 from langgraph.graph import StateGraph, START, END
 
-# --- 1. Define Child Subgraph ---
+# --- 1. CHILD SUB-GRAPH DEFINITION ---
 class ChildState(TypedDict):
-    topic: str
-    subgraph_notes: list[str]
+    raw_query: str
+    search_results: str
+    summary: str
 
-def child_step_1(state: ChildState) -> dict:
-    return {"subgraph_notes": [f"Scraped data for {state['topic']}"]}
+def fetch_search_results(state: ChildState) -> dict:
+    return {"search_results": f"Found 3 articles about '{state['raw_query']}'"}
 
-def child_step_2(state: ChildState) -> dict:
-    return {"subgraph_notes": ["Fact-checked sources."]}
+def summarize_results(state: ChildState) -> dict:
+    return {"summary": f"Summary: Key insights extracted from {state['search_results']}"}
 
 child_builder = StateGraph(ChildState)
-child_builder.add_node("step_1", child_step_1)
-child_builder.add_node("step_2", child_step_2)
-child_builder.add_edge(START, "step_1")
-child_builder.add_edge("step_1", "step_2")
-child_builder.add_edge("step_2", END)
+child_builder.add_node("fetcher", fetch_search_results)
+child_builder.add_node("summarizer", summarize_results)
+
+child_builder.add_edge(START, "fetcher")
+child_builder.add_edge("fetcher", "summarizer")
+child_builder.add_edge("summarizer", END)
+
 child_subgraph = child_builder.compile()
 
-# --- 2. Define Parent Graph ---
+# --- 2. PARENT GRAPH DEFINITION ---
 class ParentState(TypedDict):
-    topic: str
-    final_report: str
+    raw_query: str
+    summary: str
+    final_email: str
 
-def parent_prep_node(state: ParentState) -> dict:
-    return {"topic": state["topic"]}
-
-def parent_finish_node(state: ParentState) -> dict:
-    return {"final_report": f"Master Report on {state['topic']} generated."}
+def format_email_node(state: ParentState) -> dict:
+    return {"final_email": f"To Team: Here is your requested briefing:\n{state['summary']}"}
 
 parent_builder = StateGraph(ParentState)
-parent_builder.add_node("prep", parent_prep_node)
-parent_builder.add_node("research_team", child_subgraph)  # Subgraph added as standard node!
-parent_builder.add_node("finish", parent_finish_node)
 
-parent_builder.add_edge(START, "prep")
-parent_builder.add_edge("prep", "research_team")
-parent_builder.add_edge("research_team", "finish")
-parent_builder.add_edge("finish", END)
+# Add child subgraph directly as a node in the parent graph!
+parent_builder.add_node("research_agent", child_subgraph)
+parent_builder.add_node("email_formatter", format_email_node)
 
-parent_app = parent_builder.compile()
+parent_builder.add_edge(START, "research_agent")
+parent_builder.add_edge("research_agent", "email_formatter")
+parent_builder.add_edge("email_formatter", END)
 
-# --- 3. Stream with subgraphs=True ---
-async def run_subgraph_stream():
-    inputs = {"topic": "Fusion Energy"}
-    print("--- Streaming with subgraphs=True ---")
-    async for namespace, update in parent_app.astream(inputs, stream_mode="updates", subgraphs=True):
-        ns_str = " -> ".join(namespace) if namespace else "ROOT"
-        print(f"[{ns_str}] {update}")
+parent_graph = parent_builder.compile()
 
 if __name__ == "__main__":
-    asyncio.run(run_subgraph_stream())
+    initial_input: ParentState = {
+        "raw_query": "LangGraph Subgraphs",
+        "summary": "",
+        "final_email": ""
+    }
+
+    print("=== STREAMING WITH subgraphs=True ===")
+    # When subgraphs=True, each item is a (namespace, chunk) pair!
+    for namespace, chunk in parent_graph.stream(initial_input, stream_mode="updates", subgraphs=True):
+        if not namespace:
+            scope = "PARENT GRAPH"
+        else:
+            scope = f"SUB-GRAPH [{ ' > '.join(namespace) }]"
+            
+        print(f"[{scope}] -> {chunk}")
 ```
 
 ---
 
-## 6. Comparing Root Streaming vs Subgraph Streaming
+### Step 6: How Is It Used in Production?
 
-| Feature | Root Streaming (`subgraphs=False`) | Subgraph Streaming (`subgraphs=True`) |
-|---|---|---|
-| Yield Tuple Structure | `chunk` | `(namespace_tuple, chunk)` |
-| Child Graph Visibility | None (Child graph appears as 1 opaque delay) | Complete step-by-step visibility into child nodes |
-| Token Streaming from Subgraphs | Only final merged response | Real-time token chunks from nested LLMs |
-| Namespace Disambiguation | Not needed | `("sub_a", "sub_b")` path hierarchy |
-| Best Used For | Simple flat architectures | Multi-agent teams, hierarchical supervisors |
+#### Production Patterns & Edge Cases
 
----
-
-## 7. Common Mistakes
-
-- **Forgetting that `subgraphs=True` changes return signature.** When `subgraphs=True`, items yielded are `(namespace, chunk)` tuples rather than bare `chunk` objects.
-- **Mismatched state keys between parent and child.** If child subgraph expects `sub_query` but parent passes `query`, child fails on entry; use state transformation wrappers.
-- **Streaming grandchild graphs without checking namespace depth.** Hierarchical multi-agent swarms produce deep namespaces (e.g. `("finance", "tax_team", "scraper")`).
-- **Assuming child checkpointers are independent.** When compiling a parent graph with a checkpointer, child subgraphs automatically share the checkpointer under sub-namespaces.
-- **Overwhelming frontend with excessive child telemetry.** Filter noisy sub-agent events before sending to end-user web clients.
+| Scenario | Production Challenge | Recommended Solution |
+| :--- | :--- | :--- |
+| **Noise Overload** | Streaming hundreds of tiny child node updates overwhelms frontend WebSockets. | Filter `namespace` at the backend layer, forwarding only key child events to the client. |
+| **State Schema Mismatch** | Child graph state has different keys than parent graph state. | Write an adapter node function that extracts parent keys, invokes the child, and maps outputs back. |
+| **Separate Checkpointer Scopes** | Parent and child graphs updating the same database checkpoints simultaneously. | LangGraph's checkpointer engine uses `checkpoint_ns` to automatically isolate child graph checkpoints. |
 
 ---
 
-## 8. Hands-On Exercises
+### Step 7: Quick Revision
 
-**Exercise 1:** Build a 2-node child subgraph and embed it inside a parent graph.
-
-**Exercise 2:** Execute with `subgraphs=False` and notice that child internal steps are omitted from output.
-
-**Exercise 3:** Execute with `subgraphs=True` and print `namespace` alongside each node delta.
-
-**Exercise 4:** Embed a `create_react_agent` as a subgraph and stream its internal `ToolNode` calls using `subgraphs=True`.
-
-**Exercise 5:** Build a frontend filter that displays a spinner for child tasks and text typing for parent tasks based on `namespace`.
+- Add compiled child graphs directly as nodes in parent graphs.
+- Set `subgraphs=True` in `graph.stream()` to receive telemetry from nested child nodes.
+- When `subgraphs=True` is enabled, stream yields `(namespace_tuple, chunk)` pairs.
+- An empty namespace `()` indicates top-level parent graph execution.
+- Sub-graph streaming provides complete real-time transparency for multi-team architectures.
 
 ---
 
-## 9. Interview Q&A
+### Step 8: Final Flow Diagram
 
-**Q: How do you enable subgraph streaming in LangGraph?**
-By setting `subgraphs=True` in `.stream()` or `.astream()`: `app.astream(inputs, subgraphs=True)`.
+```mermaid
+flowchart TD
+    subgraph ParentGraph [Parent Graph: stream_mode updates]
+        START([START]):::startStyle --> ChildNode["Sub-graph Node: research_agent"]:::nodeStyle
+        ChildNode --> Formatter["Node: email_formatter"]:::nodeStyle
+        Formatter --> END([END]):::endStyle
+    end
 
-**Q: What is the structure of the `namespace` yielded during subgraph streaming?**
-The `namespace` is a tuple of string node names representing the hierarchical call path from the root graph down to the active child subgraph (e.g. `("supervisor", "researcher_agent")`). For root-level events, the namespace is an empty tuple `()`.
+    subgraph ChildGraph [Child Subgraph: Nested Telemetry]
+        Fetcher["Child Node: fetcher"]:::decisionStyle --> Summarizer["Child Node: summarizer"]:::decisionStyle
+    end
 
-**Q: Can you stream real-time LLM token chunks from within a nested subgraph?**
-Yes. Combining `subgraphs=True` with `stream_mode="messages"` yields `(namespace, (AIMessageChunk, metadata))` tuples, delivering real-time tokens from nested child agents.
+    ChildNode -.->|Executes internally| Fetcher
+    Summarizer -.->|Returns result to parent| ChildNode
 
-**Q: How does checkpointing work with nested subgraphs?**
-When a parent graph is compiled with a checkpointer, LangGraph manages checkpoints across all nested subgraphs within the same `thread_id`, namespacing child state snapshots automatically.
+    classDef startStyle fill:#0284c7,stroke:#38bdf8,stroke-width:2px,color:#ffffff;
+    classDef nodeStyle fill:#0f172a,stroke:#38bdf8,stroke-width:1px,color:#f8fafc;
+    classDef decisionStyle fill:#334155,stroke:#38bdf8,stroke-width:2px,color:#ffffff;
+    classDef endStyle fill:#10b981,stroke:#34d399,stroke-width:2px,color:#ffffff;
+```
 
-**Q: Why is subgraph streaming critical for multi-agent supervisor systems?**
-In multi-agent architectures, a supervisor delegates work to specialized sub-agents. Subgraph streaming allows UI applications to show the user which specific worker agent is currently reasoning, searching, or generating tokens in real time.
+---
+
+### Step 9: Quiz
+
+Try answering these questions to check your understanding:
+
+1. What parameter must you pass to `graph.stream()` to observe internal steps of nested child graphs?
+   - A) `deep_mode=True`
+   - B) `subgraphs=True`
+   - C) `verbose=10`
+   - D) `debug=True`
+
+2. What does an empty namespace tuple `()` indicate in the stream output?
+   - A) An error occurred
+   - B) The event was produced by the top-level parent graph
+   - C) The graph finished executing
+   - D) The database was disconnected
+
+3. What does each item yielded by `graph.stream(..., subgraphs=True)` contain?
+   - A) Only the raw text output
+   - B) A tuple of `(namespace, chunk)`
+   - C) A JSON schema
+   - D) A HTTP status code
+
+4. How do you attach a child graph into a parent graph?
+   - A) By pasting the child code inside the parent function
+   - B) By passing the compiled child graph directly to `parent_builder.add_node("name", child_graph)`
+   - C) By importing it via Docker
+   - D) LangGraph does not support nested graphs
+
+*Submit your answers (e.g. 1-B, 2-B, 3-B, 4-B) to verify your score!*

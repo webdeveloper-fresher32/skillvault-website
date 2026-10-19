@@ -1,184 +1,228 @@
-# 02 — Hybrid Search: BM25 and Vectors
+# Lesson 2: Hybrid Search (BM25 + Dense Vectors)
 
-> Pure vector search misses exact keyword, code, and acronym matches — this lesson combines BM25 keyword search with vector similarity using reciprocal rank fusion to get the best of both.
+Man, in Lesson 1 we looked at pure vector similarity search. But did you know that pure vector search often fails on the simplest questions? 
 
----
+If a user searches for an exact product code like *"SKU-98421"* or an error code like *"ERR_CONNECTION_REFUSED"*, vector models often return completely wrong documents!
 
-## Table of Contents
+Let's explore **Hybrid Search**—the combination of keyword search (BM25) and semantic vector search—which forms the backbone of real production RAG systems.
 
-1. [The Problem: Vector Search Misses the Obvious Exact Match](#1-the-problem-vector-search-misses-the-obvious-exact-match)
-2. [The Analogy: A Librarian Who Searches Both the Subject Catalog and the Keyword Index](#2-the-analogy-a-librarian-who-searches-both-the-subject-catalog-and-the-keyword-index)
-3. [Internal Flow: BM25 and Reciprocal Rank Fusion](#3-internal-flow-bm25-and-reciprocal-rank-fusion)
-4. [Code Example: BM25 Search Alongside Vector Search, Combined with RRF](#4-code-example-bm25-search-alongside-vector-search-combined-with-rrf)
-5. [Comparison: Pure Vector vs. Pure Keyword vs. Hybrid](#5-comparison-pure-vector-vs-pure-keyword-vs-hybrid)
-6. [Common Mistakes](#6-common-mistakes)
-7. [Hands-On Exercises](#7-hands-on-exercises)
-8. [Interview Q&A](#8-interview-qa)
+![Hybrid Search with Reciprocal Rank Fusion](/images/production-rag/hybrid-search-rrf.png)
 
 ---
 
-## 1. The Problem: Vector Search Misses the Obvious Exact Match
+### Step 1: Why Do We Need This?
 
-Every retrieval strategy so far in this course has relied purely on embedding similarity: convert the query to a vector, find the nearest chunk vectors, done. This works remarkably well for *meaning*-based queries — Phase 1's refund example, where "can I get my money back" correctly matches "refund policy" despite sharing almost no literal words. But it has a blind spot that's easy to miss until it bites you in production: pure vector search is often *worse* than plain keyword search at finding exact, literal matches.
+Vector embeddings are great at understanding *general concepts*, but they have a blind spot: **exact keyword precision**.
 
-Consider a user searching a support knowledge base for error code `ERR-4471`, or a product SKU like `SKU-88213-BLK`, or an acronym like `RBAC`. An embedding model represents these as points in a high-dimensional meaning-space based on the statistical patterns it learned during training — but it has no special mechanism for treating an exact alphanumeric string as uniquely important. Two chunks that both mention *some* error code may end up embedded close together even if only one of them mentions the *specific* code the user typed. A human doing this search would instinctively do an exact string match first; a pure vector retriever has no equivalent instinct.
+Look at where pure vector search fails:
+1. **Product Numbers & SKUs:** A customer types *"replacement part #8472-B"*. The embedding model sees arbitrary numbers and letters and matches a generic paragraph about replacement parts for model #1020-A.
+2. **Error Codes & Logs:** An engineer searches *"FATAL_ERR_SIGSEGV_0x04"*. Vector search matches a general discussion about memory leaks instead of the specific error code fix.
+3. **Uncommon Proper Names:** Searching for an author or doctor named *"Dr. P. A. Venkatesh"* matches docs mentioning *"doctors and medical staff"*, but misses the actual person.
 
----
+On the other hand, traditional **Keyword Search (BM25 / Full-Text Search)** is great at exact keyword matches, but completely fails on synonyms: searching *"auto loan"* won't match *"car financing"*.
 
-## 2. The Analogy: A Librarian Who Searches Both the Subject Catalog and the Keyword Index
-
-**Real-world analogy:** an old-fashioned library has two different catalogs for a reason. The **subject catalog** groups books by topic and theme — you look up "gardening" and find books about gardening even if the word "gardening" never appears in some of their titles. The **keyword/title index** is different: it's an exact-match lookup — you look up the precise title or author string and get precisely the matching entries, no interpretation involved.
-
-A good librarian doesn't pick one catalog and ignore the other. If you ask for a specific ISBN or an exact title, they use the keyword index — that's what it's for. If you ask "books about growing tomatoes in cold climates," they lean on the subject catalog, because no keyword search will reliably surface a book on that topic that happens to be titled something unrelated. **Hybrid search is the RAG equivalent of a librarian who runs both searches and merges the results** — vector search playing the role of the subject catalog (meaning-based), and BM25 playing the role of the keyword index (exact term-based).
-
-> 🧠 Reach for this analogy whenever someone asks "why not just use vectors for everything" — because some queries are exact-match queries in disguise, and no amount of semantic understanding substitutes for literally finding the string the user typed.
+Neither search method is complete on its own. **Hybrid Search combines both** to give you 100% keyword precision AND 100% semantic concept matching.
 
 ---
 
-## 3. Internal Flow: BM25 and Reciprocal Rank Fusion
+### Step 2: What Is It?
 
-**BM25 in plain terms.** BM25 ("Best Match 25") is a classic **keyword/term-frequency ranking function** — it is *not* embedding-based and has nothing to do with vector similarity. Given a query and a document, BM25 scores the document higher when the query's terms appear frequently in that document, while correcting for two things: very common words across the whole corpus (like "the") get down-weighted (similar in spirit to the intuition behind TF-IDF, if you've encountered it elsewhere), and longer documents don't get an unfair advantage just from containing more words overall. The net effect: BM25 rewards documents that contain the query's literal terms, especially rare/distinctive ones, and it does this purely through counting words — no semantic understanding, no embeddings, no notion of "meaning" whatsoever.
+**Hybrid Search** runs two independent search engines in parallel on the same user query:
+1. **Sparse Search (BM25 / Keyword Search):** Finds exact word matches, codes, acronyms, and technical terms using TF-IDF / BM25 algorithms.
+2. **Dense Search (Vector Embeddings):** Finds conceptual, thematic, and synonym matches using vector cosine similarity.
 
-This is precisely why BM25 complements vector search rather than competing with it: BM25 is strong exactly where vector search is weak (rare literal terms, codes, acronyms, exact phrases) and weak exactly where vector search is strong (queries phrased differently from the source text, synonyms, paraphrase).
+Then, a fusion algorithm merges both result lists into a single, perfectly balanced ranking:
+- **Reciprocal Rank Fusion (RRF):** Merges both ranked lists using math based on item positions, without needing complex score calibration.
 
-**Combining two ranked lists: Reciprocal Rank Fusion (RRF).** Once you have two separate ranked lists for the same query — one from BM25, one from vector similarity — you need a principled way to merge them into a single ranking. RRF is a simple, robust method that doesn't require the two scores to be on comparable scales (BM25 scores and cosine similarities live in completely different numeric ranges, so averaging them directly wouldn't make sense). Instead, RRF only looks at each document's **rank position** in each list:
+#### The Everyday Analogy: The Detective and the Bloodhound
+- **Dense Vector Search is the Bloodhound:** Follows general scents and tracks ideas, feelings, and themes across the forest.
+- **Sparse BM25 Search is the Forensic Detective:** Looks for exact fingerprints, license plate numbers, and specific serial codes.
+- Working together, the detective and the bloodhound find the target every single time.
+
+---
+
+### Step 3: Real-World Example
+
+Imagine searching an enterprise technical documentation portal:
+
+- **User Query:** *"How to resolve error code 0x80070005 access denied in Windows 11"*
+
+Search Engine Behaviors:
+- **Dense Vector Search Alone:** Understands *"access denied"* and *"Windows 11"*, but treats `"0x80070005"` as random noise. Retrieves generic Windows permission articles. (Wrong document!)
+- **Sparse BM25 Alone:** Finds documents with the exact string `"0x80070005"`, but if the official article says *"permission error"* instead of *"access denied"*, it might rank it low.
+- **Hybrid Search (BM25 + Vector):**
+  - BM25 immediately anchors on the exact error code `"0x80070005"`.
+  - Dense Vector search confirms the semantic context is Windows permissions.
+  - **Result:** The exact hotfix document is ranked #1!
+
+---
+
+### Step 4: How Does It Work?
+
+Here is the Hybrid Search architecture using **Reciprocal Rank Fusion (RRF)**:
 
 ```
-score(d) = sum over each ranking of  1 / (k + rank(d))
+                          User Query
+                              │
+              ┌───────────────┴───────────────┐
+              ▼                               ▼
+       [Sparse BM25]                   [Dense Vector]
+   Exact Keyword Search            Semantic Cosine Search
+              │                               │
+       Ranked List A                   Ranked List B
+    [Doc 3, Doc 1, Doc 7]           [Doc 1, Doc 4, Doc 3]
+              │                               │
+              └───────────────┬───────────────┘
+                              ▼
+            [Reciprocal Rank Fusion (RRF) Merger]
+            
+                     RRF Score Formula:
+                              1
+            RRF(d) = Σ  ────────────     (k is typically 60)
+                         k + rank(d)
+                              │
+                    Combined Top-K Chunks
+                              │
+                     LLM Prompt Augmentation
 ```
 
-where `rank(d)` is the document's position in a given ranked list (1st, 2nd, 3rd, ...), and `k` is a small constant — **60 is the commonly used default** — that dampens the influence of very low ranks and keeps the formula numerically well-behaved. A document that ranks highly in *either* list contributes a large `1/(k + rank)` term; a document that ranks highly in *both* lists gets the sum of two large terms and rises to the top of the fused ranking. Documents are then sorted by this combined score, descending.
+#### Why Reciprocal Rank Fusion (RRF) Is Elegant:
+Raw BM25 scores can be `14.8` or `42.1`, while vector cosine scores are between `0.0` and `1.0`. You cannot simply add them together without normalization.
+RRF bypasses score differences by looking only at the **rank position** (1st, 2nd, 3rd) in each list. A document that ranks high on both lists gets an unbeatable boost!
 
 ---
 
-## 4. Code Example: BM25 Search Alongside Vector Search, Combined with RRF
+### Step 5: Code Example
+
+Here is a Python implementation of Reciprocal Rank Fusion combining BM25 and Vector search results:
 
 ```python
-from rank_bm25 import BM25Okapi
+"""
+Hybrid Search with Reciprocal Rank Fusion (RRF)
+"""
 
-corpus = [
-    "Our refund policy allows returns within 30 days of purchase.",
-    "Error code ERR-4471 indicates a failed payment authorization.",
-    "To reset your password, go to Settings, then Security.",
-    "International shipping takes 7-14 business days to arrive.",
-]
+from typing import List, Dict
 
-# BM25Okapi expects a tokenized corpus: a list of documents, where each
-# document is itself a list of tokens (here, just lowercase words split
-# on whitespace -- a real system would use a proper tokenizer).
-tokenized_corpus = [doc.lower().split() for doc in corpus]
-bm25 = BM25Okapi(tokenized_corpus)
+def reciprocal_rank_fusion(
+    bm25_ranked_ids: List[str],
+    vector_ranked_ids: List[str],
+    k: int = 60,
+    top_n: int = 3
+) -> List[tuple]:
+    """
+    Combines two ranked lists of document IDs using Reciprocal Rank Fusion.
+    """
+    rrf_scores = {}
 
-query = "what does error ERR-4471 mean"
-tokenized_query = query.lower().split()
+    # 1. Score BM25 ranks
+    for rank, doc_id in enumerate(bm25_ranked_ids):
+        # rank is 0-indexed, so position is rank + 1
+        rrf_scores[doc_id] = rrf_scores.get(doc_id, 0.0) + (1.0 / (k + (rank + 1)))
 
-# get_scores returns a numpy array of scores, one per document in the
-# corpus (in corpus order) -- higher score means more relevant. It does
-# NOT return a pre-sorted ranking; we sort it ourselves below.
-bm25_scores = bm25.get_scores(tokenized_query)
+    # 2. Score Vector ranks
+    for rank, doc_id in enumerate(vector_ranked_ids):
+        rrf_scores[doc_id] = rrf_scores.get(doc_id, 0.0) + (1.0 / (k + (rank + 1)))
 
-# Turn the raw scores into a rank list: doc index -> rank position (1-based).
-bm25_ranked_indices = sorted(
-    range(len(corpus)), key=lambda i: bm25_scores[i], reverse=True
-)
-bm25_ranks = {doc_idx: rank for rank, doc_idx in enumerate(bm25_ranked_indices, start=1)}
+    # 3. Sort by highest combined RRF score
+    sorted_docs = sorted(rrf_scores.items(), key=lambda item: item[1], reverse=True)
+    return sorted_docs[:top_n]
 
-# --- Vector search side (conceptual stand-in for a real Chroma/Pinecone/
-# pgvector query from Phases 5-7) -- assume this returns doc indices already
-# ranked most-to-least similar by embedding distance.
-vector_ranked_indices = [0, 2, 1, 3]  # e.g. from collection.query(...)
-vector_ranks = {doc_idx: rank for rank, doc_idx in enumerate(vector_ranked_indices, start=1)}
+if __name__ == "__main__":
+    # Query: "Fix error code 0x80070005"
+    
+    # BM25 found exact error code in doc_A, and mentions in doc_C
+    bm25_results = ["doc_A", "doc_C", "doc_B"]
+    
+    # Vector search found semantic concepts in doc_B and doc_A
+    vector_results = ["doc_B", "doc_A", "doc_D"]
 
-# --- Reciprocal Rank Fusion ---
-def rrf_score(doc_idx: int, rank_lists: list[dict], k: int = 60) -> float:
-    total = 0.0
-    for ranks in rank_lists:
-        if doc_idx in ranks:
-            total += 1.0 / (k + ranks[doc_idx])
-    return total
+    # Merge rankings
+    final_ranks = reciprocal_rank_fusion(bm25_results, vector_results, k=60, top_n=3)
 
-all_doc_indices = range(len(corpus))
-fused = sorted(
-    all_doc_indices,
-    key=lambda i: rrf_score(i, [bm25_ranks, vector_ranks]),
-    reverse=True,
-)
-
-print("Fused ranking (best first):")
-for idx in fused:
-    print(f"  score={rrf_score(idx, [bm25_ranks, vector_ranks]):.4f}  '{corpus[idx]}'")
+    print("--- HYBRID SEARCH (RRF COMBINED RESULTS) ---")
+    for rank, (doc_id, score) in enumerate(final_ranks, start=1):
+        print(f"Rank {rank}: Document '{doc_id}' | Combined RRF Score: {score:.5f}")
+    # Output: doc_A wins Rank 1 because it appeared near the top of BOTH lists!
 ```
 
-Notice what happens with the query about `ERR-4471`: BM25 ranks the error-code chunk highly because the literal term appears in both the query and the document — something a vector search might not reliably do if the embedding model doesn't treat that exact alphanumeric code as especially distinctive. RRF then lets that BM25 signal pull the chunk toward the top of the fused ranking even if the vector search ranked it lower, without ever needing to compare raw BM25 scores to raw cosine similarities directly.
+---
+
+### Step 6: How Is It Used in Production?
+
+| Architecture Concern | What Fails | The Production Solution | Real Impact |
+| :--- | :--- | :--- | :--- |
+| **Score Normalization Chaos** | Trying to sum raw BM25 scores (0 to 50) and Cosine scores (0 to 1) directly | Use Reciprocal Rank Fusion (RRF) or Min-Max normalization | Completely eliminates score skew |
+| **Alpha Weight Tuning ($\alpha$)** | Hardcoding 50/50 balance when documents are heavy on legal codes or part numbers | Set $\alpha=0.7$ (favoring BM25) for code/part queries; $\alpha=0.3$ for conversational queries | 35% higher lookup success |
+| **Database Support** | Running two separate database clusters (Elasticsearch for BM25 + Pinecone for vectors) | Use databases that support native Hybrid Search (e.g. Qdrant, Weaviate, Pinecone, or PostgreSQL with pg_trgm + pgvector) | Cuts infrastructure maintenance in half |
+| **Duplicate Retrieval Overhead** | Fetching 20 chunks from BM25 and 20 chunks from Vector doubles prompt size | Merge and deduplicate using RRF before taking the final top 3-5 chunks | Keeps context budgets clean |
 
 ---
 
-## 5. Comparison: Pure Vector vs. Pure Keyword vs. Hybrid
+### Step 7: Quick Revision
 
-| | Pure Vector Search | Pure Keyword (BM25) | Hybrid (Vector + BM25 via RRF) |
-|---|---|---|---|
-| **Strengths** | Understands meaning, synonyms, paraphrase; finds relevant text even with no shared words | Finds exact terms, codes, acronyms, rare identifiers reliably; cheap, no embedding model needed | Gets both: semantic matches and exact-term matches in one ranked list |
-| **Weaknesses** | Can miss exact matches (codes, SKUs, acronyms) that share no strong embedding signal with the query | No understanding of meaning; misses paraphrased or synonym-based matches entirely | Slightly more infrastructure/complexity: two search paths instead of one |
-| **When it wins** | Conceptual questions phrased differently from the source text ("can I get my money back" → "refund policy") | Exact-match queries: error codes, product IDs, specific technical terms, quoted phrases | Real-world query mixes, where some queries are conceptual and others are exact-match, and you don't know in advance which is which |
-
----
-
-## 6. Common Mistakes
-
-**Mistake 1: Assuming vector search alone is always better.** It's tempting, especially after seeing embeddings solve the "meaning gap" so well in earlier phases, to conclude that vector search strictly dominates keyword search. It doesn't — it specifically loses on exact-match queries (error codes, SKUs, acronyms, quoted phrases) where BM25's literal term matching is a better fit for what the user actually typed. A production RAG system serving real users will see both query types, and a pure-vector retriever silently underperforms on the exact-match half of that traffic.
-
-**Mistake 2: Averaging raw BM25 and vector scores directly.** BM25 scores and cosine similarity scores live on completely different, uncalibrated numeric scales — a BM25 score of "8.3" and a cosine similarity of "0.83" are not comparable numbers, and naively adding or averaging them produces a meaningless combined score dominated by whichever scale happens to have larger numbers. This is exactly why RRF works off rank *position* rather than raw score magnitude — it sidesteps the scale-mismatch problem entirely.
-
-**Interview angle:** if asked "when would you add BM25 to a RAG system that already has vector search," the strong answer names the specific gap — exact-match queries (codes, IDs, acronyms) that vector search handles unreliably — rather than a vague "to make retrieval better." Naming reciprocal rank fusion (and knowing it operates on ranks, not raw scores) as the combination mechanism is what separates a candidate who's implemented hybrid search from one who's only heard the term.
+- **Dense Vectors:** Great for synonyms, themes, and conceptual understanding. Fails on exact codes and names.
+- **Sparse BM25:** Great for exact keyword matching, error codes, part numbers, and abbreviations. Fails on synonyms.
+- **Hybrid Search:** Runs both in parallel and merges results for the ultimate search precision.
+- **RRF (Reciprocal Rank Fusion):** The gold-standard merger formula ($\frac{1}{k + rank}$), eliminating score scaling problems.
+- **Interview Answer:** *"Hybrid search combines sparse keyword retrieval (like BM25) with dense semantic vector search to resolve both exact keyword queries and conceptual phrasing. In production, Reciprocal Rank Fusion (RRF) merges the candidate rankings without requiring brittle cross-score calibration."*
 
 ---
 
-## 7. Hands-On Exercises
+### Step 8: Final Flow Diagram
 
-### Exercise 1 — Run BM25 alone and inspect the scores
+```mermaid
+flowchart TD
+    classDef startEnd fill:#2563eb,stroke:#1d4ed8,color:#ffffff,stroke-width:2px;
+    classDef decision fill:#f59e0b,stroke:#d97706,color:#ffffff,stroke-width:2px;
+    classDef success fill:#10b981,stroke:#059669,color:#ffffff,stroke-width:2px;
+    classDef process fill:#3b82f6,stroke:#1d4ed8,color:#ffffff,stroke-width:2px;
 
-Using the `rank_bm25` code above, try three different queries against the same corpus: one paraphrased/conceptual query, one exact-match query (like the error code), and one query using a synonym for a word in the corpus. Print the raw `get_scores()` array for each and note which query type BM25 handles well versus poorly.
+    A([Incoming User Query]) --> B[Fork: Execute Parallel Search]:::process
 
-### Exercise 2 — Break RRF with an extreme k
+    B --> C[Sparse Search: BM25 Keyword Match]
+    B --> D[Dense Search: Vector Cosine Similarity]
 
-Re-run the RRF fusion code with `k=1` instead of `k=60`. Observe how much more the top-ranked position in each list now dominates the fused score, compared to `k=60`. Explain in your own words why a very small `k` makes RRF behave more like "trust only the #1 result from each list."
+    C --> E[Ranked Candidates List A]
+    D --> F[Ranked Candidates List B]
 
-### Exercise 3 — Design a hybrid query for your own corpus
+    E --> G[Reciprocal Rank Fusion RRF Merger]:::success
+    F --> G
 
-Take any small corpus you've indexed in a vector store from Phases 5-7, add one document containing a distinctive exact-match term (a code, an ID, an acronym), and confirm: does a pure vector query for that term reliably return the right document? Then implement the BM25 + RRF pipeline from this lesson and confirm it does.
+    G --> H[Calculate RRF Score = 1 / 60 + rank]
+    H --> I[Sort and Deduplicate Combined Results]
+    I --> J[Select Top-K Hybrid Candidates]:::success
 
----
-
-## 8. Interview Q&A
-
-### Q1. What is BM25, and is it based on embeddings?
-
-**Answer:** BM25 ("Best Match 25") is a classic keyword/term-frequency ranking function — it is not embedding-based and has no notion of semantic meaning. It scores documents higher when they contain the query's literal terms frequently, while down-weighting overly common words and correcting for document length. It's purely a statistical word-counting method, which is exactly why it complements vector search rather than duplicating it.
-
----
-
-### Q2. Why does hybrid search often outperform pure vector search in production?
-
-**Answer:** Because real user queries are a mix of conceptual questions (where vector search's semantic understanding wins) and exact-match queries — error codes, product IDs, acronyms, specific technical terms — where BM25's literal term matching is more reliable. Vector search alone silently underperforms on that second category; hybrid search combines both signals so neither type of query is systematically disadvantaged.
-
----
-
-### Q3. Explain reciprocal rank fusion and why it's used instead of just averaging scores.
-
-**Answer:** RRF combines two or more ranked lists by summing `1 / (k + rank(d))` for each document across every ranking it appears in, typically with `k=60`. It's used instead of averaging raw scores because BM25 scores and vector similarity scores live on incompatible numeric scales — averaging them directly would be dominated by whichever scale has larger magnitudes. RRF sidesteps this entirely by working only with rank position, which is directly comparable across any two ranking methods.
+    J --> K([Pass Grounded Context to LLM]):::startEnd
+```
 
 ---
 
-### Q4. What does the constant k in the RRF formula actually do?
+### Step 9: Quiz
 
-**Answer:** It dampens the influence of rank position, particularly for lower ranks, and keeps the score well-behaved (avoiding a division by a very small number for rank 1). A commonly used default is k=60. A very small k makes the formula much more sensitive to whether a document is ranked #1 versus #2 in a given list; a larger k flattens those differences out.
+Test your understanding of Hybrid Search and BM25. Submit your answers as `1-A, 2-B, 3-C, 4-D`:
 
----
+**1. Why does pure dense vector search often fail when a user searches for an exact part number like 'ABC-9921-X'?**
+- A) Embedding models compress text into high-level conceptual meanings, often treating arbitrary alphanumeric codes as unfamiliar noise.
+- B) Alphanumeric characters are illegal in Python strings.
+- C) Vector databases only allow lowercase English dictionary words.
+- D) Part numbers cannot be stored on computer disks.
 
-### Q5. Give a concrete example of a query where BM25 would outperform vector search.
+**2. What is the role of BM25 in a Hybrid Search system?**
+- A) It translates English into binary machine code.
+- B) It executes high-speed lexical (keyword) search based on term frequency and inverse document frequency, excelling at exact phrase and code matching.
+- C) It generates embeddings using GPU clusters.
+- D) It rewrites the user's prompt.
 
-**Answer:** A user searching for a specific error code like "ERR-4471" or a product SKU. BM25 will strongly favor any document containing that exact literal string. A vector search might rank a different, topically-similar chunk (one that discusses errors or payments generally, but doesn't contain that specific code) just as highly or higher, because the embedding model has no special mechanism for treating an exact alphanumeric match as decisive.
+**3. Why is Reciprocal Rank Fusion (RRF) preferred over simply adding BM25 scores and vector similarity scores together?**
+- A) BM25 scores and vector cosine similarities live on completely different mathematical scales and ranges; RRF merges based on ordinal rank positions instead.
+- B) RRF makes the server battery last longer.
+- C) Adding numbers together is not supported in modern programming languages.
+- D) RRF deletes all negative numbers.
 
----
+**4. In the RRF formula $\text{Score} = \frac{1}{k + \text{rank}}$, what happens to a document that ranks near the top of BOTH the BM25 and Vector search results?**
+- A) It is penalized and deleted.
+- B) Its scores sum together, giving it a dominant combined score that places it at the very top of the final hybrid results.
+- C) It is duplicated 60 times.
+- D) It gets converted into an audio file.
 
-> 🧠 **Memory hook:** "Vectors understand what you mean; BM25 finds what you typed — hybrid search refuses to choose between them."
+*(Submit your answers to check your progress!)*
