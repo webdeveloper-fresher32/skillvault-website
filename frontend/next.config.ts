@@ -2,11 +2,9 @@ import type { NextConfig } from "next";
 
 const PRODUCTION_BACKEND = 'https://skillvault-api.fly.dev';
 
-// Use explicit BACKEND_URL, NEXT_PUBLIC_API_URL, or default to production Fly backend
-const backendTarget = 
-  process.env.BACKEND_URL || 
-  process.env.NEXT_PUBLIC_API_URL?.replace(/\/api\/?$/, '') || 
-  PRODUCTION_BACKEND;
+// Robustly strip any trailing /api or / from env vars to avoid double /api/api rewrites
+const rawTarget = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || PRODUCTION_BACKEND;
+const backendTarget = rawTarget.replace(/\/api\/?$/, '').replace(/\/$/, '');
 
 const nextConfig: NextConfig = {
   async rewrites() {
