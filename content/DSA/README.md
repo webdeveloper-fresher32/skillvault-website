@@ -10,13 +10,13 @@ This course does not assume prior DSA exposure — Phase-01 builds the complexit
 
 ```
 DSA/
-├── Phase-01-Complexity-and-Foundations/          → Big-O/Theta/Omega, time & space complexity, recursion basics, recurrence relations & Master Theorem, math prerequisites
-├── Phase-02-Arrays-and-Strings/                   → Two pointers, sliding window, prefix sums, in-place manipulation, Kadane's algorithm
-├── Phase-03-Linked-Lists/                         → Singly/doubly linked lists, fast-slow pointers, reversal patterns, cycle detection (Floyd's), merge patterns
-├── Phase-04-Stacks-and-Queues/                    → Stack/queue/deque implementation, monotonic stack, min stack & auxiliary structures
-├── Phase-05-Hashing/                              → Hash maps & sets, collision handling, frequency counting patterns, two-sum-style problems
-├── Phase-06-Trees-and-BST/                        → Tree traversals, BST operations, balanced trees (AVL/Red-Black, conceptual), lowest common ancestor
-├── Phase-07-Heaps-and-Priority-Queues/             → Heap operations & heapify, heap sort, top-K patterns, merge K sorted lists
+├── Phase-01-Complexity-and-Foundations/          → Big-O/Theta/Omega, recurrences, Master Theorem, math prerequisites, + Top 15 Interview Problems
+├── Phase-02-Arrays-and-Strings/                   → Two pointers, sliding window, prefix sums, Kadane's, + Top 30 Array & Top 30 String Problems
+├── Phase-03-Linked-Lists/                         → Singly/doubly lists, fast-slow pointers, Floyd's cycle, reversals, + Top 15 Interview Problems
+├── Phase-04-Stacks-and-Queues/                    → Monotonic stacks, min stack, deques, sliding window max, + Top 15 Interview Problems
+├── Phase-05-Hashing/                              → Hash maps & sets, LRU & LFU cache design, modulo prefix hashing, + Top 15 Interview Problems
+├── Phase-06-Trees-and-BST/                        → Traversals, BST invariants, LCA, diameter, path sum, serialization, + Top 16 Interview Problems
+├── Phase-07-Heaps-and-Priority-Queues/             → Heapify, top-K patterns, dual-heap streaming medians, K-way merges, + Top 15 Interview Problems
 ├── Phase-08-Graphs-Traversal/                      → Graph representations, BFS & DFS, topological sort, union-find (DSU), cycle detection in graphs
 ├── Phase-09-Graphs-Shortest-Path-and-MST/          → Dijkstra's, Bellman-Ford, Floyd-Warshall, Prim's, Kruskal's
 ├── Phase-10-Greedy-and-Backtracking/               → Interval scheduling & activity selection, backtracking fundamentals (N-Queens), subsets/permutations/combinations, Sudoku-style backtracking
