@@ -1,9 +1,9 @@
-const RENDER_API = 'https://skillvault-website-backend.onrender.com/api';
+const FLY_API = 'https://skillvault-api.fly.dev/api';
 
 const API_BASE = 
   typeof window !== 'undefined' 
     ? '/api' 
-    : (process.env.BACKEND_URL ? `${process.env.BACKEND_URL.replace(/\/api\/?$/, '')}/api` : (process.env.NEXT_PUBLIC_API_URL || RENDER_API));
+    : (process.env.BACKEND_URL ? `${process.env.BACKEND_URL.replace(/\/api\/?$/, '')}/api` : (process.env.NEXT_PUBLIC_API_URL || FLY_API));
 
 let currentAccessToken: string | null = null;
 
