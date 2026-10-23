@@ -1,12 +1,15 @@
-const RENDER_API = 'https://skillvault-website-backend.onrender.com/api';
+const getBaseApi = () => {
+  if (typeof window !== 'undefined') return '/api';
+  const custom = process.env.NEXT_PUBLIC_API_URL || process.env.BACKEND_URL;
+  if (custom && !custom.includes('onrender.com') && !custom.includes('fly.dev')) {
+    return custom.replace(/\/api\/?$/, '').replace(/\/$/, '') + '/api';
+  }
+  if (process.env.VERCEL_PROJECT_PRODUCTION_URL) return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}/api`;
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}/api`;
+  return 'http://localhost:3000/api';
+};
 
-const rawApi = process.env.NEXT_PUBLIC_API_URL || process.env.BACKEND_URL || RENDER_API;
-const cleanApi = rawApi.replace(/\/api\/?$/, '').replace(/\/$/, '') + '/api';
-
-const API_BASE = 
-  typeof window !== 'undefined' 
-    ? '/api' 
-    : cleanApi;
+const API_BASE = getBaseApi();
 
 let currentAccessToken: string | null = null;
 

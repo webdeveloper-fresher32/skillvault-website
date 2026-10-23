@@ -1,19 +1,24 @@
 import type { NextConfig } from "next";
 
-const PRODUCTION_BACKEND = 'https://skillvault-website-backend.onrender.com';
-
-// Robustly strip any trailing /api or / from env vars to avoid double /api/api rewrites
-const rawTarget = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || PRODUCTION_BACKEND;
-const backendTarget = rawTarget.replace(/\/api\/?$/, '').replace(/\/$/, '');
-
 const nextConfig: NextConfig = {
+  // If local external backend URL is explicitly configured (e.g. http://localhost:8080), proxy to it.
+  // Otherwise, Next.js serves its own built-in high-performance serverless Node.js API routes!
   async rewrites() {
-    return [
-      {
-        source: '/api/:path*',
-        destination: `${backendTarget}/api/:path*`,
-      },
-    ];
+    const customBackend = process.env.BACKEND_URL;
+    if (
+      customBackend &&
+      !customBackend.includes('onrender.com') &&
+      !customBackend.includes('fly.dev')
+    ) {
+      const backendTarget = customBackend.replace(/\/api\/?$/, '').replace(/\/$/, '');
+      return [
+        {
+          source: '/api/:path*',
+          destination: `${backendTarget}/api/:path*`,
+        },
+      ];
+    }
+    return [];
   },
 };
 
