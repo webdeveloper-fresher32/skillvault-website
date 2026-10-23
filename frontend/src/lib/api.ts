@@ -1,6 +1,6 @@
-const FLY_API = 'https://skillvault-api.fly.dev/api';
+const RENDER_API = 'https://skillvault-website-backend.onrender.com/api';
 
-const rawApi = process.env.NEXT_PUBLIC_API_URL || process.env.BACKEND_URL || FLY_API;
+const rawApi = process.env.NEXT_PUBLIC_API_URL || process.env.BACKEND_URL || RENDER_API;
 const cleanApi = rawApi.replace(/\/api\/?$/, '').replace(/\/$/, '') + '/api';
 
 const API_BASE = 

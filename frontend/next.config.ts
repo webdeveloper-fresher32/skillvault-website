@@ -1,6 +1,6 @@
 import type { NextConfig } from "next";
 
-const PRODUCTION_BACKEND = 'https://skillvault-api.fly.dev';
+const PRODUCTION_BACKEND = 'https://skillvault-website-backend.onrender.com';
 
 // Robustly strip any trailing /api or / from env vars to avoid double /api/api rewrites
 const rawTarget = process.env.BACKEND_URL || process.env.NEXT_PUBLIC_API_URL || PRODUCTION_BACKEND;

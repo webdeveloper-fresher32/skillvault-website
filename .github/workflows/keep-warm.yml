@@ -1,0 +1,16 @@
+name: Keep Render Backend Warm
+
+on:
+  schedule:
+    # Run every 10 minutes to prevent Render free-tier from sleeping (timeout is 15 mins)
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping SkillVault Backend
+        run: |
+          curl -s -f --max-time 30 https://skillvault-website-backend.onrender.com/api/courses > /dev/null || true
+          echo "Render backend pinged successfully at $(date)"
