@@ -1,342 +1,935 @@
-# MongoDB Interview Questions — 50 Q&A
-## Complete Preparation Guide
+# Top 50 MongoDB Interview Questions (Query Coding & Internals)
 
+Comprehensive production & FAANG-level interview guide covering **MongoDB aggregation query coding problems** (including 2nd highest salary, `$lookup`, `$unwind`, window functions, array updates) and **distributed database architecture** (WiredTiger internals, ESR indexing rule, sharding, replica set consensus, and ACID transactions).
+
+---
+
+## 1. High-Frequency MongoDB Aggregation & Query Coding (Q1 – Q20)
+
+### Q1: How do you find the 2nd Highest Salary in MongoDB? Provide the aggregation pipeline and explain how it handles ties/duplicates.
+**Answer:**
+In MongoDB, to handle ties correctly (e.g. salaries: `[100k, 100k, 80k]`), you must first deduplicate the salaries using `$group`, sort in descending order, skip 1, and take 1:
+
+```javascript
+db.employees.aggregate([
+  // 1. Group by salary to eliminate duplicates
+  {
+    $group: {
+      _id: "$salary"
+    }
+  },
+  // 2. Sort salaries in descending order
+  {
+    $sort: {
+      _id: -1
+    }
+  },
+  // 3. Skip the highest salary
+  {
+    $skip: 1
+  },
+  // 4. Limit to the 2nd highest
+  {
+    $limit: 1
+  },
+  // 5. Clean output shape
+  {
+    $project: {
+      _id: 0,
+      secondHighestSalary: "$_id"
+    }
+  }
+]);
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│   Fundamentals    │  CRUD & Queries  │   Schema Design          │
-│   Q1 – Q10        │  Q11 – Q20       │   Q21 – Q30              │
-├─────────────────────────────────────────────────────────────────┤
-│  Indexes & Perf   │  Replication, Sharding & Transactions       │
-│  Q31 – Q40        │  Q41 – Q50                                  │
-└─────────────────────────────────────────────────────────────────┘
+*Alternative (MongoDB 5.2+ using `$sortArray`):*
+```javascript
+db.employees.aggregate([
+  {
+    $group: {
+      _id: null,
+      uniqueSalaries: { $addToSet: "$salary" }
+    }
+  },
+  {
+    $project: {
+      _id: 0,
+      secondHighest: {
+        $arrayElemAt: [
+          { $sortArray: { input: "$uniqueSalaries", sortBy: -1 } },
+          1
+        ]
+      }
+    }
+  }
+]);
 ```
 
 ---
 
-## Table of Contents
-
-1. [Fundamentals — Q1–Q10](#fundamentals)
-2. [CRUD & Queries — Q11–Q20](#crud--queries)
-3. [Schema Design — Q21–Q30](#schema-design)
-4. [Indexes & Performance — Q31–Q40](#indexes--performance)
-5. [Replication, Sharding & Transactions — Q41–Q50](#replication-sharding--transactions)
-
----
-
-## Fundamentals
-
----
-
-**Q1: What is MongoDB and how does it differ from a relational database?**
-
-Answer: MongoDB is a document-oriented NoSQL database that stores data as BSON documents inside collections rather than rows inside tables. Unlike relational databases, MongoDB has no fixed schema — each document in a collection can have a different structure. There are no JOINs at the storage engine level; instead, related data is either embedded in the same document or referenced by `_id`. MongoDB scales horizontally via sharding, whereas most relational databases scale vertically or require complex partitioning setups.
-
----
-
-**Q2: What are the differences between BSON and JSON?**
-
-Answer: JSON is a text-based format supporting six types: string, number, boolean, null, array, and object. BSON (Binary JSON) is a binary-encoded superset that adds types such as `ObjectId`, `Date`, `Binary`, `Decimal128`, `Int32`, `Int64`, `Timestamp`, and `Regex`. BSON is more efficient for traversal (it stores length prefixes so fields can be skipped without parsing) and supports data types needed for databases — for example, JSON has only one `number` type, whereas BSON distinguishes 32-bit int, 64-bit int, and double. MongoDB stores and transmits data as BSON; the shell and drivers convert to/from JSON or language-native objects.
-
----
-
-**Q3: What is the internal structure of an ObjectId?**
-
-Answer: An ObjectId is a 12-byte value: 4 bytes are a Unix timestamp (seconds since epoch), 5 bytes are a random value unique to the machine and process, and 3 bytes are an incrementing counter initialized to a random value. This structure ensures uniqueness across distributed systems without coordination. Because the first 4 bytes encode creation time, you can infer a document's approximate creation time from its `_id` using `ObjectId.getTimestamp()`, and sorting by `_id` is roughly chronological.
-
----
-
-**Q4: Why does MongoDB have a 16 MB document size limit?**
-
-Answer: The 16 MB limit exists to discourage unbounded document growth and to keep working set memory manageable. Very large documents must be loaded entirely into RAM for processing, and they increase the cost of replication since entire documents (or at least modified fields) are shipped in the oplog. For large binary data, MongoDB offers GridFS, which splits files into 255 KB chunks stored as separate documents, avoiding the size cap entirely. The 16 MB limit also prevents single-document operations from monopolizing network and I/O resources.
+### Q2: Write an aggregation pipeline to find the N-th Highest Salary in EACH department in MongoDB.
+**Answer:**
+```javascript
+db.employees.aggregate([
+  // Step 1: Sort by department and salary descending
+  {
+    $sort: {
+      department: 1,
+      salary: -1
+    }
+  },
+  // Step 2: Group by department and collect unique salaries into sorted array
+  {
+    $group: {
+      _id: "$department",
+      salaries: { $addToSet: "$salary" }
+    }
+  },
+  // Step 3: Sort the distinct salary array descending and extract N-th (index 1 for 2nd)
+  {
+    $project: {
+      department: "$_id",
+      _id: 0,
+      secondHighestSalary: {
+        $arrayElemAt: [
+          { $sortArray: { input: "$salaries", sortBy: -1 } },
+          1 // 0-indexed: 1 represents 2nd highest
+        ]
+      }
+    }
+  }
+]);
+```
 
 ---
 
-**Q5: When should you choose MongoDB over a relational database?**
+### Q3: How do you identify duplicate documents by email and delete all duplicates while retaining one copy?
+**Answer:**
 
-Answer: MongoDB excels when the data model is document-shaped (nested objects, arrays), schemas evolve frequently, horizontal scalability is needed from the start, or queries are primarily on single entities rather than complex multi-table JOINs. Relational databases are better when strict referential integrity across many entities is required, when complex multi-table ad hoc analytics are the dominant workload, or when the team's tooling (BI tools, ORMs) is deeply relational. In practice, the choice often hinges on whether the access patterns align with document retrieval or relational cross-table queries.
-
----
-
-**Q6: What is a collection and how does it differ from a table?**
-
-Answer: A collection is a grouping of documents in MongoDB, analogous to a table, but without an enforced schema. Different documents in the same collection can have entirely different fields. Collections are created implicitly on first insert and do not require a `CREATE TABLE` DDL statement. MongoDB supports schema validation via `$jsonSchema` validators, but this is optional and not enforced by the storage engine. Unlike a table, a collection has no foreign key relationships to other collections at the database engine level.
-
----
-
-**Q7: What is the WiredTiger storage engine and what are its key features?**
-
-Answer: WiredTiger has been MongoDB's default storage engine since version 3.2. It provides document-level concurrency control using MVCC (Multi-Version Concurrency Control), meaning multiple readers and writers can operate on different documents simultaneously without blocking each other. WiredTiger supports configurable compression (Snappy by default, optionally zlib or zstd) for both data and indexes, typically reducing on-disk size by 60–80%. It also supports encryption at rest and write-ahead logging (journaling) for crash recovery.
-
----
-
-**Q8: What is the oplog and why is it important?**
-
-Answer: The oplog (operations log) is a special capped collection (`local.oplog.rs`) that records every write operation applied to the primary in a replica set. Secondary members tail the oplog to replay operations and stay in sync. The oplog is also the foundation for change streams, Atlas Search sync, Atlas Triggers, and third-party CDC (change data capture) tools like Debezium. Each oplog entry contains the operation type (`i` insert, `u` update, `d` delete), the namespace, and enough information to re-apply the operation idempotently.
-
----
-
-**Q9: What is a capped collection and when would you use one?**
-
-Answer: A capped collection is a fixed-size circular buffer — once it reaches its size limit, new documents overwrite the oldest ones, preserving insertion order. Because no deletion logic is needed, inserts are extremely fast. Capped collections are suitable for logs, recent-activity feeds, and rolling windows of sensor data where only the latest N records are relevant. They do not support `delete` (individual document deletion) or index creation on arbitrary fields once capped. The oplog itself is a capped collection.
+#### Step 1: Identify duplicates and collect their `_id`s
+```javascript
+db.users.aggregate([
+  {
+    $group: {
+      _id: "$email",
+      count: { $sum: 1 },
+      ids: { $push: "$_id" }
+    }
+  },
+  {
+    $match: {
+      count: { $gt: 1 }
+    }
+  }
+]).forEach(function(doc) {
+  // Retain the first _id and delete the rest
+  doc.ids.shift(); // Removes the first element (the one we want to keep)
+  db.users.deleteMany({ _id: { $in: doc.ids } });
+});
+```
 
 ---
 
-**Q10: Explain the MongoDB consistency model — how does read concern interact with write concern?**
+### Q4: How do you perform a Relational Join in MongoDB using `$lookup`? Provide an example of basic lookup and pipeline lookup.
+**Answer:**
 
-Answer: Write concern controls how many replica set members must acknowledge a write before the driver returns success (`w:1` = primary only, `w:"majority"` = majority of members, `j:true` = journal on disk). Read concern controls how fresh the data must be: `local` reads the latest data on the queried node (may not be durable), `majority` reads only data acknowledged by a majority (durable), and `linearizable` provides the strongest guarantee but has the highest latency. For consistent reads after writes, pair `w:"majority"` with `readConcern: "majority"`. Causal consistency (sessions) ensures that reads always see writes the same session issued, even when reading from secondaries.
+#### Basic `$lookup` (Equality Join)
+```javascript
+db.orders.aggregate([
+  {
+    $lookup: {
+      from: "customers",        // Target collection
+      localField: "customerId", // Field in orders
+      foreignField: "_id",      // Field in customers
+      as: "customerDetails"     // Output array field
+    }
+  },
+  // Flatten array into object if 1:1 relationship
+  {
+    $unwind: "$customerDetails"
+  }
+]);
+```
 
----
-
-## CRUD & Queries
-
----
-
-**Q11: What is the difference between `insertOne` and `insertMany` ordered vs. unordered behavior?**
-
-Answer: `insertMany` accepts an `ordered` option (default `true`). With `ordered: true`, MongoDB inserts documents sequentially and stops on the first error — any document before the error is committed, any after is not attempted. With `ordered: false`, MongoDB attempts all inserts in parallel and continues past errors, committing all successful inserts regardless of failures. For bulk imports where partial success is acceptable, `ordered: false` is faster because it allows parallel processing and does not short-circuit on a duplicate key error.
-
----
-
-**Q12: What is the difference between `$elemMatch` and dot-notation for querying arrays?**
-
-Answer: Dot-notation on arrays (`"address.city": "Sydney"`) queries whether any element in the array satisfies the condition independently per-field. When you need multiple conditions to apply to the same array element simultaneously, you must use `$elemMatch`. For example, `{ scores: { $elemMatch: { subject: "math", grade: { $gte: 90 } } } }` requires a single element where both `subject` is "math" AND `grade >= 90`. Without `$elemMatch`, the query could match a document where one element has `subject: "math"` and a different element has `grade: 90`, which is often incorrect.
-
----
-
-**Q13: How does `$text` search work in MongoDB and what are its limitations?**
-
-Answer: `$text` uses a text index to perform tokenized full-text search with stemming and stop-word removal. You create a text index with `db.collection.createIndex({ field: "text" })` or a compound text index over multiple fields. The `$text` operator then searches those fields with the given search string, supporting phrase search (`"exact phrase"`), term exclusion (`-badword`), and language-specific stemming. Limitations include: only one text index per collection, no relevance tuning or boost per field (all fields weighted equally unless you specify weights), no proximity/span queries, and much simpler ranking than Lucene-based Atlas Search.
-
----
-
-**Q14: Explain the aggregation pipeline and how it differs from `find`.**
-
-Answer: The aggregation pipeline is a multi-stage data transformation framework where each stage receives documents from the previous stage and passes transformed results to the next. Stages include `$match` (filter), `$group` (aggregate), `$project` (reshape), `$sort`, `$limit`, `$lookup` (left outer join), `$unwind` (deconstruct arrays), `$facet` (parallel sub-pipelines), and many others. Unlike `find`, which can only filter and project, the aggregation pipeline can compute new fields, join collections, group and count, and reshape documents arbitrarily. Under the hood, MongoDB's query planner can push `$match` and `$sort` before other stages to use indexes.
-
----
-
-**Q15: What does `$lookup` do and what are its performance implications?**
-
-Answer: `$lookup` performs a left outer join between the current collection and a foreign collection, adding matched documents as an array field. For large collections without proper indexes on the `foreignField`, `$lookup` can be extremely slow because each input document triggers a full scan of the foreign collection. Always ensure the `foreignField` has an index. The `pipeline` form of `$lookup` (using a sub-pipeline) is more flexible but also more expensive. Consider whether embedding is more appropriate — if the join is always performed and the embedded data is not too large or unbounded, embedding avoids the runtime cost entirely.
-
----
-
-**Q16: What is `$unwind` and when would you use it?**
-
-Answer: `$unwind` deconstructs an array field into separate documents — one output document per array element. For example, a document with `tags: ["a", "b", "c"]` becomes three documents each with a single `tags` value. This is necessary before `$group` when you want to count or aggregate by array element. You can also use `{ includeArrayIndex: "idx" }` to preserve the original array position, and `preserveNullAndEmptyArrays: true` to keep documents where the array is missing or empty rather than filtering them out.
-
----
-
-**Q17: How does upsert work in MongoDB?**
-
-Answer: An upsert (`{ upsert: true }` in `updateOne` or `updateMany`) performs an update if a matching document exists, or inserts a new document if no match is found. The inserted document is constructed from the filter criteria plus the update fields. If the update uses `$set`, only the specified fields are set; if it is a replacement (no operator), the entire document is replaced. Upserts are atomic — there is no race condition between the find and the insert/update. They are useful for "write-if-not-exists" patterns like idempotent event processing.
+#### Advanced `$lookup` with Sub-pipeline & Custom Join Conditions
+```javascript
+db.customers.aggregate([
+  {
+    $lookup: {
+      from: "orders",
+      let: { custId: "$_id" },
+      pipeline: [
+        {
+          $match: {
+            $expr: {
+              $and: [
+                { $eq: ["$customerId", "$$custId"] },
+                { $gte: ["$orderTotal", 500] } // Custom filter during join
+              ]
+            }
+          }
+        },
+        { $sort: { orderDate: -1 } },
+        { $limit: 3 } // Only top 3 high-value orders
+      ],
+      as: "recentHighValueOrders"
+    }
+  }
+]);
+```
 
 ---
 
-**Q18: Explain the `$expr` operator.**
-
-Answer: `$expr` allows the use of aggregation expressions inside a query filter, enabling comparisons between fields within the same document. For example, `{ $expr: { $gt: ["$totalAmount", "$discountedAmount"] } }` finds documents where `totalAmount` exceeds `discountedAmount` — something not possible with regular query operators that compare a field to a literal value. `$expr` can use the full set of aggregation operators (`$add`, `$multiply`, `$cond`, etc.) and can leverage indexes if the expressions resolve to indexed fields.
-
----
-
-**Q19: What is a bulk write operation and why use it?**
-
-Answer: `bulkWrite` lets you send a batch of mixed write operations (insertOne, updateOne, updateMany, deleteOne, deleteMany, replaceOne) in a single network round trip, dramatically reducing latency for high-volume write workloads. In ordered mode (default), operations execute sequentially and stop on error. In unordered mode, all operations are attempted and errors are collected. For ETL pipelines, bulk imports, or event processors that buffer writes, `bulkWrite` is far more efficient than issuing individual writes.
-
----
-
-**Q20: What is the difference between `deleteOne` and `findOneAndDelete`?**
-
-Answer: `deleteOne` removes the first matching document and returns an acknowledgment object with `deletedCount`. `findOneAndDelete` atomically finds a document, deletes it, and returns the deleted document in a single operation — useful when you need to act on the document's contents after deletion (e.g., task queue pattern where a worker dequeues and processes). `findOneAndDelete` supports `sort` to control which document is selected when multiple match. The atomicity is document-level, ensuring no other operation sees the document between the find and delete.
-
----
-
-## Schema Design
-
----
-
-**Q21: What are the key decision criteria for embedding vs. referencing?**
-
-Answer: Embed when: the data is always accessed together (high cohesion), the child data is owned by the parent (1-to-1 or 1-to-few with bounded size), and the embedded data does not exceed ~16 MB. Reference when: the related data is large or unbounded in size, the child entity is shared across many parent documents, or the child is independently queried and updated. The dominant access pattern is the most important factor — if you always load the parent with its children, embedding avoids a round trip. If you frequently update children independently or query them standalone, referencing is cleaner.
-
----
-
-**Q22: What is the bucket pattern and when is it useful?**
-
-Answer: The bucket pattern groups multiple time-series or sequential data points into a single document (a "bucket") rather than storing one document per event. For example, instead of 3,600 separate documents for per-second sensor readings per hour, you store one document per hour containing an array of 3,600 readings. This reduces document count (lower index size, faster range scans), improves compression, and aligns with how data is typically consumed (hourly aggregations). The trade-off is that appending to a bucket requires an `updateOne` with `$push`, and bucket boundaries must be chosen carefully to avoid documents growing beyond 16 MB.
-
----
-
-**Q23: What is the unbounded array anti-pattern?**
-
-Answer: An unbounded array is an array field that grows indefinitely as the application runs — for example, `{ postId: 1, likes: [ userId1, userId2, ... ] }` where every user who likes a post is appended. As the array grows, documents approach the 16 MB limit, every read loads all data even if only a count is needed, and `$push` becomes slower as the array index is updated. The fix is to either store likes as separate documents in a `likes` collection (referencing pattern), maintain a `likeCount` counter updated with `$inc`, or use the bucket pattern to shard likes into time-bounded documents.
+### Q5: Write a query to find all employees who earn more than their direct manager in MongoDB.
+**Answer:**
+```javascript
+db.employees.aggregate([
+  // Join employee with manager document
+  {
+    $lookup: {
+      from: "employees",
+      localField: "managerId",
+      foreignField: "_id",
+      as: "manager"
+    }
+  },
+  {
+    $unwind: "$manager"
+  },
+  // Compare employee salary with manager salary
+  {
+    $match: {
+      $expr: {
+        $gt: ["$salary", "$manager.salary"]
+      }
+    }
+  },
+  {
+    $project: {
+      _id: 0,
+      employeeName: "$name",
+      employeeSalary: "$salary",
+      managerName: "$manager.name",
+      managerSalary: "$manager.salary"
+    }
+  }
+]);
+```
 
 ---
 
-**Q24: Explain schema versioning in MongoDB.**
+### Q6: How do you calculate a Cumulative Running Total in MongoDB?
+**Answer:**
+In MongoDB 5.0+, use the **`$setWindowFields`** stage:
 
-Answer: Because MongoDB is schemaless, different documents in the same collection may have been written at different application versions with different shapes. The schema versioning pattern adds a `schemaVersion: 1` field to every document. Application code checks the version and applies migration logic on read (lazy migration) or a background job migrates documents in bulk. This avoids expensive all-at-once migrations on large collections. Atlas Schema Advisor and Compass can detect shape diversity and suggest when migration is needed. The versioning pattern is especially important for long-running applications with millions of documents.
-
----
-
-**Q25: What is the extended reference pattern?**
-
-Answer: The extended reference pattern denormalizes a subset of frequently read fields from a referenced document into the parent document to avoid joins at read time. For example, instead of storing only `{ authorId: ObjectId(...) }` on a blog post, you also store `{ authorId: ObjectId(...), authorName: "Alice", authorAvatar: "url" }`. The trade-off is write complexity — when the author's name changes, both the `authors` collection and all `posts` documents must be updated. This is acceptable when the denormalized fields change rarely (names, avatars) but the parent is read very frequently.
-
----
-
-**Q26: What is the polymorphic pattern?**
-
-Answer: The polymorphic pattern stores documents of similar but not identical shapes in the same collection, using a `type` or `kind` discriminator field. For example, a `shapes` collection stores `{ type: "circle", radius: 5 }` and `{ type: "rectangle", width: 4, height: 6 }`. Application code branches on `type` to apply the correct logic. This is preferable to separate collections when querying across all shape types is common (avoids `$unionWith`) and the documents share enough structure. A partial index on `type` can optimize type-specific queries.
-
----
-
-**Q27: When would you use `$jsonSchema` validation?**
-
-Answer: `$jsonSchema` validators enforce document structure at the database level — useful for catching application bugs, ensuring data quality in multi-team environments, and providing a contract for the collection. You can require fields, restrict types, set min/max lengths, and use `if/then/else` for conditional validation. Choose `validationAction: "error"` to reject invalid documents or `"warn"` to log but allow them (useful during migration). Unlike application-level validation, `$jsonSchema` runs server-side and cannot be bypassed by any driver.
-
----
-
-**Q28: What is the computed pattern?**
-
-Answer: The computed pattern pre-calculates and stores the result of expensive calculations in the document rather than recomputing them on every read. For example, an e-commerce product document might store `averageRating: 4.3` and `reviewCount: 127` rather than computing them via aggregation on every product page load. These values are updated by a write trigger or background job when new reviews arrive. The pattern trades write complexity and potential slight staleness for dramatically faster reads, which is appropriate when reads far outnumber writes.
+```javascript
+db.transactions.aggregate([
+  {
+    $setWindowFields: {
+      partitionBy: "$accountId",
+      sortBy: { transactionDate: 1 },
+      output: {
+        runningTotal: {
+          $sum: "$amount",
+          window: {
+            documents: ["unbounded", "current"]
+          }
+        }
+      }
+    }
+  }
+]);
+```
 
 ---
 
-**Q29: What is the tree pattern and what variants exist?**
-
-Answer: The tree pattern models hierarchical data (org charts, category trees, nested comments) in MongoDB. The main variants are: (1) Parent Reference — each node stores its parent's `_id`, simple but requires recursive queries for ancestors. (2) Child References — each node stores an array of child `_id`s, good for shallow trees. (3) Array of Ancestors — each node stores the full path from root to itself as an array, enabling fast subtree queries with `$in` but costly on moves. (4) Materialized Path — each node stores a string path like `/root/parent/child`, enabling regex-based subtree queries. The right choice depends on whether tree reads, writes, or moves dominate.
-
----
-
-**Q30: What is the outlier pattern?**
-
-Answer: The outlier pattern handles documents that would violate the design of normal documents — for example, a book with 1,000,000 reviews while most books have under 100. Rather than forcing the schema to handle extreme cases that affect only 0.1% of documents, you store a flag `hasExtraReviews: true` and split overflow data into extension documents. The application checks the flag and makes additional queries only when needed. This keeps the common case fast and simple without the 99.9% of normal documents paying a tax for the rare outliers.
-
----
-
-## Indexes & Performance
-
----
-
-**Q31: Explain the ESR (Equality, Sort, Range) rule for compound index field ordering.**
-
-Answer: The ESR rule states that compound index fields should be ordered as: Equality fields first (fields queried with exact match `{field: value}`), then Sort fields (fields used in `sort()`), then Range fields (fields queried with `$gt`, `$lt`, `$in`, etc.). Equality fields narrow the index range the most, so they should come first. Sort fields must be contiguous and in order to enable index-sort (avoiding an in-memory sort). Range fields come last because they produce a range scan that the sort cannot use anyway. Violating ESR often causes index-sort fallback or poor selectivity.
-
----
-
-**Q32: What is a covered query?**
-
-Answer: A covered query is one where all the fields in the query filter, sort, and projection are contained in the index — meaning MongoDB can satisfy the query entirely from the index without reading any documents from the collection. The `explain()` output shows `"totalDocsExamined": 0` for a covered query. To create a covered query, ensure the index includes every field the query references. Note: `_id` must be explicitly excluded from projection if it is not in the index, since MongoDB would otherwise need to fetch it from the document.
+### Q7: How do you calculate a 7-day Moving / Rolling Average in MongoDB?
+**Answer:**
+```javascript
+db.dailySales.aggregate([
+  {
+    $setWindowFields: {
+      sortBy: { salesDate: 1 },
+      output: {
+        movingAvg7Days: {
+          $avg: "$revenue",
+          window: {
+            documents: [-6, "current"] // 6 rows prior + current row = 7 days
+          }
+        }
+      }
+    }
+  }
+]);
+```
 
 ---
 
-**Q33: How does a TTL (Time-To-Live) index work mechanically?**
-
-Answer: A TTL index is a single-field index on a `Date` field with an `expireAfterSeconds` option. A background thread (`TTLMonitor`) runs approximately every 60 seconds, scans the TTL index for documents whose indexed date plus `expireAfterSeconds` is less than the current time, and deletes them. Because the cleanup is asynchronous, documents may survive up to ~60 seconds past their expiry. TTL indexes only work on single `Date` fields (not compound, not arrays of dates — actually arrays of dates are supported and the soonest date is used). They are commonly used for sessions, caches, and temporary notifications.
-
----
-
-**Q34: What is a partial index and when should you use one?**
-
-Answer: A partial index only indexes documents that match a filter expression, reducing index size and write overhead compared to a full index. For example, `db.orders.createIndex({ userId: 1 }, { partialFilterExpression: { status: "active" } })` only indexes active orders. Any query that benefits from the index must include the partial filter in its own query predicate, or MongoDB will not use it. Partial indexes are powerful for sparse data (e.g., indexing only documents with a specific optional field) or hot subsets of a large collection where most queries target the subset.
-
----
-
-**Q35: What is a multikey index and what are its limitations?**
-
-Answer: A multikey index is automatically created when you index a field that holds an array — MongoDB indexes each array element individually. This allows efficient queries like `{ tags: "mongodb" }` on a `tags: ["mongodb", "database"]` field. The limitation is that a compound index can have at most one multikey field per document (though the index definition itself can include multiple array fields as long as each individual document only has one of them as an array). Multikey indexes also cannot be used as covered queries for array fields.
-
----
-
-**Q36: What is the difference between `hint()` and MongoDB's default index selection?**
-
-Answer: MongoDB's query planner runs candidate query plans in parallel (the "plan cache race"), picks the winner by counting works (document examinations), and caches the winning plan. `hint()` forces a specific index, bypassing the planner. Use `hint()` when the planner consistently picks a suboptimal index (e.g., due to misleading statistics), during debugging, or in high-frequency queries where you want deterministic behavior and have validated the index choice. Avoid `hint()` in general application code because it can break query correctness if the index is dropped; prefer creating a better index and letting the planner choose.
-
----
-
-**Q37: How do you interpret `explain("executionStats")` output?**
-
-Answer: The key fields to examine are: `totalDocsExamined` vs `totalDocsReturned` (a large ratio means poor selectivity — index not selective enough or full scan), `totalKeysExamined` vs `totalDocsExamined` (if equal and low, the index is efficient), `stage` (`COLLSCAN` means no index used — usually bad for large collections; `IXSCAN` means index scan; `FETCH` means reading documents after the index scan), `executionTimeMillis` (actual query time), and `indexBounds` (shows which part of the index was scanned). An ideal query shows `IXSCAN → FETCH` with `totalDocsExamined ≈ totalDocsReturned`.
-
----
-
-**Q38: What is index intersection and is it commonly used?**
-
-Answer: Index intersection allows MongoDB to combine two or more indexes to satisfy a single query, avoiding the need for a compound index. For example, a query on `{ age: { $gt: 30 }, city: "Sydney" }` could use two separate single-field indexes via intersection. In practice, MongoDB uses index intersection infrequently because compound indexes are more efficient — the planner prefers them when available. Intersection adds overhead (fetching two sets of `_id`s and finding their intersection). It is more of a fallback mechanism than a primary design strategy.
+### Q8: Find all customers who have NEVER placed an order in MongoDB (Anti-Join).
+**Answer:**
+```javascript
+db.customers.aggregate([
+  {
+    $lookup: {
+      from: "orders",
+      localField: "_id",
+      foreignField: "customerId",
+      as: "orders"
+    }
+  },
+  // Filter where orders array is empty
+  {
+    $match: {
+      orders: { $eq: [] }
+    }
+  },
+  {
+    $project: {
+      _id: 1,
+      name: 1,
+      email: 1
+    }
+  }
+]);
+```
 
 ---
 
-**Q39: What is a sparse index?**
+### Q9: What is `$unwind` and why must you often use `preserveNullAndEmptyArrays`?
+**Answer:**
+`$unwind` deconstructs an array field from the input document to output a document for *each* element in the array:
 
-Answer: A sparse index only includes documents where the indexed field exists and is non-null, skipping documents without the field. This is useful for optional fields that appear in only a fraction of documents — a regular index would store a null entry for every document missing the field, wasting space. Note: queries that need to find documents where the field is absent (`{ field: { $exists: false } }`) cannot use a sparse index and will fall back to a full scan. Partial indexes (with `partialFilterExpression`) are generally more explicit and flexible than sparse indexes.
-
----
-
-**Q40: How do background index builds work in MongoDB 4.4+?**
-
-Answer: Starting in MongoDB 4.4, all index builds are "hybrid" — they hold an exclusive lock only briefly at the start and end of the build, allowing reads and writes to proceed normally during the majority of the build phase. The build tracks concurrent writes in a side table and merges them at the end. Before 4.4, background builds were slower and foreground builds locked the collection. The `createIndex` command now always uses the hybrid approach. You can monitor build progress with `db.currentOp({ "command.createIndexes": { $exists: true } })`.
-
----
-
-## Replication, Sharding & Transactions
-
----
-
-**Q41: How does the replica set election algorithm work?**
-
-Answer: When a primary becomes unavailable, the remaining members hold an election. Each candidate votes for itself and solicits votes from other members. A member votes yes only if the candidate has an oplog entry at least as recent as its own (ensuring no data loss). A candidate wins by receiving a majority of votes (e.g., 2 of 3 in a 3-member set). MongoDB uses the Raft-inspired protocol with priority values — higher-priority members are preferred as primaries. The election completes in under 12 seconds in healthy networks. Arbiters vote but hold no data; they help break ties in even-numbered sets.
-
----
-
-**Q42: What are the read preference modes and when would you use each?**
-
-Answer: `primary` (default) always reads from the primary — strongly consistent. `primaryPreferred` reads from the primary if available, falls back to a secondary. `secondary` always reads from a secondary — may see stale data. `secondaryPreferred` prefers secondaries, falls back to primary — useful for analytics workloads to offload the primary. `nearest` reads from the node with the lowest network latency regardless of role — best for geographically distributed apps where latency matters more than freshness. Combining read preference with `maxStalenessSeconds` bounds how out-of-date a secondary read can be.
+```javascript
+// Input: { _id: 1, item: "Laptop", tags: ["tech", "work"] }
+// Output: 
+// { _id: 1, item: "Laptop", tags: "tech" }
+// { _id: 1, item: "Laptop", tags: "work" }
+```
+**`preserveNullAndEmptyArrays: true`:**
+By default, if the array field is `null`, missing, or empty `[]`, `$unwind` **drops the document completely** (behaving like an `INNER JOIN`).
+Setting `preserveNullAndEmptyArrays: true` preserves the document (behaving like a `LEFT JOIN`):
+```javascript
+{
+  $unwind: {
+    path: "$tags",
+    preserveNullAndEmptyArrays: true
+  }
+}
+```
 
 ---
 
-**Q43: What makes a shard key bad and what are the consequences?**
+### Q10: How do you generate Multi-Faceted Search results (Pagination + Total Count + Category Breakdown) in a single database round-trip?
+**Answer:**
+Use the **`$facet`** stage to execute parallel sub-pipelines over the filtered input documents:
 
-Answer: A bad shard key causes an uneven distribution of data or queries across shards. Low-cardinality keys (e.g., `status` with only three values) create at most three chunks, leaving most shards idle. Monotonically increasing keys (e.g., auto-increment IDs, timestamps) cause all writes to go to the last chunk on one shard ("hotspot"), defeating the purpose of horizontal scaling. Non-query-aligned keys mean most queries must be broadcast to all shards (scatter-gather). Consequences include hotspot shards, poor horizontal scalability, and high latency scatter-gather queries. Good shard keys have high cardinality, are not monotonically increasing (or are hashed), and appear in most query predicates.
-
----
-
-**Q44: What is hashed sharding and when is it appropriate?**
-
-Answer: Hashed sharding applies a hash function to the shard key value before distributing chunks, ensuring even distribution even for monotonically increasing keys like `ObjectId` or timestamps. The trade-off is that range queries on the shard key become scatter-gather (since adjacent values hash to different shards), so you lose range locality. Hashed sharding is ideal when even write distribution matters most and range queries on the shard key are rare or absent — for example, sharding a `logs` collection by `_id` (which is monotonically increasing) to spread write load.
-
----
-
-**Q45: What are the ACID guarantees in MongoDB?**
-
-Answer: MongoDB provides ACID at the single-document level without any special configuration — a write to one document is atomic, consistent, isolated, and durable (with journaling). For multi-document ACID transactions (introduced in MongoDB 4.0 for replica sets, 4.2 for sharded clusters), MongoDB wraps multiple operations in a session with `startTransaction()`. These transactions support snapshot isolation, rollback on abort, and all-or-nothing semantics across multiple collections. MongoDB uses MVCC (WiredTiger) and two-phase commit (2PC) for distributed transactions across shards.
-
----
-
-**Q46: What are the limitations of multi-document transactions in MongoDB?**
-
-Answer: Multi-document transactions have a default 60-second timeout (configurable) and a 16 MB oplog entry limit per transaction. They add write conflicts — if two transactions modify the same document concurrently, one is aborted. Transactions on sharded clusters require the use of sessions and incur the overhead of two-phase commit. They should be used sparingly for genuinely multi-document atomic operations; using them as a crutch to avoid good schema design leads to contention and performance problems. MongoDB recommends limiting transactions to a small number of documents and keeping them short.
-
----
-
-**Q47: What is the difference between a replica set and a sharded cluster?**
-
-Answer: A replica set provides high availability and redundancy — the same data is replicated across multiple nodes (typically 3), with one primary accepting writes and secondaries providing failover and read scaling. A sharded cluster provides horizontal write and storage scalability — data is partitioned across multiple shards, each of which is itself a replica set. A sharded cluster includes `mongos` routers (query routing layer) and config servers (stores cluster metadata). You use a replica set when one server's storage and write throughput is sufficient; you add sharding when data volume or write throughput exceeds what a single replica set can handle.
-
----
-
-**Q48: What is a zone in sharding and how is it different from a tag?**
-
-Answer: Tags and zones are the same concept; "zones" is the newer terminology used from MongoDB 3.4 onwards. A zone (tag) is a named label associated with a set of shards. You assign key ranges to zones using `sh.addTagRange` (older API) or zone commands, and the balancer ensures chunks in that range only live on shards assigned to the zone. This is used for data locality (geo-distribution of a global cluster), hardware tiering (hot data on SSD shards, cold on HDD), or tenant isolation (each tenant's data on their own shard).
-
----
-
-**Q49: What is change streams and how do they work?**
-
-Answer: Change streams provide a real-time, resumable stream of data change events (insert, update, delete, replace) from a collection, database, or entire cluster. Under the hood, they are backed by the oplog — MongoDB transforms raw oplog entries into a richer, easier-to-consume event format. Change streams return a resume token with each event; if the connection drops, you restart the stream from the last resume token, guaranteeing no missed events (as long as the token is within the oplog retention window). They are the foundation for Atlas Triggers, Atlas Search sync, and any CDC pipeline built on MongoDB.
+```javascript
+db.products.aggregate([
+  // Initial filter
+  {
+    $match: { status: "ACTIVE" }
+  },
+  {
+    $facet: {
+      // Facet 1: Paginated Items
+      paginatedResults: [
+        { $sort: { price: 1 } },
+        { $skip: 20 },
+        { $limit: 10 }
+      ],
+      // Facet 2: Total Matching Document Count
+      totalCount: [
+        { $count: "count" }
+      ],
+      // Facet 3: Grouping by Category with Average Price
+      categoryStats: [
+        {
+          $group: {
+            _id: "$category",
+            totalProducts: { $sum: 1 },
+            avgPrice: { $avg: "$price" }
+          }
+        }
+      ]
+    }
+  }
+]);
+```
 
 ---
 
-**Q50: Explain causal consistency and when it matters.**
+### Q11: Explain the difference between `$elemMatch` and standard Dot-Notation when querying arrays of sub-documents.
+**Answer:**
+- **Dot-Notation (`"grades.score": { $gte: 90 }`):** Matches if *any* element satisfies the condition independently. If querying two fields on an array (`"grades.subject": "Math"` AND `"grades.score": 95`), dot notation can match where one element has Math and a *different* element has 95!
+- **`$elemMatch`:** Requires that a **single individual element** satisfies **all** criteria simultaneously.
 
-Answer: Causal consistency guarantees that in a client session, a read always reflects all prior writes in the same session — even when reading from a secondary. Without causal consistency, a write to the primary followed immediately by a read from a secondary could return stale data that does not include the write. MongoDB implements causal consistency using logical operation times (cluster times): the session tracks the latest `operationTime` it has seen, and all subsequent reads are required to wait until the queried node has caught up to at least that time. This matters in applications that write data and immediately display it to the same user, especially when reads are routed to secondaries for load balancing.
+```javascript
+// Matches only students who scored >= 90 in Math specifically:
+db.students.find({
+  grades: {
+    $elemMatch: { subject: "Math", score: { $gte: 90 } }
+  }
+});
+```
+
+---
+
+### Q12: How do you update a specific element inside an array using the Positional Operators (`$`, `$[]`, and `$[<identifier>]`)?
+**Answer:**
+MongoDB provides 3 positional update operators:
+1. **`$` (First Matched Element):** Updates the first array element that matched the query filter.
+   ```javascript
+   db.students.updateOne(
+     { _id: 1, "grades.subject": "Math" },
+     { $set: { "grades.$.score": 95 } }
+   );
+   ```
+2. **`$[]` (All Elements):** Updates every element in the array unconditionally.
+   ```javascript
+   db.students.updateOne(
+     { _id: 1 },
+     { $inc: { "grades.$[].score": 5 } } // Adds 5 points to all subjects
+   );
+   ```
+3. **`$[<identifier>]` (Filtered Positional):** Updates elements that match specific `arrayFilters` conditions.
+   ```javascript
+   db.students.updateOne(
+     { _id: 1 },
+     { $set: { "grades.$[elem].grade": "A+" } },
+     { arrayFilters: [{ "elem.score": { $gte: 90 } }] }
+   );
+   ```
+
+---
+
+### Q13: What is the difference between `$push` and `$addToSet` in updates? How do you keep an array capped at $N$ items?
+**Answer:**
+- **`$push`**: Appends an element to an array regardless of whether it already exists (allows duplicates).
+- **`$addToSet`**: Appends an element only if it does not already exist in the array (set semantics, prevents duplicates).
+
+**Capped Array on Update (e.g. keeping only the 5 most recent activities):**
+```javascript
+db.users.updateOne(
+  { _id: userId },
+  {
+    $push: {
+      recentLogins: {
+        $each: [{ timestamp: new Date(), ip: "192.168.1.1" }],
+        $sort: { timestamp: -1 },
+        $slice: 5 // Retains only the top 5 elements
+      }
+    }
+  }
+);
+```
+
+---
+
+### Q14: How does an Upsert work in MongoDB, and what is `$setOnInsert`?
+**Answer:**
+When `{ upsert: true }` is passed to `updateOne()`:
+- If a document matching the query filter exists, it performs an update.
+- If no matching document exists, it inserts a new document combining the query filter and update fields.
+
+**`$setOnInsert`:**
+Sets fields **only if an insert occurs**. If the document already exists and an update occurs, `$setOnInsert` is completely ignored:
+```javascript
+db.userStats.updateOne(
+  { userId: 42 },
+  {
+    $inc: { visits: 1 },
+    $setOnInsert: { createdAt: new Date(), firstReferrer: "google.com" }
+  },
+  { upsert: true }
+);
+```
+
+---
+
+### Q15: Why is `findOneAndUpdate` preferred over `find` followed by `updateOne` in concurrent systems?
+**Answer:**
+`findOneAndUpdate` executes **atomically on a single document**.
+If two concurrent worker processes execute:
+1. `doc = find({ status: "PENDING" })`
+2. `updateOne({ _id: doc._id }, { status: "PROCESSING" })`
+Both workers will find the **same document** simultaneously (Race Condition / Double Processing).
+
+With `findOneAndUpdate`, the find and update lock the document atomically:
+```javascript
+const job = await db.jobs.findOneAndUpdate(
+  { status: "PENDING" },
+  { $set: { status: "PROCESSING", lockedAt: new Date() } },
+  { sort: { priority: -1 }, returnDocument: "after" }
+);
+```
+Only one worker can claim the job; the other worker gets the next pending job.
+
+---
+
+### Q16: How do you compare two fields within the same document using `$expr`?
+**Answer:**
+Standard query operators compare a field against a constant literal. To compare two fields in the same document, use `$expr`:
+
+```javascript
+// Find orders where actual shipping cost exceeded quoted shipping fee
+db.orders.find({
+  $expr: {
+    $gt: ["$actualShippingCost", "$quotedShippingFee"]
+  }
+});
+```
+
+---
+
+### Q17: How do you implement Full-Text Search in MongoDB? What are its limits?
+**Answer:**
+1. Create a Text Index:
+   ```javascript
+   db.articles.createIndex({ title: "text", body: "text" }, { weights: { title: 10, body: 2 } });
+   ```
+2. Search with relevance score sorting:
+   ```javascript
+   db.articles.find(
+     { $text: { $search: "distributed database" } },
+     { score: { $meta: "textScore" } }
+   ).sort({ score: { $meta: "textScore" } });
+   ```
+**Limitations:**
+- Only **one** text index per collection.
+- No typo tolerance or fuzzy matching (for typo-tolerance and autocomplete, use MongoDB Atlas Search with Apache Lucene).
+
+---
+
+### Q18: How do Geospatial Queries work in MongoDB?
+**Answer:**
+1. Store location as GeoJSON point:
+   ```javascript
+   { location: { type: "Point", coordinates: [-73.9857, 40.7484] } } // [longitude, latitude]
+   ```
+2. Create a `2dsphere` index:
+   ```javascript
+   db.restaurants.createIndex({ location: "2dsphere" });
+   ```
+3. Query nearby restaurants within 5 km:
+   ```javascript
+   db.restaurants.find({
+     location: {
+       $near: {
+         $geometry: { type: "Point", coordinates: [-73.9857, 40.7484] },
+         $maxDistance: 5000 // In meters
+       }
+     }
+   });
+   ```
+
+---
+
+### Q19: How do you conditionally sum or aggregate in MongoDB (equivalent to SQL `CASE WHEN`)?
+**Answer:**
+Use the `$cond` or `$switch` operator inside `$group`:
+
+```javascript
+db.orders.aggregate([
+  {
+    $group: {
+      _id: "$storeId",
+      totalCompleted: {
+        $sum: {
+          $cond: [{ $eq: ["$status", "COMPLETED"] }, "$amount", 0]
+        }
+      },
+      totalCancelled: {
+        $sum: {
+          $cond: [{ $eq: ["$status", "CANCELLED"] }, "$amount", 0]
+        }
+      }
+    }
+  }
+]);
+```
+
+---
+
+### Q20: What is the difference between `ordered: true` and `ordered: false` in `bulkWrite` and `insertMany`?
+**Answer:**
+- **`ordered: true` (Default):** MongoDB executes write operations serially. If an error occurs (e.g. duplicate key), execution stops immediately; subsequent operations in the array are **not attempted**.
+- **`ordered: false`:** MongoDB can execute operations in parallel and reorder them for performance. If an error occurs, MongoDB logs the error and continues executing all remaining operations.
+
+---
+
+## 2. Schema Design & Data Modeling (Q21 – Q30)
+
+### Q21: What are the golden rules for Embedding vs. Referencing in MongoDB?
+**Answer:**
+- **Embed when:**
+  - 1:1 relationships where entities are always retrieved together (e.g. `User` and `UserProfile`).
+  - 1:Few relationships (e.g. `User` and 2–3 `Addresses`).
+  - Data is viewed together in the primary access pattern and bounded in size.
+- **Reference (Normalize) when:**
+  - 1:Many large or unbounded relationships (e.g. `Blog` and 50,000 `Comments`).
+  - Many-to-Many relationships (e.g. `Students` and `Courses`).
+  - The embedded entity is updated frequently from multiple sources (embedding would cause duplicate writes).
+  - Documents risk exceeding the **16MB BSON limit**.
+
+---
+
+### Q22: Why does MongoDB enforce a 16MB document size limit? What is GridFS?
+**Answer:**
+The 16MB limit ensures that single documents do not consume disproportionate RAM in the WiredTiger cache, monopolize network I/O, or bloat replication oplog entries.
+**GridFS:**
+For files > 16MB (videos, high-res images, PDF archives), MongoDB uses GridFS. It divides the file into contiguous **255 KB chunks** stored across two collections:
+- `fs.files`: Stores metadata (filename, upload date, file size, content type).
+- `fs.chunks`: Stores binary chunks with a pointer to the file `_id` and chunk sequence index.
+
+---
+
+### Q23: Explain the Bucket Pattern. When is it used?
+**Answer:**
+Instead of storing 1 document per data point (e.g., IoT temperature sensor reading every second = 86,400 documents/day):
+The **Bucket Pattern** groups measurements into a single document representing a discrete time bucket (e.g. 1 hour or 1 day):
+```javascript
+{
+  sensorId: 101,
+  date: "2026-10-23",
+  hour: 14,
+  count: 3600,
+  readings: [
+    { sec: 0, temp: 22.1 },
+    { sec: 1, temp: 22.2 }
+  ]
+}
+```
+**Benefits:** Reduces index footprint by 100x–1,000x, improves cache locality, and speeds up historical range queries.
+
+---
+
+### Q24: What is the Subset Pattern?
+**Answer:**
+In e-commerce, a product might have 10,000 reviews. 95% of users only look at the **first 10 reviews**.
+Instead of referencing all reviews in a separate collection (requiring a `$lookup` on every page load), or embedding all 10,000 reviews (bloating the document):
+**Subset Pattern:**
+Embed the **10 most recent reviews** directly inside the `Product` document. Store the full archive of 10,000 reviews in a separate `reviews` collection.
+Page loads fetch the product + top reviews in a single disk read ($O(1)$).
+
+---
+
+### Q25: What is the Extended Reference Pattern?
+**Answer:**
+Instead of embedding an entire foreign document or just storing an `_id` (which forces a `$lookup` join), embed only the **critical, rarely changing fields** needed for display.
+*Example in Orders:*
+```javascript
+{
+  orderId: 501,
+  customer: {
+    id: ObjectId("..."),
+    name: "Alice Smith", // Cached for display
+    shippingCity: "Seattle"
+  },
+  items: [...]
+}
+```
+Eliminates `$lookup` joins on invoice generation and order history pages.
+
+---
+
+### Q26: What is the Outlier Pattern?
+**Answer:**
+Occurs when a small percentage of documents break normal schema assumptions (e.g. Twitter/X: 99.9% of users have < 500 followers, but a celebrity has 50,000,000 followers).
+If followers are embedded in an array, the celebrity document hits the 16MB limit.
+**Outlier Pattern:**
+Set an `hasOverflow: true` flag on the outlier document. The first 1,000 followers are stored embedded; remaining millions of followers overflow into a separate `followers` collection.
+
+---
+
+### Q27: What is the Polymorphic Pattern in MongoDB?
+**Answer:**
+Used when documents in a collection share common attributes but have distinct specialized fields (e.g. an `athletes` collection storing runners, swimmers, and boxers).
+All documents reside in the same collection with a `schemaType` or `type` discriminant:
+```javascript
+{ name: "Michael Phelps", sport: "SWIMMING", strokes: ["Freestyle", "Butterfly"] }
+{ name: "Usain Bolt", sport: "RUNNING", best100mTime: 9.58 }
+```
+Allows single-query retrieval across all athletes while keeping specialized fields intact.
+
+---
+
+### Q28: How do you enforce Schema Validation in MongoDB?
+**Answer:**
+Using `$jsonSchema` in collection validation rules:
+```javascript
+db.createCollection("users", {
+  validator: {
+    $jsonSchema: {
+      bsonType: "object",
+      required: ["name", "email", "age"],
+      properties: {
+        name: { bsonType: "string" },
+        email: { bsonType: "string", pattern: "^.+@.+$" },
+        age: { bsonType: "int", minimum: 18 }
+      }
+    }
+  },
+  validationAction: "error" // "error" rejects writes; "warn" logs warnings
+});
+```
+
+---
+
+### Q29: What is the Single-Document Atomicity guarantee in MongoDB?
+**Answer:**
+In MongoDB, any write operation on a **single document is strictly atomic**, including modifications to embedded arrays and sub-documents. If an update modifies 10 fields and pushes to 2 arrays inside a single document, either all modifications succeed or none do.
+No multi-document transaction is required if your data model embeds related entities within the same document.
+
+---
+
+### Q30: What are Schema Anti-Patterns to avoid in MongoDB?
+**Answer:**
+1. **Unbounded Growing Arrays:** Pushing to an array without `$slice` or bounds until the document hits 16MB.
+2. **Relational Emulation:** Normalizing everything into tiny collections and chaining 6 `$lookup` stages in queries.
+3. **Large Numbers of Collections:** Having 1 collection per user or 1 collection per day (strains WiredTiger metadata cache).
+
+---
+
+## 3. Indexing, Performance & WiredTiger Internals (Q31 – Q40)
+
+### Q31: What is the ESR (Equality, Sort, Range) Rule for Compound Indexes?
+**Answer:**
+When creating a compound index for a query that contains equality filters, sorting, and range conditions, place the fields in this exact order:
+1. **E — Equality:** Fields queried with exact values (`status: "ACTIVE"`).
+2. **S — Sort:** Fields specifying order (`sort: { createdAt: -1 }`).
+3. **R — Range:** Fields queried with ranges (`age: { $gte: 21 }`).
+
+```javascript
+// Query:
+db.orders.find({ status: "SHIPPED", total: { $gt: 100 } }).sort({ orderDate: -1 });
+
+// Ideal Compound Index following ESR:
+db.orders.createIndex({ status: 1, orderDate: -1, total: 1 });
+```
+> If Sort is placed after Range, MongoDB cannot use the index to satisfy the sort and must perform an expensive in-memory sort (`SORT` stage).
+
+---
+
+### Q32: What is a Multikey Index? What are its restrictions?
+**Answer:**
+A multikey index indexes elements inside an array. If a document has `tags: ["tech", "database", "cloud"]`, MongoDB creates 3 separate index entries pointing to the same document.
+**Restriction:**
+A compound multikey index **cannot index more than one array field**. (e.g. indexing `{ tags: 1, authors: 1 }` where both `tags` and `authors` are arrays is prohibited because it would generate a Cartesian product of index entries).
+
+---
+
+### Q33: What is a Covered Query in MongoDB? Why is it the fastest query possible?
+**Answer:**
+A query is **covered** when:
+1. All fields in the query filter are part of an index, AND
+2. All returned fields in the projection are part of that same index (and `_id` is explicitly excluded if not part of the index).
+
+```javascript
+db.users.createIndex({ email: 1, username: 1 });
+
+db.users.find(
+  { email: "alice@example.com" },
+  { email: 1, username: 1, _id: 0 } // Covered!
+);
+```
+**Why it's fastest:**
+MongoDB answers the query entirely from RAM index pages without loading documents from disk (`totalDocsExamined: 0`).
+
+---
+
+### Q34: What is a TTL (Time-To-Live) Index?
+**Answer:**
+A single-field index on a Date field that automatically deletes documents after a specified time:
+```javascript
+// Automatically deletes user sessions 3600 seconds (1 hour) after createdAt
+db.sessions.createIndex(
+  { createdAt: 1 }, 
+  { expireAfterSeconds: 3600 }
+);
+```
+A background thread runs every 60 seconds to purge expired documents.
+
+---
+
+### Q35: How do you interpret `explain("executionStats")` output in MongoDB?
+**Answer:**
+Look at:
+- **`stage`**:
+  - `IXSCAN`: Used an index (good).
+  - `COLLSCAN`: Full collection table scan (bad for large collections).
+  - `FETCH`: Retrieved documents from disk pages.
+  - `SORT`: In-memory sort (bad if memory exceeded).
+- **`totalDocsExamined` vs `nReturned`**:
+  - In an optimal index, `totalDocsExamined == nReturned`.
+  - If `totalDocsExamined: 100000` and `nReturned: 1`, the query examined 100k documents to find 1 (missing index).
+
+---
+
+### Q36: Explain the WiredTiger Storage Engine Architecture (Cache, Eviction, Checkpoints).
+**Answer:**
+- **Cache:** By default, WiredTiger allocates 50% of (Total RAM - 1GB) for its in-memory buffer pool.
+- **Checkpoints:** Every 60 seconds (or 2GB of data), WiredTiger writes a consistent snapshot checkpoint of dirty pages to disk.
+- **Journal (Write-Ahead Log):** Records every write between checkpoints. Flushed to disk every 100ms (or on demand via `j: true`), enabling crash recovery between checkpoints.
+- **Eviction:** When cache fills (>80% dirty/full), background threads evict clean pages and flush dirty pages to disk.
+
+---
+
+### Q37: What is the 100MB RAM limit in Aggregation Pipelines, and how is it resolved?
+**Answer:**
+By default, each stage in an aggregation pipeline is allocated a maximum of **100 MB of RAM**. If a `$sort` or `$group` stage exceeds 100MB, the query fails with: `exceeded memory limit for $sort`.
+**Fix:**
+Add `{ allowDiskUse: true }` to allow stages to spill temporary data to disk:
+```javascript
+db.orders.aggregate([...], { allowDiskUse: true });
+```
+
+---
+
+### Q38: What are Partial Indexes and Sparse Indexes in MongoDB?
+**Answer:**
+- **Sparse Index:** Only contains entries for documents that actually have the indexed field (ignores documents where field is missing).
+- **Partial Index:** Uses a `partialFilterExpression` to index only documents matching an arbitrary filter:
+  ```javascript
+  db.orders.createIndex(
+    { orderDate: 1 },
+    { partialFilterExpression: { status: "PENDING" } }
+  );
+  ```
+  Only pending orders are indexed, keeping the index microscopic and fast.
+
+---
+
+### Q39: What is a Collation in MongoDB?
+**Answer:**
+Collation specifies language-specific rules for string comparison and sorting (e.g. case sensitivity, accent marks):
+```javascript
+db.users.createIndex(
+  { username: 1 },
+  { collation: { locale: "en", strength: 2 } } // strength 2 = Case-Insensitive
+);
+```
+
+---
+
+### Q40: What happens during an in-memory Sort without an index?
+**Answer:**
+If a sort cannot use an index and `{ allowDiskUse: true }` is not set, MongoDB performs an in-memory sort capped at **100MB RAM**. If the dataset exceeds 100MB, the query crashes immediately.
+
+---
+
+## 4. Replication, Sharding, Consistency & Transactions (Q41 – Q50)
+
+### Q41: Explain Replica Set Architecture in MongoDB.
+**Answer:**
+A Replica Set consists of a group of `mongod` nodes maintaining identical data:
+- **Primary:** Receives all write operations. Writes changes to its `oplog`.
+- **Secondary:** Replicates the Primary's oplog asynchronously to maintain mirror state. Can serve read queries if `readPreference` allows.
+- **Arbiter:** Holds no data and cannot become primary. Participates only in voting during elections to break ties (use odd number of voting nodes instead whenever possible).
+
+---
+
+### Q42: How does Replica Set Failover and Election work?
+**Answer:**
+Nodes send heartbeats every **2 seconds**. If the Primary does not respond within **10 seconds** (`electionTimeoutMillis`):
+1. Secondaries declare the primary dead and call an election based on the **Raft consensus protocol**.
+2. Only secondaries that have the most up-to-date oplog can win the election.
+3. Once a candidate receives a majority of votes ($N/2 + 1$), it transitions to Primary.
+4. Total failover typically completes in **under 5 seconds**.
+
+---
+
+### Q43: Explain Write Concern (`w: 1`, `w: "majority"`, `j: true`).
+**Answer:**
+Controls write acknowledgment before returning success to the application:
+- **`w: 1`**: Acknowledged as soon as the **Primary node's memory** accepts the write. (Risk: data lost if primary crashes before replicating).
+- **`w: "majority"`**: Acknowledged only after a **strict majority of replica set nodes** have committed the write to memory. (Guarantees write cannot be rolled back during failover).
+- **`j: true`**: Acknowledged only after written to the on-disk **journal** on the primary.
+
+---
+
+### Q44: Explain Read Concern (`local`, `majority`, `linearizable`).
+**Answer:**
+- **`local` (Default):** Returns the node's latest data. Does not verify whether data has been committed to a majority (data could be rolled back if primary fails).
+- **`majority`:** Returns data that has been acknowledged by a majority of nodes. Immune to failover rollbacks.
+- **`linearizable`:** Primary confirms with a quorum of nodes before returning, guaranteeing strict serializability across real-time reads.
+
+---
+
+### Q45: What is Causal Consistency in MongoDB?
+**Answer:**
+In distributed systems, a user writes data to the Primary and immediately reads from a Secondary. Because replication is asynchronous, the Secondary might not have received the write yet (Read-Your-Own-Writes violation).
+**Causal Consistency (via Client Sessions):**
+Passes logical cluster times across operations in a session:
+```javascript
+const session = client.startSession({ causalConsistency: true });
+```
+Guarantees:
+1. **Read your own writes.**
+2. **Monotonic reads** (reads never see time move backward).
+3. **Writes follow reads.**
+
+---
+
+### Q46: How do Multi-Document ACID Transactions work in MongoDB?
+**Answer:**
+MongoDB 4.0+ supports multi-document transactions across collections, replica sets, and sharded clusters using a **Two-Phase Commit**:
+```javascript
+const session = client.startSession();
+session.startTransaction({
+  readConcern: { level: "snapshot" },
+  writeConcern: { level: "majority" }
+});
+
+try {
+  await ordersCollection.insertOne([{ orderId: 101, amount: 250 }], { session });
+  await accountsCollection.updateOne({ _id: "cust1" }, { $inc: { balance: -250 } }, { session });
+  await session.commitTransaction();
+} catch (error) {
+  await session.abortTransaction();
+} finally {
+  session.endSession();
+}
+```
+> **Performance Note:** Multi-document transactions carry locking and performance overhead. Good schema design (embedding) avoids the need for transactions in 95% of use cases.
+
+---
+
+### Q47: Explain Sharding Architecture in MongoDB (`mongos`, Config Servers, Shards).
+**Answer:**
+Sharding provides horizontal write & storage scalability across nodes:
+- **`mongos` (Query Router):** Stateless routing service. Applications connect to `mongos` instead of shards directly. Routes queries to the appropriate shard based on the Shard Key.
+- **Config Database (Replica Set):** Stores cluster metadata, shard key ranges, and routing tables.
+- **Shards:** Each shard is an independent **Replica Set** holding a subset of the sharded data (Chunks).
+
+---
+
+### Q48: What are the criteria for choosing a Good Shard Key?
+**Answer:**
+1. **High Cardinality:** The key must have millions of distinct values (e.g. `userId` or `uuid`), not binary or enum values (e.g. `country` or `gender` would cause jumbo un-split chunks).
+2. **Low Frequency:** No single value should dominate 20% of traffic.
+3. **Non-Monotonic:** Monotonically increasing keys (e.g. `auto_increment id` or `timestamp`) cause **hotspotting** — all write traffic hits only the highest shard chunk. Use **Hashed Sharding** for monotonically increasing values.
+
+---
+
+### Q49: Ranged Sharding vs. Hashed Sharding.
+**Answer:**
+- **Ranged Sharding:** Divides data into contiguous ranges `[min, max]`.
+  - *Best For:* Range queries (`WHERE date >= '2026-01-01' AND date < '2026-02-01'`), as `mongos` targets only the specific shard containing that range.
+  - *Drawback:* Risks write hotspotting on monotonically increasing fields.
+- **Hashed Sharding:** Computes an MD5 hash of the shard key to distribute writes uniformly across all shards.
+  - *Best For:* Randomly distributed write scaling.
+  - *Drawback:* Range queries become **Scatter-Gather** queries (broadcast to every shard in the cluster).
+
+---
+
+### Q50: Detailed Architectural Decision Matrix: PostgreSQL vs MongoDB. When should you choose each in production?
+**Answer:**
+
+| Architectural Requirement | Choose PostgreSQL | Choose MongoDB |
+|---|---|---|
+| **Data Relationships** | Deeply relational (5+ normalized tables, joins, strict foreign keys) | Document-oriented, hierarchical (JSON/BSON, embedded nested structures) |
+| **Schema Evolution** | Structured, predictable schema requiring DDL migrations | Dynamic, highly polymorphic, frequently evolving payload structures |
+| **ACID Multi-Table Transactions** | Core business requirement across 100% of domain | Needed infrequently; single-document atomicity suffices for 95% |
+| **Write Scaling** | Vertical scaling, read replicas, declarative table partitioning | Native horizontal auto-sharding out-of-the-box across commodity servers |
+| **Complex Aggregations & Analytics** | Advanced ANSI SQL, window functions, recursive CTEs, complex grouping | Aggregation Pipeline, `$lookup`, `$facet`, `$setWindowFields` |
+| **Text & Search** | Full-text search via `tsvector` and GIN | Atlas Search (integrated Lucene engine with full fuzzy search) |
+| **Best Production Fit** | Core Banking, ERP, Accounting, Relational SaaS platforms | Content Management, Catalogs, IoT, User Profiles, Mobile Backends, Real-time telemetry |
