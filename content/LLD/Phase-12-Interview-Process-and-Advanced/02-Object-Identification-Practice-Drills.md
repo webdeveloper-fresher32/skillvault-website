@@ -132,7 +132,7 @@ public class Player {
 }
 ```
 
-
+```python
 class Game:
     def __init__(self):
         self.board = Board()

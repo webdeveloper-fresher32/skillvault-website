@@ -27,7 +27,7 @@ In software engineering, components communicate over strictly typed interfaces:
 ### The Chaos of Naive Prompting
 
 When developers interact with an LLM using casual English:
-```text
+````text
 Prompt: "Extract the customer name and order total from this email. Return JSON."
 Model Output: "Sure! Here is the JSON you requested:
 ```json
@@ -37,7 +37,7 @@ Model Output: "Sure! Here is the JSON you requested:
 }
 ```
 Let me know if you need anything else!"
-```
+````
 
 ### Why This Breaks Production Pipelines
 

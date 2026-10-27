@@ -10,7 +10,7 @@
 
 If you tell an AI model in plain English: *"Please return the answer as JSON"*, your downstream Python application will frequently crash in production:
 
-```
+````
 THE PLAIN TEXT BREAKDOWN:
 Model output: "Sure! Here is the JSON you asked for:
 ```json
@@ -21,10 +21,10 @@ Hope this helps!"
 → json.loads() CRASHES because of the markdown fences and intro text.
 → Single quotes break standard JSON decoders.
 → The key might be named "user_age" today, and "age" or "userAge" tomorrow.
-```
+````
 
 This causes three critical production failures:
-1. **Markdown & Chatter Formatting Bugs:** Models frequently wrap output in ```json ... ``` or add conversational pleasantries that break standard JSON parsers.
+1. **Markdown & Chatter Formatting Bugs:** Models frequently wrap output in ```` ```json ... ``` ```` or add conversational pleasantries that break standard JSON parsers.
 2. **Missing or Renamed Keys:** One time the model returns `{"customer_id": 10}`, and the next time it returns `{"id": "ten"}`. Your downstream API throws a `KeyError`.
 3. **No Type Safety:** You ask for a number (like an urgency score from 1 to 5), but the model returns `"high"` or `null`.
 
