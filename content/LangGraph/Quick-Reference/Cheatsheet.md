@@ -63,7 +63,7 @@ class ReducerState(TypedDict):
 ## 3. Prebuilt ReAct Agent
 
 ```python
-from langchain_openai import ChatOpenAI
+from langchain_xai import ChatXAI
 from langchain_core.tools import tool
 from langgraph.prebuilt import create_react_agent
 from langgraph.checkpoint.memory import MemorySaver
@@ -73,10 +73,10 @@ def search_db(query: str) -> str:
     """Search the company database."""
     return f"Results for {query}"
 
-model = ChatOpenAI(model="gpt-4o", temperature=0)
+model = ChatXAI(model="grok-2-latest", temperature=0)
 checkpointer = MemorySaver()
 
-# Instant production ReAct Agent with ToolNode loop
+# Instant production ReAct Agent with ToolNode loop using Grok 2
 agent_app = create_react_agent(model, tools=[search_db], checkpointer=checkpointer)
 ```
 
@@ -181,10 +181,11 @@ builder.add_edge("chapter_worker", "reducer_node")
 
 ```python
 from langgraph.store.memory import InMemoryStore
-from langchain_openai import OpenAIEmbeddings
+# For semantic memory indexing (local or standard embeddings pair with Grok)
+from langchain_community.embeddings import FakeEmbeddings # or HuggingFaceEmbeddings
 
-embeddings = OpenAIEmbeddings()
-store = InMemoryStore(index={"dims": 1536, "embed": embeddings})
+embeddings = FakeEmbeddings(size=384)
+store = InMemoryStore(index={"dims": 384, "embed": embeddings})
 
 app = builder.compile(checkpointer=checkpointer, store=store)
 

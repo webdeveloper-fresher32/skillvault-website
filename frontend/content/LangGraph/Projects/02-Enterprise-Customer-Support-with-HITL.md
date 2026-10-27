@@ -65,12 +65,13 @@ class SupportState(TypedDict):
 from typing import TypedDict, Annotated, List, Optional
 import operator
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
-from langchain_openai import ChatOpenAI
+from langchain_xai import ChatXAI
 from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.types import interrupt, Command
 
-llm = ChatOpenAI(model="gpt-4o", temperature=0)
+# Initialize Grok model (requires XAI_API_KEY environment variable)
+llm = ChatXAI(model="grok-2-latest", temperature=0)
 
 def support_agent_node(state: SupportState) -> dict:
     last_user_msg = state["messages"][-1].content

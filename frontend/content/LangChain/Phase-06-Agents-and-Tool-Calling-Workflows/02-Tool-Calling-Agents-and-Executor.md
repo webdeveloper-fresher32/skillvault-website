@@ -120,8 +120,8 @@ def calculate_discount(tier: str, cart_total: float) -> float:
     discount_pct = 0.20 if tier.upper() == "VIP" else 0.05
     return cart_total * discount_pct
 
-# 2. Initialize Model
-model = init_chat_model("openai:gpt-4o-mini", temperature=0.0)
+# 2. Initialize Model (Using Grok via xAI)
+model = init_chat_model("grok-2-latest", model_provider="xai", temperature=0.0)
 
 # 3. Create Agent
 agent = create_agent(

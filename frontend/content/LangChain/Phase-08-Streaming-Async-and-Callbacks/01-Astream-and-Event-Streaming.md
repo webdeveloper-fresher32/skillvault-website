@@ -124,8 +124,8 @@ def check_order_delivery(order_id: str) -> str:
     """Checks the delivery status of an order."""
     return f"Order {order_id} is currently on the delivery truck and arriving today."
 
-# 2. Initialize Model and Agent
-model = init_chat_model("openai:gpt-4o-mini", temperature=0.0)
+# 2. Initialize Model and Agent (Using Grok via xAI)
+model = init_chat_model("grok-2-latest", model_provider="xai", temperature=0.0)
 agent = create_agent(
     model=model,
     tools=[check_order_delivery],

@@ -77,9 +77,10 @@ Apply everything you have learned by building 3 production-grade portfolio proje
 ### Prerequisites
 - Strong proficiency in Python 3.10+ (type annotations, async/await, Pydantic).
 - Basic understanding of LLMs (tokens, temperature, system prompts).
-- Active OpenAI, Anthropic, or local Ollama API access.
+- Active xAI (Grok) API access via `XAI_API_KEY` (or OpenAI/Anthropic/local Ollama).
 
 ### Installation
 ```bash
-pip install langchain-core langchain langchain-community langchain-openai langchain-anthropic pydantic fastapi uvicorn redis
+pip install langchain-core langchain langchain-community langchain-xai langchain-openai langchain-anthropic pydantic fastapi uvicorn redis
 ```
+

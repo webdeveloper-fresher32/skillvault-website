@@ -60,10 +60,11 @@ from typing import TypedDict, Annotated, List, Dict, Literal
 import operator
 from pydantic import BaseModel, Field
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
-from langchain_openai import ChatOpenAI
+from langchain_xai import ChatXAI
 from langgraph.graph import StateGraph, MessagesState, START, END
 
-llm = ChatOpenAI(model="gpt-4o", temperature=0)
+# Initialize Grok model (requires XAI_API_KEY environment variable)
+llm = ChatXAI(model="grok-2-latest", temperature=0)
 
 # --- 1. Engineering Subgraph ---
 def architecture_lead_node(state: EngineeringState) -> dict:

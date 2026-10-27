@@ -117,8 +117,8 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain.chat_models import init_chat_model
 
-# 1. Initialize modern model
-model = init_chat_model("openai:gpt-4o-mini", temperature=0.0)
+# 1. Initialize modern model (Grok supports token-by-token streaming)
+model = init_chat_model("grok-2-latest", model_provider="xai", temperature=0.0)
 
 # 2. Prompt Template
 prompt = ChatPromptTemplate.from_template("Explain {topic} in three short bullet points.")

@@ -181,12 +181,14 @@ def ask_ai_service(model_name: str, user_question: str) -> dict[str, Any]:
 if __name__ == "__main__":
     prompt = "Why do distributed systems require client-side timeouts in two sentences?"
     
-    # Example call using OpenAI (Make sure OPENAI_API_KEY is set)
-    if os.getenv("OPENAI_API_KEY"):
-        result = ask_ai_service("openai:gpt-4o-mini", prompt)
+    # Example call using xAI / Grok (Make sure XAI_API_KEY is set)
+    if os.getenv("XAI_API_KEY"):
+        result = ask_ai_service("xai:grok-2-latest", prompt)
         print("Answer:\n", result["answer"])
         print("Total Tokens:", result["tokens_used"])
         print("Finish Reason:", result["finish_reason"])
+    else:
+        print("Please set your XAI_API_KEY environment variable to test live with Grok.")
 ```
 
 ---

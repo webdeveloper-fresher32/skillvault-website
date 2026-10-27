@@ -59,11 +59,12 @@ from typing import TypedDict, Annotated, List
 import operator
 from pydantic import BaseModel, Field
 from langchain_core.messages import HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
+from langchain_xai import ChatXAI
 from langgraph.graph import StateGraph, START, END
 from langgraph.checkpoint.memory import MemorySaver
 
-llm = ChatOpenAI(model="gpt-4o", temperature=0)
+# Initialize Grok model (requires XAI_API_KEY environment variable)
+llm = ChatXAI(model="grok-2-latest", temperature=0)
 
 class Outline(BaseModel):
     sections: List[str] = Field(description="3 to 5 section headings for the research report.")

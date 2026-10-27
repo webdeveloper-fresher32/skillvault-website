@@ -118,11 +118,15 @@ os.environ["LANGCHAIN_TRACING_V2"] = "true"
 os.environ["LANGCHAIN_API_KEY"] = "your_langsmith_key_here"
 os.environ["LANGCHAIN_PROJECT"] = "learning-sandbox"
 
-# Make sure your provider key is set
-# os.environ["OPENAI_API_KEY"] = "sk-..."
+# Make sure your Grok / xAI provider key is set (export XAI_API_KEY="xai-...")
+# os.environ["XAI_API_KEY"] = "xai-..."
 
-# 2. Initialize any model using the standard 1.x factory
-model = init_chat_model("openai:gpt-4o-mini", temperature=0.0)
+# 2. Initialize Grok using the standard 1.x factory (or ChatXAI)
+model = init_chat_model("grok-2-latest", model_provider="xai", temperature=0.0)
+
+# Alternatively, import ChatXAI directly:
+# from langchain_xai import ChatXAI
+# model = ChatXAI(model="grok-2-latest", temperature=0.0)
 
 # 3. Invoke the model
 # Behind the scenes, LangChain sends the full trace to LangSmith
@@ -138,7 +142,7 @@ print(f"Total tokens:  {response.usage_metadata.get('total_tokens')}")
 ```
 
 #### What Happens When You Run This:
-1. `init_chat_model` connects to OpenAI cleanly.
+1. `init_chat_model` connects to xAI's Grok API cleanly using `XAI_API_KEY`.
 2. The prompt and the generated response are displayed in your terminal.
 3. If you open your LangSmith dashboard, you will see a new run showing the exact prompt, the latency in milliseconds, and the exact token count.
 

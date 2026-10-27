@@ -114,8 +114,8 @@ from langchain_core.chat_history import InMemoryChatMessageHistory
 from langchain_core.runnables.history import RunnableWithMessageHistory
 from langchain.chat_models import init_chat_model
 
-# 1. Base Chain Setup
-model = init_chat_model("openai:gpt-4o-mini", temperature=0.0)
+# 1. Base Chain Setup (Using Grok via xAI)
+model = init_chat_model("grok-2-latest", model_provider="xai", temperature=0.0)
 
 prompt = ChatPromptTemplate.from_messages([
     ("system", "You are a friendly personal AI assistant."),

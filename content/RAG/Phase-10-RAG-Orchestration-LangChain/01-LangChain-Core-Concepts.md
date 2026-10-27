@@ -105,19 +105,19 @@ Here is a clean, modern Python script showing a minimal LCEL chain:
 ```python
 """
 Minimal LCEL Chain Demonstration (LangChain modern standard)
-Requires: pip install langchain-core langchain-openai
+Requires: pip install langchain-core langchain-xai
 """
 
 import os
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough
-from langchain_openai import ChatOpenAI
+from langchain_xai import ChatXAI
 
 def run_lcel_chain_demo():
     # 1. Initialize Model
-    # (Requires OPENAI_API_KEY environment variable)
-    model = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+    # (Requires XAI_API_KEY environment variable)
+    model = ChatXAI(model="grok-2-latest", temperature=0)
 
     # 2. Define Prompt Template
     prompt = ChatPromptTemplate.from_template("""

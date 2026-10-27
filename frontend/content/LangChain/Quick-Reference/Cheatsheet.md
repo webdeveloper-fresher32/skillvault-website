@@ -11,16 +11,23 @@ A concise, high-density reference guide for modern LangChain (v0.2+ / v0.3+) dev
 | `langchain-core` | Core interfaces, Runnables, Prompts, Messages, Base Tools | `from langchain_core.prompts import ChatPromptTemplate` |
 | `langchain` | Chains, Agents, Executors, High-level orchestrators | `from langchain.agents import create_tool_calling_agent` |
 | `langchain-community` | Third-party integrations (Vector DBs, Loaders, Parsers) | `from langchain_community.vectorstores import FAISS` |
+| `langchain-xai` | Dedicated xAI Grok chat models (`XAI_API_KEY`) | `from langchain_xai import ChatXAI` |
 | `langchain-openai` | Dedicated OpenAI chat & embedding models | `from langchain_openai import ChatOpenAI, OpenAIEmbeddings` |
 | `langchain-anthropic`| Dedicated Anthropic Claude chat models | `from langchain_anthropic import ChatAnthropic` |
 
 ```python
 # Standard Modern Imports
+from langchain_xai import ChatXAI
+from langchain.chat_models import init_chat_model
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, ToolMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.output_parsers import StrOutputParser, JsonOutputParser
 from langchain_core.runnables import RunnablePassthrough, RunnableParallel, RunnableLambda
 from langchain_core.tools import tool, BaseTool
+
+# Initializing Grok (Reads os.environ["XAI_API_KEY"] automatically)
+model = init_chat_model("grok-2-latest", model_provider="xai", temperature=0.0)
+# Or: model = ChatXAI(model="grok-2-latest", temperature=0.0)
 ```
 
 ---

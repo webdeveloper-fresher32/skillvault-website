@@ -134,7 +134,7 @@ services:
       - "8000:8000"
     environment:
       - DATABASE_URL=postgresql://langgraph_user:securepassword123@postgres-db:5432/langgraph_prod
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - XAI_API_KEY=${XAI_API_KEY}
     depends_on:
       postgres-db:
         condition: service_healthy

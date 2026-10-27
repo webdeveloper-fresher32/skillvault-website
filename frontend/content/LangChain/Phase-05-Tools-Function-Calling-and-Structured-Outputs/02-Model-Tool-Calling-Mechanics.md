@@ -131,8 +131,8 @@ def get_current_weather(city: str) -> str:
     }
     return weather_data.get(city.lower(), "15°C, Unknown Conditions")
 
-# 2. Initialize model and bind tools
-model = init_chat_model("openai:gpt-4o-mini", temperature=0.0)
+# 2. Initialize model and bind tools (Grok 2 supports native tool calling)
+model = init_chat_model("grok-2-latest", model_provider="xai", temperature=0.0)
 model_with_tools = model.bind_tools([get_current_weather])
 
 # 3. User asks a question that requires multiple tool executions

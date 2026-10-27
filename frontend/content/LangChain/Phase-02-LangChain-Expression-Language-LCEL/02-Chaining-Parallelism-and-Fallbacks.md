@@ -138,12 +138,12 @@ def get_refund_policy(inputs: dict[str, Any]) -> str:
     # Simulates a policy search
     return "Duplicate charges are automatically refunded within 3 to 5 business days."
 
-# 2. Setup Primary and Fallback Models
+# 2. Setup Primary and Fallback Models (Using Grok-2 with Grok-Beta as backup)
 # We set strict timeouts so the primary fails fast if the provider hangs
-primary_model = init_chat_model("anthropic:claude-3-5-sonnet-20241022", timeout=5.0)
-backup_model = init_chat_model("openai:gpt-4o-mini", timeout=5.0)
+primary_model = init_chat_model("grok-2-latest", model_provider="xai", timeout=5.0)
+backup_model = init_chat_model("grok-beta", model_provider="xai", timeout=5.0)
 
-# Attach the fallback: if Claude times out or errors, GPT-4o takes over immediately!
+# Attach the fallback: if Grok-2 times out or errors, Grok-Beta takes over immediately!
 reliable_model = primary_model.with_fallbacks([backup_model])
 
 # 3. Prompt Template that combines both pieces of evidence

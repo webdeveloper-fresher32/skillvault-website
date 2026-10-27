@@ -142,8 +142,8 @@ from langchain_core.runnables import (
 )
 from langchain.chat_models import init_chat_model
 
-# 1. Initialize Model
-model = init_chat_model("openai:gpt-4o-mini", temperature=0.0)
+# 1. Initialize Model (Using Grok via xAI)
+model = init_chat_model("grok-2-latest", model_provider="xai", temperature=0.0)
 
 # 2. Reusable Prompt Templates
 summary_prompt = ChatPromptTemplate.from_messages([

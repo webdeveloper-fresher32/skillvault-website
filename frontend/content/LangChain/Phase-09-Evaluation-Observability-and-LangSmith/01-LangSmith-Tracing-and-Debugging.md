@@ -105,8 +105,8 @@ from langchain.chat_models import init_chat_model
 os.environ["LANGCHAIN_TRACING_V2"] = "true"
 os.environ["LANGCHAIN_PROJECT"] = "production-support-bot"
 
-# 2. Build Standard LCEL Chain
-model = init_chat_model("openai:gpt-4o-mini", temperature=0.0)
+# 2. Build Standard LCEL Chain (Using Grok via xAI)
+model = init_chat_model("grok-2-latest", model_provider="xai", temperature=0.0)
 prompt = ChatPromptTemplate.from_template("Answer the customer query: {query}")
 chain = prompt | model | StrOutputParser()
 

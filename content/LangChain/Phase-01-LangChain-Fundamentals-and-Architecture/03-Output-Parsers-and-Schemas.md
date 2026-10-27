@@ -132,8 +132,8 @@ class SupportTicket(BaseModel):
         description="Customer account ID if mentioned in the message, else None."
     )
 
-# 2. Initialize the model
-model = init_chat_model("openai:gpt-4o-mini", temperature=0.0)
+# 2. Initialize the model (Grok supports native tool/structured output)
+model = init_chat_model("grok-2-latest", model_provider="xai", temperature=0.0)
 
 # 3. Bind the schema
 # Set include_raw=True if you need to debug the raw model output

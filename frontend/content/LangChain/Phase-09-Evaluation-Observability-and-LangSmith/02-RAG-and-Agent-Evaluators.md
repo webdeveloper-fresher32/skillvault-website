@@ -130,8 +130,8 @@ class GroundednessEvaluation(BaseModel):
     score: Literal["PASS", "FAIL"] = Field(description="PASS if answer contains no unsupported claims. FAIL if any fact is hallucinated.")
     unsupported_claims: list[str] = Field(default=[], description="List of any specific claims made in the answer that are NOT in the context.")
 
-# 2. Setup Evaluator Model
-judge_model = init_chat_model("openai:gpt-4o-mini", temperature=0.0)
+# 2. Setup Evaluator Model (Using Grok-2 as LLM-as-a-Judge)
+judge_model = init_chat_model("grok-2-latest", model_provider="xai", temperature=0.0)
 structured_judge = judge_model.with_structured_output(GroundednessEvaluation)
 
 # 3. Judge Prompt Template
