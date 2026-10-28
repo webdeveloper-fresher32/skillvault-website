@@ -58,9 +58,9 @@ const DOMAIN_MATRIX = [
     id: 'ai',
     title: 'AI Engineering & Agents',
     icon: BrainCircuit,
-    count: '5 Tracks',
-    lessons: '180+ Lessons',
-    topics: ['Production RAG', 'PostgreSQL + pgvector', 'LangChain LCEL', 'LangGraph State Graphs', 'RAG Triad & Evals'],
+    count: '6 Tracks',
+    lessons: '220+ Lessons',
+    topics: ['Production RAG', 'Model Context Protocol (MCP)', 'LangChain LCEL', 'LangGraph State Graphs', 'RAG Triad & Evals'],
     primarySlug: 'production-rag',
   },
   {

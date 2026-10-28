@@ -198,9 +198,10 @@ const CAREER_TRACKS: CareerTrack[] = [
       {
         number: 'Pillar 6',
         title: 'Agentic Architectures & Multi-Agent Loops',
-        description: 'Cyclical state graphs, human-in-the-loop checkpoints, tool calling, and long-term memory orchestration with LangGraph.',
+        description: 'Cyclical state graphs, human-in-the-loop checkpoints, Model Context Protocol (MCP) integrations, and multi-agent coordination.',
         courseLinks: [
           { name: 'LangGraph State Machines', slug: 'langgraph' },
+          { name: 'Model Context Protocol (MCP)', slug: 'mcp' },
         ],
       },
       {

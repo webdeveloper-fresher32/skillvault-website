@@ -292,6 +292,7 @@ public class ContentIndexingService {
         if ("Aptitude".equalsIgnoreCase(name)) return "Quantitative & Logical Aptitude";
         if ("LangChain".equalsIgnoreCase(name)) return "LangChain Orchestration";
         if ("LangGraph".equalsIgnoreCase(name)) return "LangGraph Multi-Agent Workflows";
+        if ("MCP".equalsIgnoreCase(name) || "MCPs".equalsIgnoreCase(name)) return "Model Context Protocol (MCP)";
         return name.replaceAll("([a-z])([A-Z])", "$1 $2");
     }
 
@@ -303,8 +304,14 @@ public class ContentIndexingService {
             StringBuilder sb = new StringBuilder();
             for (String w : words) {
                 if (w.equalsIgnoreCase("rag")) sb.append("RAG");
+                else if (w.equalsIgnoreCase("mcp") || w.equalsIgnoreCase("mcps")) sb.append("MCP");
+                else if (w.equalsIgnoreCase("jsonrpc")) sb.append("JSON-RPC");
+                else if (w.equalsIgnoreCase("sse")) sb.append("SSE");
+                else if (w.equalsIgnoreCase("stdio")) sb.append("stdio");
+                else if (w.equalsIgnoreCase("sdk")) sb.append("SDK");
                 else if (w.equalsIgnoreCase("pgvector")) sb.append("pgvector");
                 else if (w.equalsIgnoreCase("langchain")) sb.append("LangChain");
+                else if (w.equalsIgnoreCase("langgraph")) sb.append("LangGraph");
                 else if (w.equalsIgnoreCase("api")) sb.append("API");
                 else if (w.equalsIgnoreCase("rrf")) sb.append("RRF");
                 else if (w.equalsIgnoreCase("hnsw")) sb.append("HNSW");
@@ -328,6 +335,11 @@ public class ContentIndexingService {
             StringBuilder sb = new StringBuilder();
             for (String w : words) {
                 if (w.equalsIgnoreCase("rag")) sb.append("RAG");
+                else if (w.equalsIgnoreCase("mcp") || w.equalsIgnoreCase("mcps")) sb.append("MCP");
+                else if (w.equalsIgnoreCase("jsonrpc")) sb.append("JSON-RPC");
+                else if (w.equalsIgnoreCase("sse")) sb.append("SSE");
+                else if (w.equalsIgnoreCase("stdio")) sb.append("stdio");
+                else if (w.equalsIgnoreCase("sdk")) sb.append("SDK");
                 else if (w.equalsIgnoreCase("llm") || w.equalsIgnoreCase("llms")) sb.append(w.toUpperCase());
                 else if (w.equalsIgnoreCase("pgvector")) sb.append("pgvector");
                 else if (w.equalsIgnoreCase("fastapi")) sb.append("FastAPI");
@@ -340,6 +352,7 @@ public class ContentIndexingService {
                 else if (w.equalsIgnoreCase("macos")) sb.append("macOS");
                 else if (w.equalsIgnoreCase("python")) sb.append("Python");
                 else if (w.equalsIgnoreCase("langchain")) sb.append("LangChain");
+                else if (w.equalsIgnoreCase("langgraph")) sb.append("LangGraph");
                 else if (w.equalsIgnoreCase("lcel")) sb.append("LCEL");
                 else if (w.equalsIgnoreCase("qa") || w.equalsIgnoreCase("q&a")) sb.append("Q&A");
                 else if (w.equalsIgnoreCase("and") || w.equalsIgnoreCase("or") || w.equalsIgnoreCase("with") || w.equalsIgnoreCase("vs") || w.equalsIgnoreCase("to") || w.equalsIgnoreCase("in") || w.equalsIgnoreCase("of") || w.equalsIgnoreCase("for")) sb.append(w.toLowerCase());
@@ -368,7 +381,7 @@ public class ContentIndexingService {
             return "Databases";
         }
         // AI & LLMs
-        if (n.contains("genai") || n.contains("machinelearning") || n.contains("rag") || n.contains("langchain") || n.contains("langgraph")) {
+        if (n.contains("genai") || n.contains("machinelearning") || n.contains("rag") || n.contains("langchain") || n.contains("langgraph") || n.contains("mcp")) {
             return "AI & LLMs";
         }
         // Cloud & DevOps
@@ -401,7 +414,7 @@ public class ContentIndexingService {
         if (slug.contains("react") || slug.contains("next")) return "atom";
         if (slug.contains("docker") || slug.contains("kube")) return "box";
         if (slug.contains("data") || slug.contains("sql") || slug.contains("postgres")) return "database";
-        if (slug.contains("ai") || slug.contains("rag") || slug.contains("lang")) return "brain";
+        if (slug.contains("ai") || slug.contains("rag") || slug.contains("lang") || slug.contains("mcp")) return "brain";
         if (slug.contains("hld") || slug.contains("lld")) return "layers";
         return "terminal";
     }
