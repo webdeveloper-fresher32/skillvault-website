@@ -33,25 +33,25 @@ An autonomous analytics agent featuring:
 - **Security Guardrails**: Enforce strict validation blocking write operations on the database.
 
 ### Architecture Specifications
-```text
-User Analytical Query: "What was our highest-margin product category in Q3 2024?"
-                               │
-                               ▼
-┌─────────────────────────────────────────────────────────────┐
-│ Tool-Calling Agent (GPT-4o + bind_tools)                    │
-└──────────────────────────────┬──────────────────────────────┘
-                               │
-      ┌────────────────────────┼────────────────────────┐
-      ▼                        ▼                        ▼
-┌─────────────────┐  ┌───────────────────┐  ┌───────────────────────┐
-│ list_tables &   │  │ run_safe_sql_query│  │ python_math_calculator│
-│ describe_schema │  │ (Read-only, max50)│  │ (Pandas / Statistics) │
-└─────────────────┘  └───────────────────┘  └───────────────────────┘
-                               │
-                               ▼
-┌─────────────────────────────────────────────────────────────┐
-│ Scratchpad Feedback Loop & Final Answer Synthesis           │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    classDef startEnd fill:#2563eb,stroke:#1d4ed8,color:#ffffff,stroke-width:2px;
+    classDef agent fill:#1e293b,stroke:#38bdf8,color:#ffffff,stroke-width:1.5px;
+    classDef tool fill:#0f172a,stroke:#10b981,color:#ffffff,stroke-width:1.5px;
+    classDef loop fill:#1e293b,stroke:#f59e0b,color:#ffffff,stroke-width:1.5px;
+
+    A([User Analytical Query]):::startEnd --> B[Tool-Calling Agent: GPT-4o + bind_tools]:::agent
+
+    subgraph Tool_Suite["Autonomous Tool Execution Suite"]
+        B --> C[list_tables & describe_schema]:::tool
+        B --> D[run_safe_sql_query: Read-only, max 50]:::tool
+        B --> E[python_math_calculator: Pandas / Stats]:::tool
+    end
+
+    C --> F[Scratchpad Feedback Loop & Reasoning]:::loop
+    D --> F
+    E --> F
+    F --> G([Verified Analytical Insights]):::startEnd
 ```
 
 ## Suggested Approach

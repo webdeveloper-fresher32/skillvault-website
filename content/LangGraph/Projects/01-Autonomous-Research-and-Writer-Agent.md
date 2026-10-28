@@ -8,17 +8,21 @@
 
 In this capstone project, you will build an end-to-end autonomous research and long-form report generation system. The agent plans a research outline, executes multi-query web searches, extracts and deduplicates facts, writes draft sections, reviews them against quality rubrics, and compiles a publication-ready Markdown report.
 
-```text
-User Topic: "Future of Solid-State Batteries in Commercial Aviation"
-     │
-     ▼
-[1. Outline Planner] ──▶ [2. Research Subgraph (Parallel Searches)]
-                                   │
-     ┌─────────────────────────────┘
-     ▼
-[3. Section Writer] ──▶ [4. Fact Checker & Reviewer] ──▶ [5. Final Assembler] ──▶ [Output]
-                                  │ (If quality score < 85)
-                                  └─▶ (Loop to Section Writer with feedback)
+```mermaid
+flowchart TD
+    classDef startEnd fill:#2563eb,stroke:#1d4ed8,color:#ffffff,stroke-width:2px;
+    classDef node fill:#1e293b,stroke:#38bdf8,color:#ffffff,stroke-width:1.5px;
+    classDef decision fill:#854d0e,stroke:#facc15,color:#ffffff,stroke-width:2px;
+    classDef success fill:#064e3b,stroke:#34d399,color:#ffffff,stroke-width:2px;
+
+    A([User Topic]):::startEnd --> B[1. Outline Planner]:::node
+    B --> C[2. Research Subgraph: Parallel Web Searches]:::node
+    C --> D[3. Section Writer]:::node
+    D --> E{4. Fact Checker & Reviewer}:::decision
+
+    E -- "Score < 85 (Revisions Needed)" --> D
+    E -- "Score >= 85 (Approved)" --> F[5. Final Assembler]:::success
+    F --> G([Publication-Ready Markdown Report]):::startEnd
 ```
 
 ---

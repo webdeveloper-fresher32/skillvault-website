@@ -7,11 +7,12 @@ import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
 import rehypeSlug from 'rehype-slug';
 import { Copy, Check } from 'lucide-react';
-import { parseLessonContent, isAsciiDiagram } from '@/lib/interactiveParser';
+import { parseLessonContent, isAsciiDiagram, isMermaidCode } from '@/lib/interactiveParser';
 import CodeToggle from './interactive/CodeToggle';
 import FlipCardDeck from './interactive/FlipCardDeck';
 import ExerciseChecklist from './interactive/ExerciseChecklist';
 import DiagramCard, { parsePipelineSteps } from './interactive/DiagramCard';
+import MermaidViewer from './interactive/MermaidViewer';
 
 interface MarkdownViewerProps {
   content: string;
@@ -98,7 +99,14 @@ export default function MarkdownViewer({
 
           // Custom pre / code block handler
           pre({ children, ...props }: any) {
+            // If already rendered into MermaidViewer, return as-is
+            if (React.isValidElement(children) && (children.type === MermaidViewer || (children.props as any)?.chart)) {
+              return children;
+            }
+
             let rawCode = '';
+            let codeClassName = '';
+
             const extractText = (node: any) => {
               if (!node) return;
               if (typeof node === 'string' || typeof node === 'number') {
@@ -106,12 +114,20 @@ export default function MarkdownViewer({
               } else if (Array.isArray(node)) {
                 node.forEach(extractText);
               } else if (React.isValidElement(node)) {
+                if ((node.props as any)?.className) {
+                  codeClassName = (node.props as any).className;
+                }
                 extractText((node.props as any)?.children);
               }
             };
             extractText(children);
 
-            // If this code block is an ASCII flowchart, pipeline steps, or architecture diagram, render DiagramCard
+            // 1. If this code block is a Mermaid flowchart or architecture diagram, render MermaidViewer!
+            if (isMermaidCode(rawCode, codeClassName)) {
+              return <MermaidViewer chart={rawCode} />;
+            }
+
+            // 2. If this code block is an ASCII flowchart, pipeline steps, or architecture diagram, render DiagramCard
             if (isAsciiDiagram(rawCode) || parsePipelineSteps(rawCode) !== null) {
               return <DiagramCard diagramText={rawCode} />;
             }

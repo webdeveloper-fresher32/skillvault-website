@@ -3,6 +3,7 @@
 import React, { useMemo, useState } from 'react';
 import { Network, Copy, Check, Sparkles, Terminal, ZoomIn, ZoomOut } from 'lucide-react';
 import PipelineFlow, { PipelineStep } from './PipelineFlow';
+import MermaidViewer, { isMermaidCode } from './MermaidViewer';
 
 export interface DiagramCardProps {
   diagramText: string;
@@ -12,6 +13,8 @@ export interface DiagramCardProps {
 
 export function parsePipelineSteps(text: string): PipelineStep[] | null {
   if (!text) return null;
+  // Never hijack Mermaid diagrams as flat pipeline steps
+  if (isMermaidCode(text)) return null;
 
   // Check if text has box patterns like [Stage Name]
   const stepRegex = /\[([^\]]+)\](?:\s*\n\s*\(([^)]+)\))?/g;
@@ -42,6 +45,7 @@ export default function DiagramCard({
   caption,
   title = 'System Architecture & Flow Diagram',
 }: DiagramCardProps) {
+  const isMermaid = useMemo(() => isMermaidCode(diagramText), [diagramText]);
   const [copied, setCopied] = useState(false);
   const [fontSize, setFontSize] = useState<number>(13);
 
@@ -52,6 +56,11 @@ export default function DiagramCard({
   const [activeTab, setActiveTab] = useState<'visual' | 'blueprint'>(
     pipelineSteps ? 'visual' : 'blueprint'
   );
+
+  // If diagram is Mermaid syntax, render rich interactive Mermaid diagram
+  if (isMermaid) {
+    return <MermaidViewer chart={diagramText} title={title} caption={caption} />;
+  }
 
   const handleCopy = () => {
     navigator.clipboard.writeText(diagramText);

@@ -34,14 +34,27 @@ An enterprise documentation assistant API featuring:
 - **Session State**: Persist multi-turn conversation messages in Redis with configurable TTL expiration.
 
 ### Architecture Specifications
-```text
-[PDF / Markdown Docs] ──▶ [ParentDocumentRetriever] ──▶ [FAISS Vector Store]
-                                                              │
-                                                              ▼
-[User Chat Stream] ──▶ [History Rephraser] ──▶ [Ensemble Retriever] ──▶ [Reranker]
-                                                                          │
-                                                                          ▼
-[FastAPI SSE Stream] ◀── [Token-by-Token LLM Generation] ◀── [Stuff QA Chain]
+
+```mermaid
+flowchart TD
+    classDef startEnd fill:#2563eb,stroke:#1d4ed8,color:#ffffff,stroke-width:2px;
+    classDef process fill:#1e293b,stroke:#38bdf8,color:#ffffff,stroke-width:1.5px;
+    classDef store fill:#1e293b,stroke:#a855f7,color:#ffffff,stroke-width:1.5px;
+
+    subgraph Offline_Indexing["1. Ingestion & Indexing Pipeline"]
+        A[PDF / Markdown Documentation]:::process --> B[ParentDocumentRetriever & Chunking]:::process
+        B --> C[(FAISS / Chroma Vector Store)]:::store
+    end
+
+    subgraph Online_Conversation["2. Conversational Retrieval & Generation"]
+        D([User Chat Stream]):::startEnd --> E[History-Aware Query Rephraser]:::process
+        C -. Provide Top Candidates .-> F[Ensemble Retriever: Dense + BM25]:::process
+        E --> F
+        F --> G[Cross-Encoder Reranker]:::process
+        G --> H[Stuff QA Chain & Prompt Assembly]:::process
+        H --> I[Token-by-Token LLM Generation]:::process
+        I --> J([FastAPI SSE Stream to Client]):::startEnd
+    end
 ```
 
 ## Suggested Approach

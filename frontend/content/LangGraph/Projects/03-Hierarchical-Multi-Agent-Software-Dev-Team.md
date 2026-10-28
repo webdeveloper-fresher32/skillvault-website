@@ -11,22 +11,28 @@ In this comprehensive multi-agent capstone, you will construct an autonomous sof
 - **Engineering Subgraph (Dev Team Lead)**: Manages Frontend and Backend worker agents to generate modular code files.
 - **QA Subgraph (Test Lead)**: Executes automated syntax and unit tests in a Python sandbox, reporting failure stack traces back to developers until all tests pass.
 
-```text
-User: "Build an authenticated rate-limited FastAPI key-value store."
-                          │
-                          ▼
-             [Top-Level Product Manager]
-                          │
-         ┌────────────────┴────────────────┐
-         ▼                                 ▼
-┌─────────────────────────┐       ┌─────────────────────────┐
-│ Engineering Subgraph    │       │ QA & Testing Subgraph   │
-│ ┌─────────────────────┐ │       │ ┌─────────────────────┐ │
-│ │ Tech Lead Supervisor│ │       │ │ QA Lead Supervisor  │ │
-│ └───┬─────────────┬───┘ │       │ └───┬─────────────┬───┘ │
-│     ▼             ▼     │       │     ▼             ▼     │
-│ [BackendDev] [FrontendDev│      │ [TestRunner] [Linter]   │
-└─────────────────────────┘       └─────────────────────────┘
+```mermaid
+flowchart TD
+    classDef startEnd fill:#2563eb,stroke:#1d4ed8,color:#ffffff,stroke-width:2px;
+    classDef supervisor fill:#1e293b,stroke:#38bdf8,color:#ffffff,stroke-width:1.5px;
+    classDef worker fill:#0f172a,stroke:#a855f7,color:#ffffff,stroke-width:1.5px;
+
+    A([User Architecture Spec]):::startEnd --> B[Top-Level Product Manager Supervisor]:::supervisor
+
+    subgraph EngTeam["Engineering Subgraph"]
+        B --> C[Tech Lead Supervisor]:::supervisor
+        C --> D[BackendDev Agent]:::worker
+        C --> E[FrontendDev Agent]:::worker
+    end
+
+    subgraph QATeam["QA & Testing Subgraph"]
+        B --> F[QA Lead Supervisor]:::supervisor
+        F --> G[Pytest TestRunner Agent]:::worker
+        F --> H[Code Linter Agent]:::worker
+    end
+
+    D & E --> F
+    G & H --> I([Verified Production Code Artifacts]):::startEnd
 ```
 
 ---

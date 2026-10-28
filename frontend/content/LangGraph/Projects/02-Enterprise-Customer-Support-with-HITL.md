@@ -12,26 +12,25 @@ Build an enterprise-grade multi-department customer support bot featuring:
 - **Human-in-the-Loop (HITL) Breakpoints**: Dynamic interrupts that pause execution whenever a refund exceeds $100 or account changes are requested, waiting for a human supervisor to approve or edit the payload before funds transfer.
 - Persistent session storage across reboots.
 
-```text
-Customer: "I want a refund of $350 for order ORD-8812."
-                  │
-                  ▼
-         [1. Triage Node]
-                  │
-                  ▼
-         [2. Support Agent] (Decides refund tool call)
-                  │
-                  ▼ (Amount > $100 Threshold Triggered)
-   ┌──────────────────────────────┐
-   │ 3. `interrupt()` Breakpoint   │
-   │    Graph Pauses & Commits    │
-   └──────────────┬───────────────┘
-                  │
-                  ▼ (Execution Yields)
-   [Human Supervisor Web Dashboard] ──▶ [Approve / Reject]
-                  │
-                  ▼ (Command(resume={"approved": True}))
-         [4. Execute Refund Node] ──▶ [5. Final Customer Confirmation]
+```mermaid
+flowchart TD
+    classDef startEnd fill:#2563eb,stroke:#1d4ed8,color:#ffffff,stroke-width:2px;
+    classDef node fill:#1e293b,stroke:#38bdf8,color:#ffffff,stroke-width:1.5px;
+    classDef hitl fill:#854d0e,stroke:#facc15,color:#ffffff,stroke-width:2px;
+    classDef success fill:#064e3b,stroke:#34d399,color:#ffffff,stroke-width:2px;
+
+    A([Customer Support Query]):::startEnd --> B[1. Triage Node]:::node
+    B --> C[2. Support Agent: Evaluates Refund Intent]:::node
+    C --> D{Is Refund Amount > $100?}:::hitl
+
+    D -- "Yes (Threshold Triggered)" --> E["3. interrupt() Breakpoint: State Paused"]:::hitl
+    D -- "No (Auto-Approved)" --> G[4. Execute Refund Node]:::success
+
+    E --> F[Human Supervisor Review Dashboard]:::hitl
+    F -- "Command(resume={'approved': True})" --> G
+    F -- "Rejected" --> H[Decline Notification]:::node
+    G --> I([5. Final Customer Confirmation]):::startEnd
+    H --> I
 ```
 
 ---

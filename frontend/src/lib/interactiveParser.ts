@@ -12,9 +12,90 @@ export interface ParsedLessonContent {
 }
 
 /**
+ * Checks if a string contains Mermaid diagram syntax.
+ */
+export function isMermaidCode(text: string, className?: string): boolean {
+  if (className && (className.includes('language-mermaid') || className.includes('mermaid'))) {
+    return true;
+  }
+  if (!text) return false;
+
+  const trimmed = text.trim();
+  const clean = trimmed
+    .replace(/^<div\s+class=["']mermaid["']>([\s\S]*?)<\/div>$/i, '$1')
+    .trim();
+
+  const mermaidKeywords = [
+    'flowchart',
+    'graph TD',
+    'graph LR',
+    'graph TB',
+    'graph BT',
+    'graph RL',
+    'sequenceDiagram',
+    'stateDiagram',
+    'classDiagram',
+    'erDiagram',
+    'gantt',
+    'pie',
+    'gitGraph',
+    'C4Context',
+    'mindmap',
+    'timeline',
+    'architecture',
+  ];
+
+  for (const kw of mermaidKeywords) {
+    if (clean.startsWith(kw) || clean.startsWith(kw.toLowerCase())) {
+      return true;
+    }
+  }
+
+  // Also check if it defines flowchart or classDef and has connections
+  if (
+    (clean.includes('flowchart TD') || clean.includes('flowchart LR') || clean.includes('flowchart TB')) &&
+    clean.includes('-->')
+  ) {
+    return true;
+  }
+
+  if (clean.includes('classDef') && (clean.includes('-->') || clean.includes('subgraph'))) {
+    return true;
+  }
+
+  if (clean.includes('subgraph') && clean.includes('end') && clean.includes('-->')) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Extracts and cleans Mermaid code from potential markdown / HTML wrappers.
+ */
+export function extractMermaidCode(raw: string): string {
+  if (!raw) return '';
+  let text = raw.trim();
+
+  // If wrapped in display(HTML("""...<div class="mermaid">...</div>..."""))
+  const divMatch = text.match(/<div\s+class=["']mermaid["']>([\s\S]*?)<\/div>/i);
+  if (divMatch) {
+    text = divMatch[1].trim();
+  }
+
+  // Strip markdown code fences if wrapped
+  text = text.replace(/^```(?:mermaid)?\s*\n?/i, '').replace(/\n?```$/i, '').trim();
+
+  return text;
+}
+
+/**
  * Checks if a string contains ASCII diagram box/arrow characters.
  */
 export function isAsciiDiagram(text: string): boolean {
+  if (!text) return false;
+  if (isMermaidCode(text)) return false;
+
   const diagramMarkers = ['┌', '└', '├', '┤', '│', '─', '──▶', '──>', '▲', '▼', '◄──', '◄──▶', '|---', '+---', '+===', '→', '-->', '──►'];
   let markerHits = 0;
   for (const marker of diagramMarkers) {

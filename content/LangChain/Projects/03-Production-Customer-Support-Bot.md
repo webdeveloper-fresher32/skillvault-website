@@ -34,23 +34,24 @@ A production customer support microservice featuring:
 - **Production Packaging**: Containerize with a multi-stage Dockerfile running as non-root `appuser`.
 
 ### Architecture Specifications
-```text
-User Request ──▶ [FastAPI Ingress] ──▶ [Input Guardrail Scanner]
-                                              │
-                                              ▼
-┌─────────────────────────────────────────────────────────────┐
-│ Resilient Agent Executor (Primary: GPT-4o | Fallback: Sonnet)│
-│ Tools: [CRM Lookup, Order Status, Knowledge Base RAG]       │
-│ Memory: RedisChatMessageHistory (TTL: 24h)                  │
-└──────────────────────────────┬──────────────────────────────┘
-                               │
-                               ▼
-┌─────────────────────────────────────────────────────────────┐
-│ Output Guardrail (PII Scrubber: SSN / Credit Card Masking)  │
-└──────────────────────────────┬──────────────────────────────┘
-                               │
-                               ▼
-Client SSE Stream ◀── [FastAPI StreamingResponse]
+```mermaid
+flowchart TD
+    classDef startEnd fill:#2563eb,stroke:#1d4ed8,color:#ffffff,stroke-width:2px;
+    classDef guard fill:#1e293b,stroke:#f59e0b,color:#ffffff,stroke-width:1.5px;
+    classDef agent fill:#1e293b,stroke:#38bdf8,color:#ffffff,stroke-width:1.5px;
+    classDef store fill:#1e293b,stroke:#a855f7,color:#ffffff,stroke-width:1.5px;
+
+    A([User Request]):::startEnd --> B[FastAPI Ingress]:::agent
+    B --> C[Input Guardrail Scanner: Prompt Injection Defense]:::guard
+    C --> D[Resilient Agent Executor: Primary GPT-4o / Fallback Claude]:::agent
+
+    subgraph Agent_Context["Agent Tooling & Memory Context"]
+        D <--> E[(Redis Session Store: 24h TTL)]:::store
+        D --> F[Tools: CRM Lookup, Order Status, KB RAG]:::agent
+    end
+
+    D --> G[Output Guardrail: PII Scrubber & Masking]:::guard
+    G --> H([Client SSE Stream via StreamingResponse]):::startEnd
 ```
 
 ## Suggested Approach
