@@ -5,7 +5,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Search, Terminal, BookOpen, CheckCircle2, Bookmark, Zap, Layers, HelpCircle, LogIn, LogOut, ChevronDown, UserCircle } from 'lucide-react';
+import { Search, Terminal, BookOpen, CheckCircle2, Bookmark, Zap, Layers, HelpCircle, LogIn, LogOut, ChevronDown, UserCircle, Sparkles } from 'lucide-react';
 import SearchModal from './SearchModal';
 import { useAuth } from '@/context/AuthContext';
 
@@ -50,6 +50,7 @@ export default function Navbar() {
 
   const navItems = [
     { label: 'Dashboard', href: '/', icon: Terminal },
+    { label: 'My Work', href: '/courses/my-work', icon: Sparkles },
     { label: 'Courses', href: '/courses', icon: BookOpen },
     { label: 'Interview Q&A', href: '/interview', icon: HelpCircle },
     { label: 'Practice & Quizzes', href: '/practice', icon: Zap },

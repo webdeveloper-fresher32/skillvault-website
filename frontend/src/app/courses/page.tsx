@@ -9,6 +9,7 @@ import { stripMarkdown } from '@/lib/utils';
 
 const CATEGORIES = [
   'All',
+  'My Work',
   'Backend',
   'Cloud & DevOps',
   'DevOps',
