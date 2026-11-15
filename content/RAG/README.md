@@ -98,7 +98,6 @@ Seven hands-on projects that integrate multiple phases, ordered beginner → adv
 | 5 | Evaluated RAG Pipeline | 10, 11 | Intermediate-Advanced |
 | 6 | Agentic Research Assistant | 12 | Advanced |
 | 7 | Production RAG Capstone | 1-14 | Advanced (Capstone) |
-| 8 | [Production-Grade Multi-Tenant SaaS Assistant](Projects/08-Production-Grade-Multi-Tenant-SaaS-Assistant.md) | 1-14 | Expert / Capstone |
 
 ---
 

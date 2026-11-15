@@ -46,7 +46,7 @@ Every phase directory has its own `README.md` summarising that phase's lessons, 
 | 08 | Security and Compliance | Medium-Hard | 3 days |
 | 09 | Multi-Currency and International Payments | Medium | 3 days |
 | 10 | Choosing Providers and Production Best Practices | Hard | 3 days |
-| Projects | End-to-end payment integrations (combines phases 1–8: unified checkout, subscription dunning, refund/dispute pipeline, and production-grade Stripe billing architecture) | Medium-Hard | 4-6 days |
+| Projects | End-to-end payment integrations (combines phases 1–7) | Medium-Hard | 4-6 days |
 
 **Total estimated time: 5 weeks** (30 phase-days + 4-6 project-days ≈ 34-36 days)
 

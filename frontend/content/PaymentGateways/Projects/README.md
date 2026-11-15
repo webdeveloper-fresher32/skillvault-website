@@ -11,7 +11,6 @@ Every project follows the same structure: a problem statement, a discussion of t
 | [`01-Unified-Checkout-Interface.md`](./01-Unified-Checkout-Interface.md) | Phase 1's 3-step checkout shape + Phases 3/4/5's provider-specific create-order/create-PaymentIntent calls, unified behind one `createPayment({ provider, amount, currency })` interface | Phases 1, 3, 4, 5 |
 | [`02-Subscription-Billing-System-with-Dunning.md`](./02-Subscription-Billing-System-with-Dunning.md) | Phase 6's subscription lifecycle state machine + Phase 6's dunning backoff-schedule logic, combined into one system tracing a subscription from trial through a failed renewal, dunning retries, and eventual cancellation | Phase 6 |
 | [`03-Webhook-Driven-Refund-and-Dispute-Pipeline.md`](./03-Webhook-Driven-Refund-and-Dispute-Pipeline.md) | Phase 2's idempotent-handler dedup-by-event-ID pattern + Phase 7's refund tracking and dispute state tracking, combined into one webhook processing pipeline that stays correct under duplicate delivery | Phases 2, 7 |
-| [`04-Production-Grade-Stripe-Billing-Architecture.md`](./04-Production-Grade-Stripe-Billing-Architecture.md) | End-to-end SaaS subscription billing platform: 4-vector duplicate payment prevention, distributed consistency vs ACID row locking, BullMQ queue-based webhook idempotency, proration math, and senior interview battle-cards | Phases 1, 2, 3, 6, 7, 8 |
 
 ## How to Use These Projects
 

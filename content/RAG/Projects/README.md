@@ -15,7 +15,6 @@ Work through them in order. Project 1 is a same-day weekend build using the most
 | 5 | [Evaluated RAG Pipeline](05-Evaluated-RAG-Pipeline.md) | Intermediate+ | 10, 11 | 4-6 hours |
 | 6 | [Agentic Research Assistant](06-Agentic-Research-Assistant.md) | Advanced | 12 | 5-8 hours |
 | 7 | [Production RAG Capstone](07-Production-RAG-Capstone.md) | Advanced (Capstone) | 1-14 | 10-15 hours |
-| 8 | [Production-Grade Multi-Tenant SaaS Assistant](08-Production-Grade-Multi-Tenant-SaaS-Assistant.md) | Expert / Capstone | 1-14 | 12-16 hours |
 
 ## Recommended Learning Path
 

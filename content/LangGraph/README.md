@@ -76,7 +76,6 @@ Welcome to the **LangGraph Mastery Curriculum**, the comprehensive, production-g
 - **[Project 1: Autonomous Research and Writer Agent](Projects/01-Autonomous-Research-and-Writer-Agent.md)**: Multi-query parallel research, outline generation, section drafting, quality review scoring loops, and final Markdown report assembly.
 - **[Project 2: Enterprise Customer Support with HITL](Projects/02-Enterprise-Customer-Support-with-HITL.md)**: Automated customer triage, intent detection, dynamic tool calling, and dynamic Human-in-the-Loop approval gates for financial transactions.
 - **[Project 3: Hierarchical Multi-Agent Software Dev Team](Projects/03-Hierarchical-Multi-Agent-Software-Dev-Team.md)**: Top-level Product Manager supervisor coordinating Engineering Subgraph (Architect + Backend Dev) and QA Subgraph (Test Writer + Runner) with automated feedback loops.
-- **[Project 4: Production-Grade Multi-Tenant AI Chat Assistant](Projects/04-Production-Grade-Multi-Tenant-RAG-Chat-Assistant.md)**: End-to-end multi-tenant enterprise support assistant with RAG, 3-layer data isolation (JWT + RLS + pgvector), intent classification, dynamic tool calling, Celery ingestion, and real-time SSE token streaming.
 
 ---
 
