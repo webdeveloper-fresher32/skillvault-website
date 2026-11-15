@@ -111,6 +111,14 @@ export default function MermaidViewer({
   
   const cleanChart = useMemo(() => extractMermaidCode(chart), [chart]);
 
+  const diagramTypeLabel = useMemo(() => {
+    if (cleanChart.startsWith('sequenceDiagram')) return 'Sequence Flow';
+    if (cleanChart.startsWith('stateDiagram')) return 'State Machine';
+    if (cleanChart.startsWith('classDiagram')) return 'Class Diagram';
+    if (cleanChart.startsWith('erDiagram')) return 'ER Diagram';
+    return 'Mermaid Flowchart';
+  }, [cleanChart]);
+
   const [svgHtml, setSvgHtml] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -149,6 +157,13 @@ export default function MermaidViewer({
             useMaxWidth: false,
             padding: 20,
             defaultRenderer: 'dagre-wrapper',
+          },
+          sequence: {
+            useMaxWidth: false,
+            mirrorActors: true,
+            actorMargin: 50,
+            noteMargin: 10,
+            boxMargin: 10,
           },
           themeVariables: {
             darkMode: true,
@@ -269,9 +284,15 @@ export default function MermaidViewer({
     return (
       <div
         ref={containerRef}
-        className={`relative min-h-[380px] ${
-          isFullscreen ? 'flex-1 max-h-none' : 'max-h-[800px]'
-        } overflow-auto p-4 sm:p-8 flex flex-col items-center justify-start bg-[#070b14] transition-all scrollbar-thin scrollbar-thumb-slate-800`}
+        className={`relative ${
+          isFullscreen
+            ? 'flex-1 max-h-none overflow-auto p-4 sm:p-8'
+            : 'w-full max-h-none overflow-x-auto overflow-y-visible p-4 sm:p-6'
+        } flex flex-col items-center justify-start bg-[#070b14] scrollbar-thin scrollbar-thumb-slate-800`}
+        style={{
+          overscrollBehaviorX: 'contain',
+          overscrollBehaviorY: 'auto',
+        }}
       >
         <div
           style={{
@@ -293,7 +314,7 @@ export default function MermaidViewer({
       }`}
     >
       {/* Top Header / Action Toolbar */}
-      <div className="flex flex-wrap items-center justify-between px-3 sm:px-4 py-3 bg-gradient-to-r from-[#0d1527] to-[#0a0f1d] border-b border-slate-800 gap-2">
+      <div className="flex flex-wrap items-center justify-between px-3 sm:px-4 py-2.5 bg-gradient-to-r from-[#0d1527] to-[#0a0f1d] border-b border-slate-800/80 gap-2">
         {/* Left: Title & Badge */}
         <div className="flex items-center gap-2.5">
           <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-sky-500/10 border border-sky-500/30 text-sky-400 shadow-sm">
@@ -303,7 +324,7 @@ export default function MermaidViewer({
             <h4 className="text-xs sm:text-sm font-bold text-slate-100 tracking-wide uppercase flex items-center gap-2">
               <span>{title}</span>
               <span className="hidden sm:inline-block px-1.5 py-0.5 rounded text-[10px] font-mono font-medium bg-sky-500/10 text-sky-400 border border-sky-500/20">
-                Mermaid Flowchart
+                {diagramTypeLabel}
               </span>
             </h4>
           </div>
