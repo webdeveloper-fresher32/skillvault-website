@@ -26,3 +26,4 @@ Discover the foundations of the **Model Context Protocol (MCP)**: resolve the cl
 ## Next Phase
 
 → [Phase 2: Core Primitives: Tools, Resources, and Prompts](../Phase-02-Core-Primitives-Tools-Resources-and-Prompts/README.md)
+

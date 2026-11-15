@@ -26,3 +26,4 @@ Connect, configure, and orchestrate MCP servers inside desktop host applications
 ## Next Phase
 
 → [Phase 8: Orchestration: MCP with LangChain and LangGraph](../Phase-08-Orchestration-MCP-with-LangChain-and-LangGraph/README.md)
+

@@ -263,3 +263,4 @@ Package into a hardened, non-root Docker container and attach to `claude_desktop
   }
 }
 ```
+

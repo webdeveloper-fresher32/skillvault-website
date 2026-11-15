@@ -246,3 +246,4 @@ flowchart TD
    - D) Through Windows registry keys
 
 *Submit your answers (e.g. 1-B, 2-B, 3-B, 4-B) to verify your score!*
+

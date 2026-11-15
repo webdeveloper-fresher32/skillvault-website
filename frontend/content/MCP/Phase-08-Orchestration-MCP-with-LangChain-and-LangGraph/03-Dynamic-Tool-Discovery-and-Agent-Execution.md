@@ -242,3 +242,4 @@ flowchart TD
    - D) Deprecated tools scheduled for deletion
 
 *Submit your answers (e.g. 1-B, 2-B, 3-A, 4-B) to verify your score!*
+

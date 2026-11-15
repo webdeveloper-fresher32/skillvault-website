@@ -247,3 +247,4 @@ flowchart TD
    - D) By calling `time.sleep(100)`
 
 *Submit your answers (e.g. 1-B, 2-B, 3-A, 4-B) to verify your score!*
+

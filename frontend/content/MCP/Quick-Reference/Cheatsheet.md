@@ -192,3 +192,4 @@ Get-Content -Path "$env:APPDATA\Claude\Logs\mcp*.log" -Wait
 | **`-32602`** | `INVALID_PARAMS` | Invalid method parameter(s) (schema validation failed). |
 | **`-32603`** | `INTERNAL_ERROR` | Internal JSON-RPC error. |
 | **`-32000` to `-32099`**| `SERVER_ERROR` | Reserved for implementation-defined server errors. |
+

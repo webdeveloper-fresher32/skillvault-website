@@ -80,3 +80,4 @@ Welcome to the **Model Context Protocol (MCP) Mastery Curriculum**, the definiti
 
 - **[MCP Syntax & Architecture Cheatsheet](Quick-Reference/Cheatsheet.md)**: High-density quick reference covering JSON-RPC wire frames, Python FastMCP, TypeScript SDK, client config schemas, and CLI debugging commands.
 - **[MCP Master Interview Q&A](Quick-Reference/Interview-QA.md)**: 50 in-depth architectural questions and detailed senior-level answers covering protocol specifications, security, transports, and multi-agent systems.
+

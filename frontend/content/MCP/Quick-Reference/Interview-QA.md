@@ -236,3 +236,4 @@ Before step 3 completes, no tools or resources can be called.
 **A:** 
 - **`/healthz` (Liveness Probe):** Verifies the web server process and event loop are responsive. If failing, Kubernetes restarts the container.
 - **`/readyz` (Readiness Probe):** Verifies downstream dependencies (database connection pool, Redis cache) are online. If failing, traffic is temporarily diverted until connectivity is restored.
+

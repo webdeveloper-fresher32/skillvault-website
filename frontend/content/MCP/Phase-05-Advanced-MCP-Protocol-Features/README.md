@@ -29,3 +29,4 @@ Explore the cutting-edge protocol features of the Model Context Protocol:
 ## Next Phase
 
 → [Phase 6: Security, Authentication, and Sandboxing](../Phase-06-Security-Authentication-and-Sandboxing/README.md)
+

@@ -267,3 +267,4 @@ Configure inside Cursor (`.cursor/mcp.json`):
   }
 }
 ```
+
