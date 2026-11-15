@@ -367,20 +367,26 @@ function MarkdownImage({ src, alt, ...props }: any) {
 
   return (
     <span className="my-8 flex flex-col items-center">
-      <span className="relative group overflow-hidden rounded-xl border border-slate-700/60 bg-[#0a0e17] p-2 shadow-2xl transition-all duration-300 hover:border-sky-500/50 block">
+      <a
+        href={normalizedSrc}
+        target="_blank"
+        rel="noopener noreferrer"
+        title="Click to open full-resolution diagram in a new tab"
+        className="relative group overflow-hidden rounded-xl border border-slate-700/60 bg-[#0a0e17] p-2 shadow-2xl transition-all duration-300 hover:border-sky-500/50 block cursor-zoom-in"
+      >
         <img
           src={normalizedSrc}
           alt={alt || 'Technical Architecture Diagram'}
-          className={`max-h-[580px] w-auto rounded-lg object-contain transition-transform duration-300 group-hover:scale-[1.01] ${isLoaded ? 'opacity-100' : 'opacity-90'}`}
+          className={`max-h-[640px] w-auto rounded-lg object-contain transition-transform duration-300 group-hover:scale-[1.01] ${isLoaded ? 'opacity-100' : 'opacity-90'}`}
           loading="lazy"
           onLoad={() => setIsLoaded(true)}
           onError={() => setHasError(true)}
           {...props}
         />
-      </span>
+      </a>
       {alt && (
         <span className="mt-3 text-center text-xs font-mono text-sky-400/80 block">
-          ▲ {alt}
+          ▲ {alt} • <span className="text-slate-400">Click diagram for high-resolution</span>
         </span>
       )}
     </span>

@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1400" height="920" viewBox="0 0 1400 920" xmlns="http://www.w3.org/2000/svg" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <linearGradient id="bgGrad4" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#070a13"/>
+      <stop offset="100%" stop-color="#0a0f1d"/>
+    </linearGradient>
+    <marker id="arr4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8"/>
+    </marker>
+    <marker id="arr-green4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#34d399"/>
+    </marker>
+    <marker id="arr-red4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#f43f5e"/>
+    </marker>
+  </defs>
+
+  <rect width="1400" height="920" rx="16" fill="url(#bgGrad4)" stroke="#1e293b" stroke-width="2"/>
+
+  <!-- Title Banner -->
+  <rect x="30" y="25" width="1340" height="65" rx="12" fill="#0f172a" stroke="#38bdf8" stroke-width="1.5" stroke-opacity="0.3"/>
+  <text x="50" y="54" fill="#38bdf8" font-size="19" font-weight="800">LANGGRAPH CYCLIC STATE MACHINE &amp; CONDITIONAL ROUTING</text>
+  <text x="50" y="74" fill="#94a3b8" font-size="12">Dynamic intent routing, hybrid RAG retrieval, SaaS tool execution, and durable Human-in-the-Loop breakpoints</text>
+
+  <!-- START Node -->
+  <g transform="translate(620, 115)">
+    <rect width="160" height="45" rx="22" fill="#2563eb" stroke="#38bdf8" stroke-width="2"/>
+    <text x="80" y="28" fill="#ffffff" font-size="14" font-weight="800" text-anchor="middle">START</text>
+  </g>
+  <line x1="700" y1="160" x2="700" y2="195" stroke="#38bdf8" stroke-width="2" marker-end="url(#arr4)"/>
+
+  <!-- Node 1: Intent Classification -->
+  <g transform="translate(560, 200)">
+    <rect width="280" height="65" rx="12" fill="#1e1b4b" stroke="#818cf8" stroke-width="2"/>
+    <text x="140" y="28" fill="#f8fafc" font-size="13" font-weight="700" text-anchor="middle">1. Intent Classifier Node</text>
+    <text x="140" y="48" fill="#c7d2fe" font-size="11" text-anchor="middle">Pydantic Structured Output Decision</text>
+  </g>
+
+  <!-- Conditional Edge Fan-out -->
+  <line x1="700" y1="265" x2="700" y2="300" stroke="#818cf8" stroke-width="2"/>
+  
+  <!-- Horizontal Fan-out Bar -->
+  <line x1="150" y1="300" x2="1250" y2="300" stroke="#818cf8" stroke-width="2"/>
+
+  <!-- Vertical lines to 5 routes -->
+  <line x1="150" y1="300" x2="150" y2="340" stroke="#38bdf8" stroke-width="2" marker-end="url(#arr4)"/>
+  <line x1="430" y1="300" x2="430" y2="340" stroke="#34d399" stroke-width="2" marker-end="url(#arr-green4)"/>
+  <line x1="700" y1="300" x2="700" y2="340" stroke="#34d399" stroke-width="2" marker-end="url(#arr-green4)"/>
+  <line x1="970" y1="300" x2="970" y2="340" stroke="#f43f5e" stroke-width="2" marker-end="url(#arr-red4)"/>
+  <line x1="1250" y1="300" x2="1250" y2="340" stroke="#94a3b8" stroke-width="2" marker-end="url(#arr4)"/>
+
+  <!-- Route Labels -->
+  <text x="150" y="325" fill="#38bdf8" font-size="11" font-weight="700" text-anchor="middle">rag_knowledge</text>
+  <text x="430" y="325" fill="#34d399" font-size="11" font-weight="700" text-anchor="middle">billing_action</text>
+  <text x="700" y="325" fill="#34d399" font-size="11" font-weight="700" text-anchor="middle">account_action</text>
+  <text x="970" y="325" fill="#f43f5e" font-size="11" font-weight="700" text-anchor="middle">ticket_creation</text>
+  <text x="1250" y="325" fill="#94a3b8" font-size="11" font-weight="700" text-anchor="middle">general_chat</text>
+
+  <!-- Route 1: RAG Knowledge -->
+  <g transform="translate(40, 345)">
+    <rect width="220" height="75" rx="10" fill="#0c1a2e" stroke="#38bdf8" stroke-width="1.5"/>
+    <text x="110" y="28" fill="#e0f2fe" font-size="12" font-weight="700" text-anchor="middle">2a. Hybrid Retrieval &amp; RRF</text>
+    <text x="110" y="46" fill="#7dd3fc" font-size="10" text-anchor="middle">Dense HNSW + Sparse BM25</text>
+    <text x="110" y="62" fill="#94a3b8" font-size="10" text-anchor="middle">Top 20 Fused Candidates</text>
+  </g>
+  <line x1="150" y1="420" x2="150" y2="455" stroke="#38bdf8" stroke-width="2" marker-end="url(#arr4)"/>
+
+  <!-- RAG Stage 2: Cross Encoder -->
+  <g transform="translate(40, 460)">
+    <rect width="220" height="75" rx="10" fill="#0c1a2e" stroke="#38bdf8" stroke-width="1.5"/>
+    <text x="110" y="28" fill="#e0f2fe" font-size="12" font-weight="700" text-anchor="middle">Cross-Encoder Reranker</text>
+    <text x="110" y="46" fill="#7dd3fc" font-size="10" text-anchor="middle">ms-marco-MiniLM-L-6-v2</text>
+    <text x="110" y="62" fill="#34d399" font-size="10" font-weight="600" text-anchor="middle">Threshold &gt;= 0.65 Confidence Gate</text>
+  </g>
+  <line x1="150" y1="535" x2="150" y2="570" stroke="#38bdf8" stroke-width="2" marker-end="url(#arr4)"/>
+
+  <!-- RAG Stage 3: Grounded Generator -->
+  <g transform="translate(40, 575)">
+    <rect width="220" height="75" rx="10" fill="#1e1b4b" stroke="#c084fc" stroke-width="1.5"/>
+    <text x="110" y="28" fill="#f3e8ff" font-size="12" font-weight="700" text-anchor="middle">3. Grounded Generator</text>
+    <text x="110" y="46" fill="#d8b4fe" font-size="10" text-anchor="middle">Strict Inline Citations [Doc X]</text>
+    <text x="110" y="62" fill="#94a3b8" font-size="10" text-anchor="middle">Faithfulness Self-Check</text>
+  </g>
+
+  <!-- Route 2: Billing Tool -->
+  <g transform="translate(325, 345)">
+    <rect width="210" height="75" rx="10" fill="#064e3b" stroke="#34d399" stroke-width="1.5"/>
+    <text x="105" y="28" fill="#d1fae5" font-size="12" font-weight="700" text-anchor="middle">2b. Billing Tool Node</text>
+    <text x="105" y="46" fill="#6ee7b7" font-size="10" text-anchor="middle">Read-only Stripe / DB Query</text>
+    <text x="105" y="62" fill="#cbd5e1" font-size="10" text-anchor="middle">Active Plan &amp; Period End</text>
+  </g>
+
+  <!-- Route 3: Account Tool -->
+  <g transform="translate(595, 345)">
+    <rect width="210" height="75" rx="10" fill="#064e3b" stroke="#34d399" stroke-width="1.5"/>
+    <text x="105" y="28" fill="#d1fae5" font-size="12" font-weight="700" text-anchor="middle">2c. Account Tool Node</text>
+    <text x="105" y="46" fill="#6ee7b7" font-size="10" text-anchor="middle">Team Seats &amp; Usage Stats</text>
+    <text x="105" y="62" fill="#cbd5e1" font-size="10" text-anchor="middle">Strict Tenant Permission Check</text>
+  </g>
+
+  <!-- Route 4: Support Ticket & HITL -->
+  <g transform="translate(865, 345)">
+    <rect width="210" height="75" rx="10" fill="#3a1118" stroke="#f43f5e" stroke-width="1.5"/>
+    <text x="105" y="28" fill="#ffe4e6" font-size="12" font-weight="700" text-anchor="middle">2d. Ticket Risk Check</text>
+    <text x="105" y="46" fill="#fda4af" font-size="10" text-anchor="middle">Sensitive Words (refund, cancel)</text>
+    <text x="105" y="62" fill="#cbd5e1" font-size="10" text-anchor="middle">If Non-Admin: Trigger HITL</text>
+  </g>
+  <line x1="970" y1="420" x2="970" y2="455" stroke="#f43f5e" stroke-width="2" marker-end="url(#arr-red4)"/>
+
+  <!-- HITL Breakpoint Box -->
+  <g transform="translate(865, 460)">
+    <rect width="210" height="75" rx="10" fill="#4c0519" stroke="#f43f5e" stroke-width="2" stroke-dasharray="6,3"/>
+    <text x="105" y="28" fill="#fecdd3" font-size="12" font-weight="800" text-anchor="middle">4. interrupt() Breakpoint</text>
+    <text x="105" y="46" fill="#fda4af" font-size="10" text-anchor="middle">State Serialized to Postgres</text>
+    <text x="105" y="62" fill="#fecaca" font-size="10" font-weight="600" text-anchor="middle">Waits for Supervisor Approval</text>
+  </g>
+  <line x1="970" y1="535" x2="970" y2="570" stroke="#34d399" stroke-width="2" marker-end="url(#arr-green4)"/>
+  <text x="1055" y="555" fill="#34d399" font-size="10" font-weight="700">Command(resume=True)</text>
+
+  <!-- Ticket Created Node -->
+  <g transform="translate(865, 575)">
+    <rect width="210" height="75" rx="10" fill="#064e3b" stroke="#34d399" stroke-width="1.5"/>
+    <text x="105" y="28" fill="#d1fae5" font-size="12" font-weight="700" text-anchor="middle">Execute Ticket Creation</text>
+    <text x="105" y="46" fill="#6ee7b7" font-size="10" text-anchor="middle">Internal Helpdesk / Jira API</text>
+    <text x="105" y="62" fill="#cbd5e1" font-size="10" text-anchor="middle">Ticket # Generated</text>
+  </g>
+
+  <!-- Route 5: General Chat -->
+  <g transform="translate(1145, 345)">
+    <rect width="210" height="75" rx="10" fill="#1e293b" stroke="#94a3b8" stroke-width="1.5"/>
+    <text x="105" y="28" fill="#f8fafc" font-size="12" font-weight="700" text-anchor="middle">2e. Conversational LLM</text>
+    <text x="105" y="46" fill="#cbd5e1" font-size="10" text-anchor="middle">General SaaS Queries</text>
+    <text x="105" y="62" fill="#94a3b8" font-size="10" text-anchor="middle">No Tool Calls Required</text>
+  </g>
+
+  <!-- Convergence to Final Response -->
+  <!-- Horizontal Convergence Bar -->
+  <line x1="150" y1="680" x2="1250" y2="680" stroke="#38bdf8" stroke-width="2"/>
+  
+  <line x1="150" y1="650" x2="150" y2="680" stroke="#38bdf8" stroke-width="2"/>
+  <line x1="430" y1="420" x2="430" y2="680" stroke="#34d399" stroke-width="2"/>
+  <line x1="700" y1="420" x2="700" y2="680" stroke="#34d399" stroke-width="2"/>
+  <line x1="970" y1="650" x2="970" y2="680" stroke="#34d399" stroke-width="2"/>
+  <line x1="1250" y1="420" x2="1250" y2="680" stroke="#94a3b8" stroke-width="2"/>
+
+  <line x1="700" y1="680" x2="700" y2="715" stroke="#38bdf8" stroke-width="2" marker-end="url(#arr4)"/>
+
+  <!-- Final Response Node -->
+  <g transform="translate(480, 720)">
+    <rect width="440" height="60" rx="12" fill="#047857" stroke="#34d399" stroke-width="2"/>
+    <text x="220" y="27" fill="#ffffff" font-size="14" font-weight="800" text-anchor="middle">5. Final Markdown Response &amp; SSE Stream</text>
+    <text x="220" y="47" fill="#a7f3d0" font-size="11" text-anchor="middle">Tokens streamed in real-time • Structured source citations attached</text>
+  </g>
+  <line x1="700" y1="780" x2="700" y2="810" stroke="#38bdf8" stroke-width="2" marker-end="url(#arr4)"/>
+
+  <!-- Checkpoint & Audit Node -->
+  <g transform="translate(510, 815)">
+    <rect width="380" height="45" rx="10" fill="#0f172a" stroke="#818cf8" stroke-width="1.5"/>
+    <text x="190" y="28" fill="#e2e8f0" font-size="12" font-weight="700" text-anchor="middle">6. Persist Audit Log &amp; PostgresSaver Checkpoint</text>
+  </g>
+  <line x1="700" y1="860" x2="700" y2="885" stroke="#38bdf8" stroke-width="2" marker-end="url(#arr4)"/>
+
+  <!-- END Node -->
+  <g transform="translate(630, 890)">
+    <rect width="140" height="30" rx="15" fill="#2563eb" stroke="#38bdf8" stroke-width="1.5"/>
+    <text x="70" y="20" fill="#ffffff" font-size="12" font-weight="800" text-anchor="middle">END</text>
+  </g>
+</svg>

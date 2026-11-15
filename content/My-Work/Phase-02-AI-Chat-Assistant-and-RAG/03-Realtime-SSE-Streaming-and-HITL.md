@@ -7,49 +7,7 @@
 
 ## 1. LangGraph Cyclic State Machine with HITL Breakpoints
 
-```mermaid
-flowchart TD
-    classDef startEnd fill:#2563eb,stroke:#1d4ed8,color:#ffffff,stroke-width:2px;
-    classDef node fill:#1e293b,stroke:#38bdf8,color:#ffffff,stroke-width:1.5px;
-    classDef decision fill:#854d0e,stroke:#facc15,color:#ffffff,stroke-width:2px;
-    classDef hitl fill:#b91c1c,stroke:#f87171,color:#ffffff,stroke-width:2px;
-    classDef success fill:#064e3b,stroke:#34d399,color:#ffffff,stroke-width:2px;
-
-    Start([START]):::startEnd --> IntentRouter[1. Intent Classification Node]:::node
-    
-    IntentRouter --> RouteDecision{Classify User Intent}:::decision
-
-    RouteDecision -- "rag_knowledge" --> RAGRetrieve[2a. Hybrid Retrieval & Reranker]:::node
-    RouteDecision -- "billing_action" --> ToolBilling[2b. Billing Tool Executor]:::node
-    RouteDecision -- "account_action" --> ToolAccount[2c. Account Tool Executor]:::node
-    RouteDecision -- "ticket_creation" --> RiskCheck{Assess Ticket Risk}:::decision
-    RouteDecision -- "general_chat" --> DirectChat[2e. Conversational LLM]:::node
-
-    RAGRetrieve --> ContextGate{Sufficient Context?}:::decision
-    ContextGate -- "Yes (Score >= 0.65)" --> RAGGenerate[3. Grounded Generator with Citations]:::node
-    ContextGate -- "No (Low Context)" --> FallbackNode[Direct Fallback: Insufficient Docs]:::node
-
-    RiskCheck -- "Sensitive Action (e.g. Refund > $100)" --> HITLBreakpoint["4. interrupt() Breakpoint: State Paused"]:::hitl
-    RiskCheck -- "Standard Support Ticket" --> ToolTicket[Execute Ticket Creation]:::node
-
-    HITLBreakpoint --> SupervisorReview[Human Supervisor Review Dashboard]:::hitl
-    SupervisorReview -- "Command(resume=Approved)" --> ToolTicket
-    SupervisorReview -- "Command(resume=Rejected)" --> RejectNode[Notify User of Rejection]:::node
-
-    RAGGenerate --> FaithfulnessGate{Validate Groundedness}:::decision
-    FaithfulnessGate -- "Faithful" --> FinalResponse[5. Final Markdown Response]:::success
-    FaithfulnessGate -- "Hallucinated Claims" --> FallbackNode
-
-    ToolBilling --> FinalResponse
-    ToolAccount --> FinalResponse
-    ToolTicket --> FinalResponse
-    DirectChat --> FinalResponse
-    FallbackNode --> FinalResponse
-    RejectNode --> FinalResponse
-
-    FinalResponse --> PersistAudit[6. Persist Audit Log & Checkpoint]:::node
-    PersistAudit --> End([END]):::startEnd
-```
+![LangGraph Agentic State Machine Flowchart](/images/my-work/04-langgraph-agentic-state-machine.png)
 
 ---
 

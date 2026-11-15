@@ -11,43 +11,7 @@ In enterprise SaaS, handling payments is essentially solving the **Distributed T
 1. **Stripe's Ledger**: The ultimate financial source of truth regarding charges, payment methods, disputes, and subscription statuses.
 2. **Your Application Database**: The internal source of truth for user permissions, feature flags, team seats, and account entitlements.
 
-```mermaid
-sequenceDiagram
-    autonumber
-    actor User as Customer / Browser
-    participant FE as React Frontend
-    participant API as Express API Server
-    participant DB as PostgreSQL (Prisma)
-    participant Stripe as Stripe API Engine
-    participant Queue as Redis / BullMQ
-    participant Worker as Webhook Background Worker
-
-    User->>FE: Selects Pro Plan ($49/mo)
-    FE->>API: POST /api/v1/billing/checkout-session { planId: "plan_pro_monthly" }
-    Note over API: Authenticate User via JWT & enforce active tenant
-    API->>DB: Query User & existing stripe_customer_id
-    API->>Stripe: stripe.checkout.sessions.create({ customer, mode: 'subscription', ... })
-    Stripe-->>API: { id: "cs_test_123", url: "https://checkout.stripe.com/..." }
-    API-->>FE: { checkoutUrl: "https://checkout.stripe.com/..." }
-    FE->>User: Redirect to Stripe Hosted Checkout
-    User->>Stripe: Submits Credit Card (3D Secure Authentication)
-    Stripe->>Stripe: Authorize & Capture Charge ($49.00)
-    Stripe-->>User: Redirect to /billing/success?session_id=cs_test_123
-
-    par Synchronous Client Return
-        User->>FE: Lands on /billing/success
-        FE->>API: GET /api/v1/billing/subscription-status
-        API->>DB: Read subscription (May still be 'INCOMPLETE' if webhook pending)
-        API-->>FE: { status: "PROCESSING" }
-    and Asynchronous Webhook Guarantee
-        Stripe->>API: POST /api/v1/webhooks/stripe (Event: checkout.session.completed)
-        Note over API: 1. Validate HMAC signature (stripe.webhooks.constructEvent)<br/>2. Verify idempotency in Redis<br/>3. Enqueue to BullMQ worker
-        API-->>Stripe: 200 OK (Immediate ack within 200ms)
-        Queue->>Worker: Consume checkout.session.completed job
-        Worker->>DB: BEGIN Transaction: Lock User row, Upsert Subscription, Audit Log
-        Worker->>DB: COMMIT Transaction (status='ACTIVE', plan='PRO')
-    end
-```
+![Stripe Billing & Webhook Event Lifecycle Architecture](/images/my-work/01-stripe-billing-lifecycle-architecture.png)
 
 ---
 

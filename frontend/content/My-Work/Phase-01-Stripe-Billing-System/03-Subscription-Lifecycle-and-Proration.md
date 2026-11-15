@@ -9,27 +9,7 @@
 
 A production SaaS subscription is not a binary `active` or `inactive` flag. Stripe defines a 7-stage state machine that your application must mirror:
 
-```mermaid
-stateDiagram-v2
-    [*] --> Incomplete: Payment method required (SCA/3DS)
-    Incomplete --> Active: Payment authorized & confirmed
-    Incomplete --> IncompleteExpired: 23 hours without payment
-    
-    Active --> PastDue: Automatic renewal payment fails
-    Active --> Canceled: User cancels immediately
-    Active --> Trialing: Trial period active
-    
-    Trialing --> Active: First cycle payment succeeds
-    Trialing --> PastDue: Trial ends, card declined
-    
-    PastDue --> Active: Smart Retries succeed
-    PastDue --> Unpaid: All retries fail (dunning exhausted)
-    PastDue --> Canceled: Final cancellation policy enforced
-    
-    Unpaid --> Active: Customer updates payment method
-    Unpaid --> Canceled: Account purge
-    Canceled --> [*]
-```
+![SaaS Subscription Lifecycle State Machine](/images/my-work/02-subscription-state-machine.png)
 
 ### Critical State Definitions:
 1. **`incomplete`**: The initial invoice failed to pay (e.g. 3D Secure verification required). If not resolved within 23 hours, it transitions to `incomplete_expired`.

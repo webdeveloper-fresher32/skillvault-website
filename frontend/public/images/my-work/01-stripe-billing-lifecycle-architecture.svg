@@ -1,0 +1,276 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1500" height="1200" viewBox="0 0 1500 1200" xmlns="http://www.w3.org/2000/svg" font-family="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#070a13"/>
+      <stop offset="100%" stop-color="#0a0f1d"/>
+    </linearGradient>
+    <linearGradient id="primaryBox" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="100%" stop-color="#1e293b"/>
+    </linearGradient>
+    <linearGradient id="stripeBox" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3b0764"/>
+      <stop offset="100%" stop-color="#581c87"/>
+    </linearGradient>
+    <linearGradient id="postgresBox" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#064e3b"/>
+      <stop offset="100%" stop-color="#065f46"/>
+    </linearGradient>
+    <linearGradient id="noteBox" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e1b4b"/>
+      <stop offset="100%" stop-color="#2e1065"/>
+    </linearGradient>
+    
+    <!-- Arrow Marker -->
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#38bdf8"/>
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#34d399"/>
+    </marker>
+    <marker id="arrow-purple" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#c084fc"/>
+    </marker>
+    <marker id="arrow-amber" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="#fbbf24"/>
+    </marker>
+  </defs>
+
+  <!-- Background Canvas -->
+  <rect width="1500" height="1200" rx="16" fill="url(#bgGrad)" stroke="#1e293b" stroke-width="2"/>
+
+  <!-- Top Title Banner -->
+  <rect x="30" y="25" width="1440" height="70" rx="12" fill="#0f172a" stroke="#38bdf8" stroke-width="1.5" stroke-opacity="0.3"/>
+  <text x="50" y="56" fill="#38bdf8" font-size="20" font-weight="800" letter-spacing="0.5">STRIPE BILLING &amp; SUBSCRIPTION EVENT MACHINE</text>
+  <text x="50" y="78" fill="#94a3b8" font-size="13" font-weight="500">End-to-End Distributed 2PC Lifecycle: Checkout Initiation, 3DS Auth, and Asynchronous Webhook State Machine</text>
+  
+  <rect x="1310" y="42" width="140" height="28" rx="6" fill="#38bdf8" fill-opacity="0.15" stroke="#38bdf8" stroke-width="1"/>
+  <text x="1380" y="61" fill="#38bdf8" font-size="11" font-weight="700" text-anchor="middle">PRODUCTION ARCH</text>
+
+  <!-- Lifeline X Coordinates:
+       1. Customer (120)
+       2. React Frontend (340)
+       3. Express API (570)
+       4. PostgreSQL (800)
+       5. Stripe API (1030)
+       6. Redis / BullMQ (1230)
+       7. Webhook Worker (1400)
+  -->
+
+  <!-- Lifeline Dashed Columns -->
+  <g stroke="#334155" stroke-width="1.5" stroke-dasharray="6,6">
+    <line x1="120" y1="170" x2="120" y2="1140"/>
+    <line x1="340" y1="170" x2="340" y2="1140"/>
+    <line x1="570" y1="170" x2="570" y2="1140"/>
+    <line x1="800" y1="170" x2="800" y2="1140"/>
+    <line x1="1030" y1="170" x2="1030" y2="1140"/>
+    <line x1="1230" y1="170" x2="1230" y2="1140"/>
+    <line x1="1400" y1="170" x2="1400" y2="1140"/>
+  </g>
+
+  <!-- Header Participants Boxes -->
+  <!-- 1. Customer -->
+  <g transform="translate(45, 115)">
+    <rect width="150" height="52" rx="10" fill="url(#primaryBox)" stroke="#38bdf8" stroke-width="1.5"/>
+    <circle cx="35" cy="26" r="12" fill="#38bdf8" fill-opacity="0.2"/>
+    <text x="35" y="30" fill="#38bdf8" font-size="12" font-weight="700" text-anchor="middle">👤</text>
+    <text x="105" y="27" fill="#f8fafc" font-size="13" font-weight="700" text-anchor="middle">Customer</text>
+    <text x="105" y="42" fill="#94a3b8" font-size="10" font-weight="500" text-anchor="middle">Browser / Client</text>
+  </g>
+
+  <!-- 2. React Frontend -->
+  <g transform="translate(265, 115)">
+    <rect width="150" height="52" rx="10" fill="url(#primaryBox)" stroke="#06b6d4" stroke-width="1.5"/>
+    <text x="75" y="27" fill="#f8fafc" font-size="13" font-weight="700" text-anchor="middle">React Frontend</text>
+    <text x="75" y="42" fill="#06b6d4" font-size="10" font-weight="600" text-anchor="middle">Next.js / TypeScript</text>
+  </g>
+
+  <!-- 3. Express API -->
+  <g transform="translate(495, 115)">
+    <rect width="150" height="52" rx="10" fill="url(#primaryBox)" stroke="#818cf8" stroke-width="1.5"/>
+    <text x="75" y="27" fill="#f8fafc" font-size="13" font-weight="700" text-anchor="middle">Express Server</text>
+    <text x="75" y="42" fill="#818cf8" font-size="10" font-weight="600" text-anchor="middle">API Gateway (JWT)</text>
+  </g>
+
+  <!-- 4. PostgreSQL -->
+  <g transform="translate(725, 115)">
+    <rect width="150" height="52" rx="10" fill="url(#postgresBox)" stroke="#34d399" stroke-width="1.5"/>
+    <text x="75" y="27" fill="#f8fafc" font-size="13" font-weight="700" text-anchor="middle">PostgreSQL DB</text>
+    <text x="75" y="42" fill="#34d399" font-size="10" font-weight="600" text-anchor="middle">Prisma (ACID Locks)</text>
+  </g>
+
+  <!-- 5. Stripe API -->
+  <g transform="translate(955, 115)">
+    <rect width="150" height="52" rx="10" fill="url(#stripeBox)" stroke="#c084fc" stroke-width="1.5"/>
+    <text x="75" y="27" fill="#f8fafc" font-size="13" font-weight="700" text-anchor="middle">Stripe API</text>
+    <text x="75" y="42" fill="#c084fc" font-size="10" font-weight="600" text-anchor="middle">Financial Ledger</text>
+  </g>
+
+  <!-- 6. Redis / BullMQ -->
+  <g transform="translate(1155, 115)">
+    <rect width="150" height="52" rx="10" fill="url(#primaryBox)" stroke="#fbbf24" stroke-width="1.5"/>
+    <text x="75" y="27" fill="#f8fafc" font-size="13" font-weight="700" text-anchor="middle">Redis / BullMQ</text>
+    <text x="75" y="42" fill="#fbbf24" font-size="10" font-weight="600" text-anchor="middle">Distributed Queue</text>
+  </g>
+
+  <!-- 7. Webhook Worker -->
+  <g transform="translate(1325, 115)">
+    <rect width="150" height="52" rx="10" fill="url(#primaryBox)" stroke="#fb7185" stroke-width="1.5"/>
+    <text x="75" y="27" fill="#f8fafc" font-size="13" font-weight="700" text-anchor="middle">Webhook Worker</text>
+    <text x="75" y="42" fill="#fb7185" font-size="10" font-weight="600" text-anchor="middle">Background Consumer</text>
+  </g>
+
+  <!-- ================= SEQUENCE INTERACTIONS ================= -->
+
+  <!-- Step 1: Customer selects plan -->
+  <g transform="translate(0, 195)">
+    <circle cx="120" cy="15" r="10" fill="#38bdf8"/>
+    <text x="120" y="19" fill="#070b14" font-size="10" font-weight="800" text-anchor="middle">1</text>
+    <line x1="120" y1="15" x2="335" y2="15" stroke="#38bdf8" stroke-width="2" marker-end="url(#arrow)"/>
+    <text x="227" y="9" fill="#e2e8f0" font-size="12" font-weight="600" text-anchor="middle">Selects Pro Plan ($49/mo)</text>
+  </g>
+
+  <!-- Step 2: React calls API -->
+  <g transform="translate(0, 245)">
+    <circle cx="340" cy="15" r="10" fill="#38bdf8"/>
+    <text x="340" y="19" fill="#070b14" font-size="10" font-weight="800" text-anchor="middle">2</text>
+    <line x1="340" y1="15" x2="565" y2="15" stroke="#38bdf8" stroke-width="2" marker-end="url(#arrow)"/>
+    <text x="455" y="9" fill="#e2e8f0" font-size="12" font-weight="600" text-anchor="middle">POST /api/v1/billing/checkout-session { planId }</text>
+  </g>
+
+  <!-- Step 3: Auth & Tenant Context Note -->
+  <g transform="translate(450, 285)">
+    <rect width="240" height="40" rx="8" fill="url(#noteBox)" stroke="#818cf8" stroke-width="1"/>
+    <text x="570" y="302" fill="#a5b4fc" font-size="11" font-weight="600" text-anchor="middle">🔒 Authenticate JWT &amp; Extract Tenant ID</text>
+    <text x="570" y="318" fill="#cbd5e1" font-size="10" text-anchor="middle">Client cannot forge active organization</text>
+  </g>
+
+  <!-- Step 4: Query User in Postgres -->
+  <g transform="translate(0, 345)">
+    <circle cx="570" cy="15" r="10" fill="#34d399"/>
+    <text x="570" y="19" fill="#070b14" font-size="10" font-weight="800" text-anchor="middle">3</text>
+    <line x1="570" y1="15" x2="795" y2="15" stroke="#34d399" stroke-width="2" marker-end="url(#arrow-green)"/>
+    <text x="685" y="9" fill="#e2e8f0" font-size="12" font-weight="600" text-anchor="middle">Query User &amp; existing stripe_customer_id</text>
+  </g>
+
+  <!-- Step 5: Express creates Checkout Session with Stripe -->
+  <g transform="translate(0, 395)">
+    <circle cx="570" cy="15" r="10" fill="#c084fc"/>
+    <text x="570" y="19" fill="#070b14" font-size="10" font-weight="800" text-anchor="middle">4</text>
+    <line x1="570" y1="15" x2="1025" y2="15" stroke="#c084fc" stroke-width="2" marker-end="url(#arrow-purple)"/>
+    <text x="800" y="9" fill="#e2e8f0" font-size="12" font-weight="600" text-anchor="middle">stripe.checkout.sessions.create({ customer, mode: 'subscription', idempotencyKey })</text>
+  </g>
+
+  <!-- Step 6: Stripe returns session URL -->
+  <g transform="translate(0, 445)">
+    <line x1="1030" y1="15" x2="575" y2="15" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4,4" marker-end="url(#arrow)"/>
+    <text x="800" y="9" fill="#cbd5e1" font-size="11" font-weight="500" text-anchor="middle">Returns { id: "cs_123", url: "https://checkout.stripe.com/..." }</text>
+  </g>
+
+  <!-- Step 7: Express returns URL to React -->
+  <g transform="translate(0, 485)">
+    <line x1="570" y1="15" x2="345" y2="15" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4,4" marker-end="url(#arrow)"/>
+    <text x="455" y="9" fill="#cbd5e1" font-size="11" font-weight="500" text-anchor="middle">{ checkoutUrl: "https://checkout.stripe.com/..." }</text>
+  </g>
+
+  <!-- Step 8: Redirect to Stripe Hosted Checkout -->
+  <g transform="translate(0, 525)">
+    <circle cx="340" cy="15" r="10" fill="#38bdf8"/>
+    <text x="340" y="19" fill="#070b14" font-size="10" font-weight="800" text-anchor="middle">5</text>
+    <line x1="340" y1="15" x2="125" y2="15" stroke="#38bdf8" stroke-width="2" marker-end="url(#arrow)"/>
+    <text x="230" y="9" fill="#e2e8f0" font-size="12" font-weight="600" text-anchor="middle">Redirect to Stripe Hosted Checkout</text>
+  </g>
+
+  <!-- Step 9: User submits card to Stripe -->
+  <g transform="translate(0, 570)">
+    <circle cx="120" cy="15" r="10" fill="#c084fc"/>
+    <text x="120" y="19" fill="#070b14" font-size="10" font-weight="800" text-anchor="middle">6</text>
+    <line x1="120" y1="15" x2="1025" y2="15" stroke="#c084fc" stroke-width="2" marker-end="url(#arrow-purple)"/>
+    <text x="575" y="9" fill="#e2e8f0" font-size="12" font-weight="600" text-anchor="middle">Submits Credit Card (PCI DSS compliant tokenization &amp; 3D Secure Challenge)</text>
+  </g>
+
+  <!-- Step 10: Stripe authorizes charge (internal loop) -->
+  <g transform="translate(1030, 605)">
+    <path d="M 0 5 C 60 5, 60 40, 5 40" fill="none" stroke="#c084fc" stroke-width="2" marker-end="url(#arrow-purple)"/>
+    <text x="75" y="25" fill="#e9d5ff" font-size="11" font-weight="600">Authorize &amp; Capture Charge ($49.00)</text>
+  </g>
+
+  <!-- Step 11: Stripe redirects user back to app -->
+  <g transform="translate(0, 665)">
+    <circle cx="1030" cy="15" r="10" fill="#38bdf8"/>
+    <text x="1030" y="19" fill="#070b14" font-size="10" font-weight="800" text-anchor="middle">7</text>
+    <line x1="1030" y1="15" x2="125" y2="15" stroke="#38bdf8" stroke-width="2" marker-end="url(#arrow)"/>
+    <text x="575" y="9" fill="#e2e8f0" font-size="12" font-weight="600" text-anchor="middle">Browser Redirect: /billing/success?session_id=cs_123</text>
+  </g>
+
+  <!-- ================= PARALLEL CONTAINER BLOCKS ================= -->
+  <!-- PARALLEL BLOCK 1: Client Return -->
+  <g transform="translate(45, 715)">
+    <rect width="700" height="150" rx="10" fill="#0f172a" fill-opacity="0.6" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="6,4"/>
+    <rect x="0" y="0" width="220" height="24" rx="6" fill="#38bdf8" fill-opacity="0.2"/>
+    <text x="10" y="16" fill="#38bdf8" font-size="11" font-weight="800">PAR: SYNCHRONOUS CLIENT RETURN</text>
+
+    <!-- Interactions inside client return -->
+    <g transform="translate(0, 35)">
+      <line x1="75" y1="15" x2="290" y2="15" stroke="#38bdf8" stroke-width="1.5" marker-end="url(#arrow)"/>
+      <text x="180" y="9" fill="#cbd5e1" font-size="11" text-anchor="middle">Lands on /billing/success</text>
+
+      <line x1="295" y1="45" x2="520" y2="45" stroke="#38bdf8" stroke-width="1.5" marker-end="url(#arrow)"/>
+      <text x="407" y="39" fill="#cbd5e1" font-size="11" text-anchor="middle">GET /api/v1/billing/subscription-status</text>
+
+      <line x1="525" y1="75" x2="295" y2="75" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4,4" marker-end="url(#arrow)"/>
+      <text x="410" y="69" fill="#94a3b8" font-size="11" text-anchor="middle">Returns { status: "PROCESSING" } (Optimistic poll until webhook commits)</text>
+    </g>
+  </g>
+
+  <!-- PARALLEL BLOCK 2: Asynchronous Webhook Guarantee -->
+  <g transform="translate(45, 885)">
+    <rect width="1410" height="235" rx="10" fill="#0f172a" fill-opacity="0.7" stroke="#34d399" stroke-width="1.5"/>
+    <rect x="0" y="0" width="280" height="24" rx="6" fill="#34d399" fill-opacity="0.2"/>
+    <text x="10" y="16" fill="#34d399" font-size="11" font-weight="800">AND: ASYNCHRONOUS WEBHOOK GUARANTEE (2PC TRUTH)</text>
+
+    <!-- Step A: Webhook delivery -->
+    <g transform="translate(0, 35)">
+      <circle cx="985" cy="15" r="10" fill="#34d399"/>
+      <text x="985" y="19" fill="#070b14" font-size="10" font-weight="800" text-anchor="middle">8</text>
+      <line x1="985" y1="15" x2="530" y2="15" stroke="#34d399" stroke-width="2" marker-end="url(#arrow-green)"/>
+      <text x="750" y="9" fill="#34d399" font-size="12" font-weight="700" text-anchor="middle">POST /api/v1/webhooks/stripe (Event: checkout.session.completed)</text>
+    </g>
+
+    <!-- Step B: Validation & BullMQ enqueue note -->
+    <g transform="translate(380, 70)">
+      <rect width="380" height="42" rx="6" fill="#1e1b4b" stroke="#818cf8" stroke-width="1"/>
+      <text x="190" y="16" fill="#c7d2fe" font-size="10" font-weight="600" text-anchor="middle">1. Validate HMAC (stripe.webhooks.constructEvent)</text>
+      <text x="190" y="32" fill="#e0e7ff" font-size="10" text-anchor="middle">2. Redis SET NX idempotency lock • 3. Enqueue BullMQ job</text>
+    </g>
+
+    <!-- Step C: 200 OK immediate ack -->
+    <g transform="translate(0, 115)">
+      <line x1="525" y1="15" x2="980" y2="15" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4,4" marker-end="url(#arrow-green)"/>
+      <text x="750" y="9" fill="#cbd5e1" font-size="11" text-anchor="middle">200 OK (Immediate Ack within 200ms - Prevents Stripe timeout retry storms)</text>
+    </g>
+
+    <!-- Step D: BullMQ pushes to worker -->
+    <g transform="translate(0, 145)">
+      <circle cx="1185" cy="15" r="10" fill="#fbbf24"/>
+      <text x="1185" y="19" fill="#070b14" font-size="10" font-weight="800" text-anchor="middle">9</text>
+      <line x1="1185" y1="15" x2="1350" y2="15" stroke="#fbbf24" stroke-width="2" marker-end="url(#arrow-amber)"/>
+      <text x="1270" y="9" fill="#fde68a" font-size="11" font-weight="600" text-anchor="middle">Consume job</text>
+    </g>
+
+    <!-- Step E: Worker executes ACID transaction -->
+    <g transform="translate(0, 175)">
+      <circle cx="1355" cy="15" r="10" fill="#34d399"/>
+      <text x="1355" y="19" fill="#070b14" font-size="10" font-weight="800" text-anchor="middle">10</text>
+      <line x1="1355" y1="15" x2="760" y2="15" stroke="#34d399" stroke-width="2" marker-end="url(#arrow-green)"/>
+      <text x="1055" y="9" fill="#e2e8f0" font-size="12" font-weight="700" text-anchor="middle">BEGIN Transaction: Lock User row (SELECT FOR UPDATE), Upsert Subscription, Record Audit Event</text>
+    </g>
+
+    <!-- Step F: Transaction committed -->
+    <g transform="translate(0, 205)">
+      <line x1="755" y1="15" x2="1350" y2="15" stroke="#34d399" stroke-width="1.5" stroke-dasharray="4,4" marker-end="url(#arrow-green)"/>
+      <text x="1055" y="9" fill="#6ee7b7" font-size="11" font-weight="600" text-anchor="middle">COMMIT Transaction (status='ACTIVE', plan='PRO') — Final Consistency Achieved</text>
+    </g>
+  </g>
+</svg>
