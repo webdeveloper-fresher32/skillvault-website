@@ -36,6 +36,13 @@ target/
 .env.test.local
 .env.production.local
 
+# Python virtual environments
+.venv/
+.venv_pdf/
+venv/
+__pycache__/
+*.pyc
+
 # Resumes & Personal Docs
 personal/
 *.tex
