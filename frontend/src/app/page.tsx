@@ -22,7 +22,8 @@ import {
   Server,
   Network,
   ShieldCheck,
-  ChevronRight
+  ChevronRight,
+  Sparkles
 } from 'lucide-react';
 import { fetchDashboardStats, fetchCourses, DEFAULT_STATS, DashboardStats, Course } from '@/lib/api';
 
@@ -246,6 +247,17 @@ export default function HomePage() {
                   <BookOpen className="h-4 w-4" />
                   Browse 31 Course Tracks
                   <ArrowRight className="h-4 w-4" />
+                </Link>
+              </motion.div>
+              <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
+                <Link
+                  href="/quick-references"
+                  prefetch={true}
+                  className="inline-flex items-center gap-2 rounded-lg border border-sky-500/30 bg-sky-500/10 hover:bg-sky-500/20 px-5 py-2.5 text-xs sm:text-sm font-semibold text-sky-300 transition-colors"
+                >
+                  <Code2 className="h-4 w-4 text-sky-400" />
+                  JS Quick References
+                  <Sparkles className="h-3.5 w-3.5 text-sky-400" />
                 </Link>
               </motion.div>
               <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
