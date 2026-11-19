@@ -3,6 +3,7 @@ import './globals.css';
 import Navbar from '@/components/Navbar';
 import { AuthProvider } from '@/context/AuthContext';
 import AuthModal from '@/components/AuthModal';
+import FloatingAssistant from '@/components/chat/FloatingAssistant';
 
 export const metadata: Metadata = {
   title: 'SkillVault — Developer Learning Operating System',
@@ -30,6 +31,7 @@ export default function RootLayout({
           <Navbar />
           <main>{children}</main>
           <AuthModal />
+          <FloatingAssistant />
         </AuthProvider>
       </body>
     </html>
