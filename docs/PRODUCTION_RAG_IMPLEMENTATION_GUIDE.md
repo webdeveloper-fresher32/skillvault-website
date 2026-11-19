@@ -251,11 +251,19 @@ CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
 
 ### 8.2 Production Environment Variables (`backend-ai/.env.production.example`)
-In your cloud hosting dashboard (Render / Railway / AWS):
-- `DATABASE_URL`: Your managed PostgreSQL connection URL (e.g. Neon with pgvector).
-- `LLM_BASE_URL`: `https://api.groq.com/openai/v1` (or `https://api.x.ai/v1`).
-- `LLM_API_KEY`: Your cloud API key (e.g. `gsk_...` or `xai-...`).
-- `CHAT_MODEL`: `qwen/qwen3.8-27b` (or `grok-2-mini` / `gpt-4o-mini`).
+In your cloud hosting dashboard (Render / Fly.io / Railway):
+- `DATABASE_URL`: `postgresql://neondb_owner:npg_9NKSpLyAP6gw@ep-cold-bread-b4mv005l-pooler.c-6.us-east-2.aws.neon.tech/neondb?sslmode=require`
+- `LLM_BASE_URL`: `https://api.groq.com/openai/v1`
+- `LLM_API_KEY`: `gsk_your_groq_api_key_here`
+- `CHAT_MODEL`: `qwen/qwen3.8-27b`
+- `EMBEDDING_PROVIDER`: `fastembed` (in-process ONNX `nomic-embed-text-v1.5`, 768 dim, ~8ms CPU, $0 cost)
+- `MODEL_CACHE_DIR`: `/tmp/models`
+- `PORT`: `8000`
+
+### 8.3 Deployment Configuration Files Provided
+1. **Render (`backend-ai/render.yaml`)**: One-click blueprint with pre-configured health checks and environment settings.
+2. **Fly.io (`backend-ai/fly.ai.toml`)**: Dedicated configuration matching your existing `skillvault-api.fly.dev` architecture with 1GB RAM machine and HTTPS auto-routing.
+3. **Neon Cloud Database (`scripts/sync_to_neon.py`)**: Automatic synchronizer keeping all 4,842 chunks and HNSW indexes live on Neon.
 
 ---
 

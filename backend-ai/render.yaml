@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: skillvault-ai
+    runtime: docker
+    dockerfilePath: Dockerfile
+    plan: starter
+    region: oregon
+    envVars:
+      - key: PORT
+        value: 8000
+      - key: DATABASE_URL
+        value: postgresql://neondb_owner:npg_9NKSpLyAP6gw@ep-cold-bread-b4mv005l-pooler.c-6.us-east-2.aws.neon.tech/neondb?sslmode=require
+      - key: LLM_BASE_URL
+        value: https://api.groq.com/openai/v1
+      - key: LLM_API_KEY
+        sync: false
+      - key: CHAT_MODEL
+        value: qwen/qwen3.8-27b
+      - key: EMBEDDING_PROVIDER
+        value: fastembed
+      - key: MODEL_CACHE_DIR
+        value: /tmp/models

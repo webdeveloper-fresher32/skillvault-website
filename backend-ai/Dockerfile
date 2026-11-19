@@ -12,8 +12,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends gcc && rm -rf /
 COPY requirements.txt .
 RUN pip install --no-cache-dir --user -r requirements.txt
 
-# Pre-download FlashRank ONNX model during docker build to guarantee 0ms cold-starts
-RUN python -c "from flashrank import Ranker; Ranker(model_name='ms-marco-MiniLM-L-12-v2', cache_dir='/build/models')"
+# Pre-download FlashRank & FastEmbed ONNX models during build to guarantee 0ms cold-starts
+RUN python -c "from flashrank import Ranker; Ranker(model_name='ms-marco-MiniLM-L-12-v2', cache_dir='/build/models')" && \
+    python -c "from fastembed import TextEmbedding; TextEmbedding(model_name='nomic-ai/nomic-embed-text-v1.5', cache_dir='/build/models')"
 
 # Stage 2: Minimal Hardened Runtime
 FROM python:3.11-slim AS runner

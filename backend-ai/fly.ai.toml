@@ -1,0 +1,26 @@
+app = 'skillvault-ai'
+primary_region = 'iad'
+
+[build]
+  dockerfile = 'Dockerfile'
+
+[env]
+  PORT = '8000'
+  DATABASE_URL = 'postgresql://neondb_owner:npg_9NKSpLyAP6gw@ep-cold-bread-b4mv005l-pooler.c-6.us-east-2.aws.neon.tech/neondb?sslmode=require'
+  LLM_BASE_URL = 'https://api.groq.com/openai/v1'
+  CHAT_MODEL = 'qwen/qwen3.8-27b'
+  EMBEDDING_PROVIDER = 'fastembed'
+  MODEL_CACHE_DIR = '/tmp/models'
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ['app']
+
+[[vm]]
+  memory = '1024mb'
+  cpu_kind = 'shared'
+  cpus = 1
