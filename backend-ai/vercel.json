@@ -1,5 +1,11 @@
 {
   "version": 2,
+  "functions": {
+    "api/index.py": {
+      "memory": 1024,
+      "maxDuration": 60
+    }
+  },
   "builds": [
     {
       "src": "api/index.py",
@@ -13,6 +19,8 @@
     }
   ],
   "env": {
-    "MODEL_CACHE_DIR": "/tmp/models"
+    "MODEL_CACHE_DIR": "/tmp/models",
+    "HF_HOME": "/tmp/huggingface",
+    "XDG_CACHE_HOME": "/tmp"
   }
 }
