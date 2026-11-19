@@ -17,3 +17,7 @@ langchain-ollama>=0.2.0
 langchain-openai>=0.2.0
 langchain-text-splitters>=0.3.0
 langgraph>=0.2.0
+
+# Document Parsers
+pypdf>=5.0.0
+fonttools>=4.50.0

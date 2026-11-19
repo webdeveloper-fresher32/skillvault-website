@@ -287,7 +287,39 @@ Both implementations exist side-by-side in `backend-ai/app/`:
 
 ---
 
-## 11. Runbook: How to Start the System
+## 11. PDF Ingestion & Retrieval Pipeline (`resources/pdfs`)
+
+The platform includes full support for ingesting and retrieving from enterprise PDFs, technical books, and guidebooks located in `resources/pdfs/`:
+
+### 11.1 Indexed PDF Catalog (3,989 Chunks)
+| Document Title | Pages | Chunks | Key Topics Covered |
+| :--- | :---: | :---: | :--- |
+| **SkillVault AI Assistant Masterclass** | 200 | 377 | Multi-Tenant RAG, SSE Streaming, HNSW vs IVFFlat, LangGraph |
+| **Angular From Theory To Practice** | 692 | 753 | Components, Directives, Dependency Injection, Routing |
+| **Angular for Enterprise Applications (2024)** | 593 | 591 | Micro-frontends, State Management, Architecture Patterns |
+| **Spring Boot 3 Official Reference Guide** | 973 | 1,105 | Auto-configuration, Actuator, WebFlux, Cloud Integration |
+| **Spring Boot Up & Running (O'Reilly)** | 330 | 355 | Cloud-native Java/Kotlin, Reactive APIs, Observability |
+| **Spring Security In Action (Manning)** | 562 | 617 | AuthenticationManager, Provider, OAuth2, Filter Chains |
+| **The Ultimate Guide to Angular Evolution (v19)** | 182 | 191 | Angular 19 Signals, Standalone Components, SSR Hydration |
+
+### 11.2 Ingestion & Retrieval Commands
+```bash
+cd backend-ai
+source venv/bin/activate
+
+# 1. Ingest all PDFs (Idempotent - skips already indexed files)
+python -m app.rag_langchain.pdf_ingestion resources/pdfs
+
+# 2. Ingest a specific single PDF
+python -m app.rag_langchain.pdf_ingestion resources/pdfs Spring_Security_In_Action_Manning.pdf
+
+# 3. Test PDF Hybrid Retrieval (HNSW + BM25 + FlashRank Reranker)
+python test_search_pdf.py
+```
+
+---
+
+## 12. Runbook: How to Start the System
 
 ### 1. Ensure Local PostgreSQL & Ollama are Running
 ```bash
