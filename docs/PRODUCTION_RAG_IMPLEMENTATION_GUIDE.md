@@ -272,7 +272,22 @@ Located in `frontend/src/`:
 
 ---
 
-## 9. Runbook: How to Start the System
+## 10. Dual Architecture: Native Python & LangChain
+
+Both implementations exist side-by-side in `backend-ai/app/`:
+
+| Component | Native Python (`app/rag/`) | LangChain (`app/rag_langchain/`) |
+| :--- | :--- | :--- |
+| **AST Chunker** | `app/rag/ast_chunker.py` (Custom AST / Regex) | `app/rag_langchain/ast_chunker.py` (Extends `TextSplitter`, returns `Document`s) |
+| **Retriever** | `app/rag/hybrid_retriever.py` (Raw `AsyncOpenAI` + asyncpg) | `app/rag_langchain/hybrid_retriever.py` (Extends `BaseRetriever`, returns `List[Document]`) |
+| **Ingestion** | `app/rag/ingestion.py` (Direct batching & raw vectors) | `app/rag_langchain/ingestion.py` (Batches `Document`s + `Embeddings.aembed_documents`) |
+| **Chain / LCEL** | Direct streaming in `app/main.py` | `app/rag_langchain/chain.py` (`prompt \| chat_model \| StrOutputParser`) |
+| **Chat Service** | Alternative endpoint / fallback | **Active in `app/main.py`** powering the live SSE chat assistant |
+| **Verification** | `python backend-ai/test_search.py` | `python backend-ai/test_search_langchain.py` |
+
+---
+
+## 11. Runbook: How to Start the System
 
 ### 1. Ensure Local PostgreSQL & Ollama are Running
 ```bash
