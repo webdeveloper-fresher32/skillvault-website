@@ -13,22 +13,25 @@ from app.schemas.rag import SearchRequest, ChatStreamRequest
 
 load_dotenv()
 
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
+# Dual Local Ollama (Default) <-> Cloud Provider (Groq / Grok / OpenAI) Configuration
+LLM_BASE_URL = os.getenv("LLM_BASE_URL", os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1"))
+LLM_API_KEY = os.getenv("LLM_API_KEY", os.getenv("OPENAI_API_KEY", "ollama"))
 CHAT_MODEL = os.getenv("CHAT_MODEL", "llama3.2")
 
 retriever: HybridRAGRetriever = None
-ollama_client: AsyncOpenAI = None
+llm_client: AsyncOpenAI = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Initialize connection pool & FlashRank model once at startup
-    global retriever, ollama_client
+    global retriever, llm_client
     print("🚀 Starting SkillVault AI Microservice...")
     retriever = HybridRAGRetriever()
     await retriever.initialize()
-    ollama_client = AsyncOpenAI(base_url=OLLAMA_BASE_URL, api_key="ollama")
-    print("   ✅ Service ready with local Ollama & FlashRank.")
+    llm_client = AsyncOpenAI(base_url=LLM_BASE_URL, api_key=LLM_API_KEY)
+    provider_type = "Cloud API" if "api." in LLM_BASE_URL else "Local Ollama"
+    print(f"   ✅ Service ready with {provider_type} ({CHAT_MODEL}) & FlashRank.")
     yield
     # Cleanup on shutdown
     if retriever:
@@ -54,9 +57,11 @@ app.add_middleware(
 
 @app.get("/health")
 async def health():
+    provider = "cloud_api" if "api." in LLM_BASE_URL else "local_ollama"
     return {
         "status": "healthy",
         "service": "SkillVault AI Service",
+        "provider": provider,
         "models": {
             "embeddings": os.getenv("EMBEDDING_MODEL", "nomic-embed-text"),
             "chat": CHAT_MODEL
@@ -139,8 +144,8 @@ async def generate_rag_stream(
         f"Question: {query}"
     )
 
-    # 4. Stream tokens from local Ollama
-    stream = await ollama_client.chat.completions.create(
+    # 4. Stream tokens from LLM (Local Ollama or Cloud API)
+    stream = await llm_client.chat.completions.create(
         model=CHAT_MODEL,
         messages=[
             {"role": "system", "content": system_prompt},

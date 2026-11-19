@@ -206,19 +206,60 @@ Located at `backend-ai/app/rag/hybrid_retriever.py`:
 
 ---
 
-## 7. FastAPI Real-Time Streaming Service
+## 7. FastAPI Real-Time Streaming Service & Multi-Provider Architecture
 
 Located at `backend-ai/app/main.py`:
-- Protocol: Server-Sent Events (SSE) via `POST /api/v1/rag/chat/stream`.
-- Emits typed frames:
+- **Dual Mode Support**:
+  - **Local Development**: Connects to local Ollama (`llama3.2` + `nomic-embed-text`) with zero API costs.
+  - **Cloud Production**: Switches automatically to cloud LLM providers (Groq, Grok xAI, or OpenAI) when `LLM_BASE_URL` and `LLM_API_KEY` are configured.
+- **Protocol**: Server-Sent Events (SSE) via `POST /api/v1/rag/chat/stream`.
+- **Emits Typed Frames**:
   1. `event: citations` $\rightarrow$ Metadata for verified document titles, section headers, and FlashRank scores.
-  2. `event: token` $\rightarrow$ Real-time delta tokens from local `llama3.2`.
+  2. `event: token` $\rightarrow$ Real-time delta tokens from the active LLM.
   3. `event: done` $\rightarrow$ Stream termination.
 - Bypasses reverse-proxy buffering via `X-Accel-Buffering: no`.
 
 ---
 
-## 8. Next.js 16 Frontend UI Components
+## 8. Production Cloud Deployment (Docker & Hosting)
+
+For production deployment (Render, Fly.io, Railway, AWS ECS, or Kubernetes):
+
+### 8.1 Multi-Stage Dockerfile (`backend-ai/Dockerfile`)
+The service includes a multi-stage Docker build that pre-downloads the FlashRank ONNX model during the image build stage to eliminate runtime cold starts:
+
+```dockerfile
+# Stage 1: Build & Pre-cache FlashRank Model
+FROM python:3.11-slim AS builder
+WORKDIR /build
+RUN apt-get update && apt-get install -y --no-install-recommends gcc && rm -rf /var/lib/apt/lists/*
+COPY requirements.txt .
+RUN pip install --no-cache-dir --user -r requirements.txt
+RUN python -c "from flashrank import Ranker; Ranker(model_name='ms-marco-MiniLM-L-12-v2', cache_dir='/build/models')"
+
+# Stage 2: Minimal Hardened Runtime
+FROM python:3.11-slim AS runner
+WORKDIR /app
+RUN groupadd -g 1001 appgroup && useradd -u 1001 -g appgroup -s /bin/sh appuser
+COPY --from=builder /root/.local /home/appuser/.local
+COPY --from=builder /build/models /tmp/models
+COPY . .
+ENV PATH=/home/appuser/.local/bin:$PATH PYTHONUNBUFFERED=1 MODEL_CACHE_DIR=/tmp/models PORT=8000
+USER appuser
+EXPOSE 8000
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+```
+
+### 8.2 Production Environment Variables (`backend-ai/.env.production.example`)
+In your cloud hosting dashboard (Render / Railway / AWS):
+- `DATABASE_URL`: Your managed PostgreSQL connection URL (e.g. Neon with pgvector).
+- `LLM_BASE_URL`: `https://api.groq.com/openai/v1` (or `https://api.x.ai/v1`).
+- `LLM_API_KEY`: Your cloud API key (e.g. `gsk_...` or `xai-...`).
+- `CHAT_MODEL`: `qwen/qwen3.8-27b` (or `grok-2-mini` / `gpt-4o-mini`).
+
+---
+
+## 9. Next.js 16 Frontend UI Components
 
 Located in `frontend/src/`:
 1. **Hook (`lib/useAIAssistant.ts`)**: Native `fetch` + `ReadableStream` parser handling streaming frames with cancellation via `AbortController`.
