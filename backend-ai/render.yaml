@@ -9,7 +9,7 @@ services:
       - key: PORT
         value: 8000
       - key: DATABASE_URL
-        value: postgresql://neondb_owner:npg_9NKSpLyAP6gw@ep-cold-bread-b4mv005l-pooler.c-6.us-east-2.aws.neon.tech/neondb?sslmode=require
+        sync: false
       - key: LLM_BASE_URL
         value: https://api.groq.com/openai/v1
       - key: LLM_API_KEY

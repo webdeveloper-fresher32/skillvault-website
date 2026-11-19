@@ -29,12 +29,15 @@ target/
 *.swp
 *.swo
 
-# Environment
+# Environment & Secrets
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*
+!.env.example
+*.key
+*.pem
+credentials*
+*credentials*
+serviceAccount*.json
 
 # Python virtual environments
 .venv/

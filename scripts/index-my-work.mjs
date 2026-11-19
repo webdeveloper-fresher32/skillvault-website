@@ -7,7 +7,11 @@ const { neon } = pkg;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://neondb_owner:npg_9NKSpLyAP6gw@ep-cold-bread-b4mv005l-pooler.c-6.us-east-2.aws.neon.tech/neondb?sslmode=require';
+const DATABASE_URL = process.env.DATABASE_URL;
+if (!DATABASE_URL) {
+  console.error('ERROR: DATABASE_URL environment variable is required.');
+  process.exit(1);
+}
 const sql = neon(DATABASE_URL);
 
 const contentDir = path.resolve(__dirname, '..', 'content', 'My-Work');

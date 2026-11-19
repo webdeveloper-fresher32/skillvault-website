@@ -252,7 +252,7 @@ CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
 
 ### 8.2 Production Environment Variables (`backend-ai/.env.production.example`)
 In your cloud hosting dashboard (Render / Fly.io / Railway):
-- `DATABASE_URL`: `postgresql://neondb_owner:npg_9NKSpLyAP6gw@ep-cold-bread-b4mv005l-pooler.c-6.us-east-2.aws.neon.tech/neondb?sslmode=require`
+- `DATABASE_URL`: `postgresql://neondb_owner:YOUR_NEON_PASSWORD@ep-cold-bread-b4mv005l-pooler.c-6.us-east-2.aws.neon.tech/neondb?sslmode=require`
 - `LLM_BASE_URL`: `https://api.groq.com/openai/v1`
 - `LLM_API_KEY`: `gsk_your_groq_api_key_here`
 - `CHAT_MODEL`: `qwen/qwen3.8-27b`

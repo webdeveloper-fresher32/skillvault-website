@@ -77,13 +77,14 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS configuration for Next.js frontend
+# Permissive CORS configuration supporting localhost, Vercel deployments, and production domains
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origin_regex=r".*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
 
 
@@ -172,6 +173,12 @@ async def generate_rag_stream(
     yield "event: done\ndata: {}\n\n"
 
 
+@app.options("/api/v1/rag/chat/stream")
+@app.options("/api/v1/rag/search")
+async def options_rag_endpoints():
+    return {"status": "ok"}
+
+
 @app.post("/api/v1/rag/chat/stream")
 async def chat_stream_endpoint(req: ChatStreamRequest):
     """Server-Sent Events (SSE) streaming endpoint."""
@@ -185,6 +192,9 @@ async def chat_stream_endpoint(req: ChatStreamRequest):
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
-            "X-Accel-Buffering": "no"  # Bypasses NGINX reverse-proxy buffering
+            "X-Accel-Buffering": "no",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "POST, OPTIONS",
+            "Access-Control-Allow-Headers": "*"
         }
     )

@@ -2,8 +2,13 @@ import asyncio
 import asyncpg
 from pgvector.asyncpg import register_vector
 
-LOCAL_DB = "postgresql://postgres:0000@localhost:5432/skillvault_local"
-NEON_DB = "postgresql://neondb_owner:npg_9NKSpLyAP6gw@ep-cold-bread-b4mv005l-pooler.c-6.us-east-2.aws.neon.tech/neondb?sslmode=require"
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+LOCAL_DB = os.getenv("LOCAL_DATABASE_URL", "postgresql://postgres:0000@localhost:5432/skillvault_local")
+NEON_DB = os.getenv("NEON_DATABASE_URL", os.getenv("DATABASE_URL"))
 BATCH_SIZE = 500
 
 async def sync():

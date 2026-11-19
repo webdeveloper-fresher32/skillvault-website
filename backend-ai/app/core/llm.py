@@ -26,7 +26,10 @@ def get_embeddings_model() -> Embeddings:
     if EMBEDDING_PROVIDER == "fastembed" or (EMBEDDING_PROVIDER == "auto" and "api." in LLM_BASE_URL):
         try:
             from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
-            return FastEmbedEmbeddings(model_name="nomic-ai/nomic-embed-text-v1.5")
+            return FastEmbedEmbeddings(
+                model_name="nomic-ai/nomic-embed-text-v1.5",
+                cache_dir=os.getenv("MODEL_CACHE_DIR", "/tmp/models")
+            )
         except Exception:
             pass
 

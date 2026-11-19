@@ -18,7 +18,9 @@ export interface ChatMessage {
   isStreaming?: boolean;
 }
 
-const AI_API_URL = process.env.NEXT_PUBLIC_AI_API_URL || 'http://localhost:8000';
+// If NEXT_PUBLIC_AI_API_URL is configured (e.g. custom external service), use it.
+// Otherwise, default to relative '/api/rag/chat/stream' through Next.js proxy (guarantees 0 CORS issues in browser).
+const AI_API_URL = process.env.NEXT_PUBLIC_AI_API_URL || '';
 
 export function useAIAssistant() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -60,7 +62,11 @@ export function useAIAssistant() {
     abortControllerRef.current = controller;
 
     try {
-      const response = await fetch(`${AI_API_URL}/api/v1/rag/chat/stream`, {
+      const targetEndpoint = AI_API_URL
+        ? `${AI_API_URL.replace(/\/$/, '')}/api/v1/rag/chat/stream`
+        : '/api/rag/chat/stream';
+
+      const response = await fetch(targetEndpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
