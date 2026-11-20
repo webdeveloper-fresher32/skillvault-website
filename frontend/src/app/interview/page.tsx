@@ -24,6 +24,12 @@ import {
   Briefcase
 } from 'lucide-react';
 import { fetchInterviewGuides, InterviewGuide } from '@/lib/api';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Skeleton } from '@/components/ui/Skeleton';
 
 // Curated high-yield tags mapping for top tech tracks to enhance interview study cards
 const TECH_TAGS_MAP: Record<string, string[]> = {
@@ -57,7 +63,6 @@ const TECH_TAGS_MAP: Record<string, string[]> = {
   aptitude: ['Behavioral STAR Method', 'Conflict Resolution', 'Salary Negotiation', 'Leadership Scenarios']
 };
 
-// Fallback high-priority curated interview tracks if API is loading
 const FALLBACK_GUIDES: InterviewGuide[] = [
   {
     id: 1,
@@ -249,75 +254,46 @@ export default function InterviewHubPage() {
   }, [guides]);
 
   return (
-    <div className="min-h-screen bg-[#06080e] text-slate-100 pb-24">
-      {/* 1. HERO HEADER */}
-      <section className="border-b border-white/[0.06] bg-[#080c14] px-4 py-14 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-5xl text-center">
-          <div className="inline-flex items-center gap-2 rounded-md border border-white/[0.08] bg-white/[0.03] px-3 py-1 text-xs font-mono text-sky-400 mb-4">
-            <Sparkles className="h-3.5 w-3.5 text-sky-400" />
-            <span>Senior Technical Interview Knowledge Vault</span>
-          </div>
-
-          <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl lg:text-5xl text-white">
+    <div className="min-h-screen bg-[#090b10] text-slate-100 pb-24">
+      {/* 1. ENTERPRISE HEADER */}
+      <PageHeader
+        breadcrumbs={[
+          { label: 'Platform', href: '/' },
+          { label: 'Interview Prep' },
+          { label: 'Master Guides' }
+        ]}
+        badge={
+          <Badge variant="primary" dot>
             Technical Interview Master Guides
-          </h1>
-
-          <p className="mx-auto mt-4 max-w-2xl text-xs sm:text-sm text-slate-400 leading-relaxed">
-            Battle-tested senior engineering questions, real-world code snippets, and architectural trade-offs organized across <strong className="text-white font-semibold">{guides.length}+ technology domains</strong>.
-          </p>
-
-          {/* Quick Metrics */}
-          <div className="mt-6 flex flex-wrap items-center justify-center gap-6 sm:gap-8 text-xs font-mono text-slate-400">
-            <div className="flex items-center gap-1.5">
-              <span className="flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
-              <span>{guides.length} Curated Tracks</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <CheckCircle2 className="h-3.5 w-3.5 text-sky-400" />
-              <span>1,200+ Verified Q&As</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <Code2 className="h-3.5 w-3.5 text-sky-400" />
-              <span>Edge Cases & Concurrency</span>
-            </div>
-          </div>
-
-          {/* Search Box */}
-          <div className="mx-auto mt-8 max-w-2xl relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
+          </Badge>
+        }
+        title="Senior Technical Interview Knowledge Vault"
+        description="Battle-tested senior engineering questions, real-world architecture trade-offs, and deep system internals across 30+ technology domains."
+        actions={
+          <div className="relative w-full sm:w-80">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-500" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search interview guides (e.g. Angular, Spring Boot, Kafka, AWS, DSA, SQL)..."
-              className="w-full rounded-lg border border-white/[0.08] bg-[#0c1019] pl-11 pr-4 py-2.5 text-xs sm:text-sm text-white placeholder-slate-500 focus:border-sky-500/50 focus:outline-none transition-colors"
+              placeholder="Search guides (Angular, Spring, Kafka, AWS)..."
+              className="w-full rounded-lg border border-white/[0.08] bg-[#0f131c] pl-10 pr-4 py-2 text-xs sm:text-sm text-slate-200 placeholder-slate-500 focus:border-sky-500/50 focus:bg-[#141a26] focus:outline-none transition-colors"
             />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[11px] font-mono text-slate-400 hover:text-white bg-white/[0.06] px-2 py-0.5 rounded"
-              >
-                Clear
-              </button>
-            )}
           </div>
-        </div>
-      </section>
-
-      {/* 2. MAIN CONTENT AREA */}
-      <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 mt-10">
+        }
+      >
         {/* Category Pills Navigation */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-4 scrollbar-none">
+        <div className="flex items-center gap-1.5 overflow-x-auto pt-6 border-t border-white/[0.06] mt-6 scrollbar-none">
           {categories.map((cat) => {
             const isActive = selectedCategory === cat.name;
             return (
               <button
                 key={cat.name}
                 onClick={() => setSelectedCategory(cat.name)}
-                className={`relative shrink-0 flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-md transition-colors focus:outline-none cursor-pointer ${
+                className={`relative whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium transition-colors focus:outline-none cursor-pointer flex items-center gap-1.5 ${
                   isActive
                     ? 'text-sky-300 font-semibold'
-                    : 'bg-[#0c1019] text-slate-400 border border-white/[0.06] hover:text-white'
+                    : 'bg-[#0f131c] text-slate-400 hover:text-white hover:bg-[#141a26] border border-white/[0.06]'
                 }`}
               >
                 {isActive && (
@@ -328,178 +304,163 @@ export default function InterviewHubPage() {
                   />
                 )}
                 <span className="relative z-10">{cat.name}</span>
-                <span
-                  className={`relative z-10 text-[10px] px-1.5 py-0.2 rounded font-mono ${
-                    isActive
-                      ? 'bg-sky-500/20 text-sky-300'
-                      : 'bg-white/[0.04] text-slate-500'
-                  }`}
-                >
+                <span className={`relative z-10 text-[10px] px-1.5 py-0.2 rounded font-mono ${isActive ? 'bg-sky-500/20 text-sky-300' : 'bg-white/[0.04] text-slate-500'}`}>
                   {cat.count}
                 </span>
               </button>
             );
           })}
         </div>
+      </PageHeader>
 
+      {/* 2. MAIN CONTENT AREA */}
+      <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 mt-8">
         {/* High-Yield Top Picks (Visible when on "All" and no search) */}
         {selectedCategory === 'All' && !searchQuery.trim() && featuredPicks.length > 0 && (
-          <div className="mt-8 mb-12">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-300 font-mono">
+          <div className="mb-10">
+            <div className="flex items-center justify-between mb-4 pb-2 border-b border-white/[0.06]">
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-slate-300 font-mono">
                 <Zap className="h-3.5 w-3.5 text-amber-400" />
                 <span>Frequently Interviewed Senior Tracks</span>
               </div>
-              <span className="text-xs text-slate-500 font-mono">Essential Focus</span>
+              <span className="text-xs text-slate-500 font-mono">Curated Selection</span>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {featuredPicks.map((pick) => (
-                <motion.div
+                <Link
                   key={pick.id}
-                  whileHover={{ y: -4, borderColor: 'rgba(56, 189, 248, 0.35)' }}
-                  className="rounded-xl border border-white/[0.08] bg-[#0a0e17] transition-colors"
+                  href={pick.url}
+                  className="group flex flex-col justify-between h-full rounded-xl border border-white/[0.08] bg-[#0f131c] hover:bg-[#141a26] hover:border-sky-500/30 p-5 transition-all duration-200"
                 >
-                  <Link
-                    href={pick.url}
-                    className="group p-5 flex flex-col justify-between h-full"
-                  >
-                    <div>
-                      <div className="flex items-center justify-between text-xs mb-3">
-                        <span className="font-semibold text-sky-400 bg-sky-500/10 px-2 py-0.5 rounded border border-sky-500/20 text-[11px] font-mono">
-                          {pick.category}
-                        </span>
-                        <span className="text-slate-500 flex items-center gap-1 font-mono text-[11px]">
-                          <Clock className="h-3 w-3" />
-                          {pick.estimatedMinutes || 30}m
-                        </span>
-                      </div>
-
-                      <h3 className="font-bold text-white text-sm group-hover:text-sky-400 transition-colors line-clamp-2">
-                        {pick.courseTitle}
-                      </h3>
-
-                      <p className="mt-2 text-xs text-slate-400 line-clamp-2 leading-relaxed">
-                        {pick.summary || `Senior technical interview drilling guide for ${pick.courseTitle}.`}
-                      </p>
+                  <div>
+                    <div className="flex items-center justify-between text-xs mb-3">
+                      <Badge variant="primary">
+                        {pick.category}
+                      </Badge>
+                      <span className="text-slate-500 flex items-center gap-1 font-mono text-[11px]">
+                        <Clock className="h-3 w-3" />
+                        {pick.estimatedMinutes || 30}m
+                      </span>
                     </div>
 
-                    <div className="mt-4 pt-3 border-t border-white/[0.06] flex items-center justify-between text-xs font-semibold text-sky-400 group-hover:text-sky-300">
-                      <span>Study Master Q&A</span>
-                      <ArrowRight className="h-3 w-3 group-hover:translate-x-0.5 transition-transform" />
-                    </div>
-                  </Link>
-                </motion.div>
+                    <h3 className="font-semibold text-white text-sm group-hover:text-sky-400 transition-colors line-clamp-2">
+                      {pick.courseTitle}
+                    </h3>
+
+                    <p className="mt-2 text-xs text-slate-400 line-clamp-2 leading-relaxed">
+                      {pick.summary || `Senior technical interview drilling guide for ${pick.courseTitle}.`}
+                    </p>
+                  </div>
+
+                  <div className="mt-4 pt-3 border-t border-white/[0.06] flex items-center justify-between text-xs font-medium text-sky-400 group-hover:translate-x-0.5 transition-transform">
+                    <span>Study Master Q&A</span>
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </div>
+                </Link>
               ))}
             </div>
           </div>
         )}
 
         {/* Results Header */}
-        <div className="mt-8 flex items-center justify-between pb-3 border-b border-white/[0.06]">
-          <div className="flex items-center gap-2 text-xs font-semibold text-slate-300 font-mono">
-            <Briefcase className="h-3.5 w-3.5 text-sky-400" />
-            <span>
-              {selectedCategory === 'All' ? 'All Interview Guides' : `${selectedCategory} Tracks`}
-            </span>
-            <span className="text-slate-500">({filteredGuides.length} available)</span>
+        <div className="flex items-center justify-between pb-3 border-b border-white/[0.06] mb-6">
+          <div className="flex items-center gap-2 text-xs font-mono text-slate-400">
+            <span className="font-semibold text-slate-200">{filteredGuides.length}</span>
+            <span>Interview Guides Ready</span>
           </div>
-          {searchQuery && (
-            <span className="text-xs text-slate-400 font-mono">
-              Matching <span className="text-white font-medium">"{searchQuery}"</span>
-            </span>
-          )}
+          <span className="text-xs font-mono text-slate-500">Includes Code & Edge-Cases</span>
         </div>
 
-        {/* Cards Grid */}
-        {filteredGuides.length === 0 ? (
-          <div className="py-20 text-center rounded-xl border border-dashed border-white/[0.08] mt-6">
-            <HelpCircle className="h-8 w-8 text-slate-600 mx-auto mb-3" />
-            <h3 className="text-sm font-semibold text-white">No interview guides found</h3>
-            <p className="mt-1 text-xs text-slate-400 max-w-sm mx-auto">
-              No tracks match your current search query "{searchQuery}". Try searching for another tech stack.
-            </p>
-            <button
-              onClick={() => {
-                setSearchQuery('');
-                setSelectedCategory('All');
-              }}
-              className="mt-4 px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold transition-colors cursor-pointer"
-            >
-              Reset Filters
-            </button>
+        {/* Guides Grid */}
+        {loading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="rounded-xl border border-white/[0.08] bg-[#0f131c] p-5 space-y-4">
+                <Skeleton className="h-5 w-24" />
+                <Skeleton className="h-6 w-3/4" />
+                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-4 w-28" />
+              </div>
+            ))}
           </div>
+        ) : filteredGuides.length === 0 ? (
+          <EmptyState
+            icon={BookOpen}
+            title="No interview guides found"
+            description={
+              searchQuery
+                ? `No guides matching "${searchQuery}". Try searching for another topic like Angular, Spring, Kafka, or DSA.`
+                : 'There are currently no guides in this category.'
+            }
+            action={
+              <Button variant="secondary" size="sm" onClick={() => { setSearchQuery(''); setSelectedCategory('All'); }}>
+                Reset Filters
+              </Button>
+            }
+          />
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {filteredGuides.map((guide, idx) => {
-              const tags = TECH_TAGS_MAP[guide.courseSlug] || [
-                'Architecture Tradeoffs',
-                'Code Edge Cases',
-                'Core Concepts',
-                'Mock Scenarios'
-              ];
+              const tags = TECH_TAGS_MAP[guide.courseSlug] || [];
 
               return (
                 <motion.div
-                  key={`${guide.courseSlug}-${guide.lessonSlug}-${guide.id}`}
+                  key={guide.id}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.2, delay: Math.min(idx * 0.03, 0.3) }}
-                  whileHover={{ y: -3, borderColor: 'rgba(56, 189, 248, 0.35)' }}
-                  className="rounded-xl border border-white/[0.08] bg-[#0a0e17] p-5 transition-colors flex flex-col justify-between group"
+                  transition={{ duration: 0.2, delay: Math.min(idx * 0.02, 0.25) }}
+                  className="h-full"
                 >
-                  <div>
-                    {/* Top row: Category badge & duration */}
-                    <div className="flex items-center justify-between text-xs mb-3">
-                      <span className="rounded bg-white/[0.04] px-2 py-0.5 text-[11px] font-mono text-slate-300 border border-white/[0.06]">
-                        {guide.category}
-                      </span>
-                      <span className="flex items-center gap-1 text-[11px] text-slate-500 font-mono">
-                        <Clock className="h-3 w-3" />
-                        {guide.estimatedMinutes || 25} min
-                      </span>
-                    </div>
+                  <Link
+                    href={guide.url}
+                    prefetch={true}
+                    className="group flex flex-col justify-between h-full rounded-xl border border-white/[0.08] bg-[#0f131c] hover:bg-[#141a26] hover:border-sky-500/30 p-5 transition-all duration-200"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between mb-3 text-xs">
+                        <Badge variant="primary">
+                          {guide.category}
+                        </Badge>
+                        <span className="text-[11px] font-mono text-slate-400 flex items-center gap-1">
+                          <Clock className="h-3 w-3 text-slate-500" />
+                          ~{guide.estimatedMinutes || 30}m
+                        </span>
+                      </div>
 
-                    {/* Course Title & Lesson Title */}
-                    <div className="mb-2">
-                      <span className="text-[10px] font-mono font-semibold uppercase tracking-wider text-sky-400 block">
-                        {guide.courseTitle}
-                      </span>
-                      <h3 className="text-sm font-bold text-white group-hover:text-sky-400 transition-colors mt-0.5 line-clamp-2">
+                      <h3 className="text-base font-semibold text-white group-hover:text-sky-400 transition-colors">
                         {guide.title}
                       </h3>
+
+                      <p className="mt-2 text-xs text-slate-400 line-clamp-3 leading-relaxed">
+                        {guide.summary}
+                      </p>
+
+                      {/* Curated Tags */}
+                      {tags.length > 0 && (
+                        <div className="mt-4 flex flex-wrap gap-1.5">
+                          {tags.slice(0, 3).map((tag, tIdx) => (
+                            <span
+                              key={tIdx}
+                              className="rounded bg-[#141a26] border border-white/[0.06] px-2 py-0.5 text-[10px] font-mono text-slate-400"
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
 
-                    {/* Description */}
-                    <p className="text-xs text-slate-400 leading-relaxed line-clamp-2 mb-4">
-                      {guide.summary ||
-                        `Senior-level interview questions, concrete code examples, and technical tradeoffs for ${guide.courseTitle}.`}
-                    </p>
-
-                    {/* Key High-Yield Tags */}
-                    <div className="flex flex-wrap gap-1.5 mb-4">
-                      {tags.slice(0, 3).map((tag, i) => (
-                        <span
-                          key={i}
-                          className="text-[10px] font-mono px-2 py-0.5 rounded bg-sky-500/10 text-sky-300 border border-sky-500/20"
-                        >
-                          {tag}
-                        </span>
-                      ))}
+                    <div className="mt-6 pt-3 border-t border-white/[0.06] flex items-center justify-between text-xs">
+                      <span className="text-slate-500 font-mono text-[11px]">
+                        100+ Verified Q&A
+                      </span>
+                      <span className="flex items-center gap-1 font-medium text-sky-400 group-hover:translate-x-1 transition-transform">
+                        <span>Launch Guide</span>
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </span>
                     </div>
-                  </div>
-
-                  {/* Footer link button */}
-                  <div className="pt-3 border-t border-white/[0.06] flex items-center justify-between">
-                    <span className="text-[11px] text-slate-500 font-mono">Interactive Q&A + Notes</span>
-                    <Link
-                      href={guide.url}
-                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-sky-500/10 hover:bg-sky-500/20 text-sky-400 text-xs font-semibold border border-sky-500/25 transition-colors"
-                    >
-                      <span>Study Guide</span>
-                      <ArrowRight className="h-3 w-3 group-hover:translate-x-0.5 transition-transform" />
-                    </Link>
-                  </div>
+                  </Link>
                 </motion.div>
               );
             })}

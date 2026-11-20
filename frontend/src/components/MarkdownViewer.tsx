@@ -352,7 +352,7 @@ function MarkdownImage({ src, alt, ...props }: any) {
   if (hasError) {
     return (
       <span className="my-8 flex flex-col items-center w-full">
-        <span className="w-full max-w-xl rounded-xl border border-sky-500/30 bg-[#0a0e17] p-5 shadow-2xl flex flex-col items-center text-center">
+        <span className="w-full max-w-xl rounded-xl border border-sky-500/30 bg-[#0f131c] p-5 shadow-2xl flex flex-col items-center text-center">
           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-sky-500/10 border border-sky-500/20 text-sky-400 mb-2.5">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -372,7 +372,7 @@ function MarkdownImage({ src, alt, ...props }: any) {
         target="_blank"
         rel="noopener noreferrer"
         title="Click to open full-resolution diagram in a new tab"
-        className="relative group overflow-hidden rounded-xl border border-slate-700/60 bg-[#0a0e17] p-2 shadow-2xl transition-all duration-300 hover:border-sky-500/50 block cursor-zoom-in"
+        className="relative group overflow-hidden rounded-xl border border-slate-700/60 bg-[#0f131c] p-2 shadow-2xl transition-all duration-300 hover:border-sky-500/50 block cursor-zoom-in"
       >
         <img
           src={normalizedSrc}

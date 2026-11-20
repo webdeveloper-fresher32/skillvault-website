@@ -17,6 +17,10 @@ import {
   X
 } from 'lucide-react';
 import { fetchFlashcards } from '@/lib/api';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
 
 interface Flashcard {
   id: number;
@@ -187,72 +191,69 @@ export default function RevisionPage() {
   const categories = ['All', 'Backend & Java', 'System Design', 'Cloud & Infrastructure', 'Frontend', 'AI & LLMs'];
 
   return (
-    <div className="min-h-screen bg-[#06080e] text-slate-100 pb-20">
-      {/* 1. HEADER BAR */}
-      <section className="border-b border-white/[0.06] bg-[#080c14] py-10 px-4 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-3xl">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <div className="inline-flex items-center gap-2 rounded-md border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 text-xs font-mono text-amber-400 mb-3">
-                <Bookmark className="h-3.5 w-3.5 text-amber-400" />
-                <span>Spaced Repetition & Active Recall</span>
-              </div>
-              <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-                Engineering Flashcards & Core Principles
-              </h1>
-              <p className="mt-1 text-xs sm:text-sm text-slate-400 leading-relaxed">
-                Retain critical distributed systems principles, JVM internals, and cloud tradeoffs through active recall.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-2 font-mono text-xs text-slate-400 shrink-0">
-              <span className="text-emerald-400 font-semibold">{masteredIds.length}</span> / {cards.length} Mastered
-            </div>
-          </div>
-
-          {/* Category Filter Pills */}
-          <div className="mt-6 flex flex-wrap items-center gap-2 pt-4 border-t border-white/[0.06]">
-            {categories.map((cat) => {
-              const isActive = activeCategory === cat;
-              return (
-                <button
-                  key={cat}
-                  onClick={() => {
-                    setActiveCategory(cat);
-                    setCurrentIndex(0);
-                    setIsFlipped(false);
-                  }}
-                  className={`relative px-3 py-1 text-xs font-medium rounded-md transition-colors focus:outline-none cursor-pointer ${
-                    isActive
-                      ? 'text-amber-300 font-semibold'
-                      : 'bg-[#0c1019] text-slate-400 hover:text-white border border-white/[0.06]'
-                  }`}
-                >
-                  {isActive && (
-                    <motion.div
-                      layoutId="revision-category-active"
-                      className="absolute inset-0 rounded-md bg-amber-500/15 border border-amber-500/30"
-                      transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-                    />
-                  )}
-                  <span className="relative z-10">{cat}</span>
-                </button>
-              );
-            })}
-          </div>
+    <div className="min-h-screen bg-[#090b10] text-slate-100 pb-20">
+      {/* 1. ENTERPRISE HEADER */}
+      <PageHeader
+        breadcrumbs={[
+          { label: 'Platform', href: '/' },
+          { label: 'Revision' },
+          { label: 'Flashcards' }
+        ]}
+        badge={
+          <Badge variant="warning" dot>
+            Spaced Repetition & Recall
+          </Badge>
+        }
+        title="Engineering Flashcards & Core Principles"
+        description="Retain critical distributed systems principles, JVM memory models, and cloud architectural tradeoffs through active recall."
+        actions={
+          <Badge variant="success" dot>
+            {masteredIds.length} of {cards.length} Mastered
+          </Badge>
+        }
+      >
+        {/* Category Filter Pills */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pt-6 border-t border-white/[0.06] mt-6 scrollbar-none">
+          {categories.map((cat) => {
+            const isActive = activeCategory === cat;
+            return (
+              <button
+                key={cat}
+                onClick={() => {
+                  setActiveCategory(cat);
+                  setCurrentIndex(0);
+                  setIsFlipped(false);
+                }}
+                className={`relative whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium transition-colors focus:outline-none cursor-pointer ${
+                  isActive
+                    ? 'text-amber-300 font-semibold'
+                    : 'bg-[#0f131c] text-slate-400 hover:text-white hover:bg-[#141a26] border border-white/[0.06]'
+                }`}
+              >
+                {isActive && (
+                  <motion.div
+                    layoutId="revision-category-active"
+                    className="absolute inset-0 rounded-md bg-amber-500/15 border border-amber-500/30"
+                    transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                  />
+                )}
+                <span className="relative z-10">{cat}</span>
+              </button>
+            );
+          })}
         </div>
-      </section>
+      </PageHeader>
 
       {/* 2. FLASHCARD WORKSPACE */}
       <main className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 mt-8">
         {/* Progress bar */}
         <div className="flex items-center justify-between text-xs font-mono text-slate-400 mb-2">
           <span>Card {currentIndex + 1} of {filteredCards.length}</span>
-          <span className="text-slate-500">Shortcuts: Space to flip • Arrows to navigate • M to master</span>
+          <span className="text-slate-500 hidden sm:inline">Space: Flip • Arrows: Navigate • M: Master</span>
         </div>
-        <div className="h-1 w-full rounded-full bg-slate-800 overflow-hidden mb-6">
+        <div className="h-1 w-full rounded-full bg-[#141a26] overflow-hidden mb-6">
           <motion.div
-            className="h-full bg-amber-500 rounded-full"
+            className="h-full bg-amber-400 rounded-full"
             initial={false}
             animate={{ width: `${((currentIndex + 1) / filteredCards.length) * 100}%` }}
             transition={{ duration: 0.3 }}
@@ -262,31 +263,36 @@ export default function RevisionPage() {
         {/* Tactile Flashcard Card */}
         <motion.div
           key={`card-shell-${currentCard.id}`}
-          initial={{ opacity: 0, scale: 0.98 }}
+          initial={{ opacity: 0, scale: 0.99 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.2 }}
-          whileHover={{ y: -2 }}
           onClick={toggleFlip}
-          className="min-h-[340px] cursor-pointer rounded-xl border border-white/[0.08] bg-[#0a0e17] p-8 shadow-2xl flex flex-col justify-between hover:border-white/[0.18] transition-colors select-none"
+          className="min-h-[340px] cursor-pointer rounded-xl border border-white/[0.08] bg-[#0f131c] p-8 shadow-xl flex flex-col justify-between hover:border-white/[0.16] hover:bg-[#141a26] transition-all select-none"
         >
           {/* Card Meta Top */}
-          <div className="flex items-center justify-between text-xs">
-            <div className="flex items-center gap-2 font-mono">
-              <span className="font-semibold text-amber-400 uppercase tracking-wide text-[11px]">
+          <div className="flex items-center justify-between text-xs pb-4 border-b border-white/[0.06]">
+            <div className="flex items-center gap-2">
+              <Badge variant="warning">
                 {currentCard.category}
-              </span>
-              <span className="text-slate-600">•</span>
-              <span className="text-slate-400 text-[11px]">{currentCard.topic}</span>
+              </Badge>
+              <span className="text-slate-400 text-xs font-mono">{currentCard.topic}</span>
             </div>
 
-            <span className="flex items-center gap-1.5 text-slate-500 hover:text-slate-300 text-xs font-mono">
-              <RotateCw className="h-3 w-3" />
-              {isFlipped ? 'Answer Revealed' : 'Click or Space to Flip'}
-            </span>
+            <div className="flex items-center gap-2">
+              {isCurrentMastered && (
+                <Badge variant="success">
+                  Mastered
+                </Badge>
+              )}
+              <span className="flex items-center gap-1.5 text-slate-500 text-xs font-mono">
+                <RotateCw className="h-3 w-3" />
+                {isFlipped ? 'Answer' : 'Question'}
+              </span>
+            </div>
           </div>
 
           {/* Card Body with Smooth AnimatePresence */}
-          <div className="py-6 text-center">
+          <div className="py-8 text-center my-auto">
             <AnimatePresence mode="wait">
               {!isFlipped ? (
                 <motion.div
@@ -294,14 +300,14 @@ export default function RevisionPage() {
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -6 }}
-                  transition={{ duration: 0.18 }}
+                  transition={{ duration: 0.15 }}
                 >
-                  <span className="text-[10px] font-mono uppercase tracking-widest text-slate-500 block mb-3">
-                    Technical Concept / Architectural Question
+                  <span className="text-[10px] font-mono uppercase tracking-widest text-slate-500 block mb-3 font-semibold">
+                    Technical Principle & Question
                   </span>
-                  <h3 className="text-lg sm:text-xl font-bold text-white leading-relaxed max-w-2xl mx-auto">
+                  <p className="text-base sm:text-lg font-medium text-white max-w-xl mx-auto leading-relaxed">
                     {currentCard.front}
-                  </h3>
+                  </p>
                 </motion.div>
               ) : (
                 <motion.div
@@ -309,17 +315,19 @@ export default function RevisionPage() {
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -6 }}
-                  transition={{ duration: 0.18 }}
+                  transition={{ duration: 0.15 }}
+                  className="text-left"
                 >
-                  <span className="text-[10px] font-mono uppercase tracking-widest text-emerald-400 block mb-3">
-                    Production Rationale & Verified Answer
+                  <span className="text-[10px] font-mono uppercase tracking-widest text-amber-400 block mb-2 font-semibold">
+                    Engineering Solution & Internals
                   </span>
-                  <p className="text-sm sm:text-base text-slate-200 leading-relaxed max-w-2xl mx-auto font-sans">
+                  <p className="text-xs sm:text-sm text-slate-200 leading-relaxed font-sans mb-4">
                     {currentCard.back}
                   </p>
+
                   {currentCard.notes && (
-                    <div className="mt-4 inline-block text-left p-3 rounded-md bg-[#070a12] border border-white/[0.06] text-xs text-slate-400 max-w-xl">
-                      <span className="font-mono text-sky-400 font-semibold block mb-0.5">Practical Tip:</span>
+                    <div className="rounded-lg bg-[#090b10] border border-white/[0.06] p-3 text-xs text-slate-400 font-mono">
+                      <span className="text-amber-400 font-semibold block mb-0.5">Production Practice:</span>
                       {currentCard.notes}
                     </div>
                   )}
@@ -328,59 +336,48 @@ export default function RevisionPage() {
             </AnimatePresence>
           </div>
 
-          {/* Card Bottom Meta */}
-          <div className="flex items-center justify-between pt-4 border-t border-white/[0.06] text-xs">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                toggleMastery();
-              }}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border transition-colors cursor-pointer ${
-                isCurrentMastered
-                  ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
-                  : 'bg-white/[0.03] text-slate-400 border-white/[0.06] hover:text-white'
-              }`}
-            >
-              {isCurrentMastered ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Bookmark className="h-3.5 w-3.5" />}
-              <span>{isCurrentMastered ? 'Mastered' : 'Mark as Mastered (M)'}</span>
-            </button>
-
-            <span className="text-amber-400/90 font-mono text-[11px]">
-              {isFlipped ? 'Tap to view question' : 'Tap to reveal answer'}
-            </span>
+          {/* Card Bottom Bar */}
+          <div className="pt-4 border-t border-white/[0.06] flex items-center justify-between text-xs text-slate-500 font-mono">
+            <span>Card #{currentCard.id}</span>
+            <span>Click card or hit Space to toggle</span>
           </div>
         </motion.div>
 
-        {/* Controls Bar */}
-        <div className="mt-6 flex items-center justify-between">
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.97 }}
+        {/* Card Controls Bar */}
+        <div className="mt-6 flex items-center justify-between gap-3">
+          <Button
+            variant="secondary"
             onClick={handlePrev}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.08] bg-[#0c1019] hover:bg-[#121826] px-4 py-2 text-xs font-semibold text-slate-300 transition-colors cursor-pointer"
+            icon={<ChevronLeft className="h-4 w-4" />}
           >
-            <ChevronLeft className="h-4 w-4" />
             Previous
-          </motion.button>
+          </Button>
 
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.97 }}
-            onClick={toggleFlip}
-            className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-5 py-2 text-xs font-semibold text-amber-400 hover:bg-amber-500/20 transition-colors cursor-pointer"
-          >
-            {isFlipped ? 'Show Question' : 'Flip Card (Space)'}
-          </motion.button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={toggleFlip}
+              icon={<RotateCw className="h-3.5 w-3.5" />}
+            >
+              Flip
+            </Button>
 
-          <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.97 }}
+            <Button
+              variant={isCurrentMastered ? "secondary" : "outline"}
+              onClick={toggleMastery}
+              icon={<CheckCircle2 className={`h-4 w-4 ${isCurrentMastered ? 'text-emerald-400' : 'text-slate-500'}`} />}
+            >
+              {isCurrentMastered ? 'Mastered' : 'Mark Mastered'}
+            </Button>
+          </div>
+
+          <Button
+            variant="primary"
             onClick={handleNext}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 px-4 py-2 text-xs font-semibold text-white transition-colors cursor-pointer"
+            icon={<ChevronRight className="h-4 w-4" />}
           >
             Next
-            <ChevronRight className="h-4 w-4" />
-          </motion.button>
+          </Button>
         </div>
       </main>
     </div>

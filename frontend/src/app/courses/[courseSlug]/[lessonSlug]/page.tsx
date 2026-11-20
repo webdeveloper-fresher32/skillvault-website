@@ -434,7 +434,7 @@ export default function LessonPage({ params }: PageProps) {
   return (
     <>
       <TopScrollProgress />
-      <div className="flex min-h-[calc(100vh-4rem)] bg-[#06080e]">
+      <div className="flex min-h-[calc(100vh-4rem)] bg-[#090b10]">
       {/* Mobile Toggle Button */}
       <button
         onClick={() => setIsSidebarOpen(!isSidebarOpen)}
@@ -446,14 +446,14 @@ export default function LessonPage({ params }: PageProps) {
       {/* 1. FIXED LEFT SIDEBAR: Course Curriculum Accordion */}
       <aside
         style={{ width: isDesktop ? `${sidebarWidth}px` : undefined }}
-        className={`fixed top-16 bottom-0 left-0 z-30 border-r border-white/[0.08] bg-[#0a0e17] ${
+        className={`fixed top-16 bottom-0 left-0 z-30 border-r border-white/[0.08] bg-[#0f131c] ${
           isDragging ? '' : 'transition-[width,transform] duration-150'
         } lg:translate-x-0 overflow-y-auto ${
           isSidebarOpen ? 'translate-x-0 w-80 sm:w-88' : '-translate-x-full'
         }`}
       >
         {/* Course Title Header */}
-        <div className="p-4 border-b border-white/[0.06] bg-[#0c101a]/95 sticky top-0 z-10 backdrop-blur">
+        <div className="p-4 border-b border-white/[0.06] bg-[#141a26]/95 sticky top-0 z-10 backdrop-blur">
           <Link
             href={`/courses/${course.slug}`}
             className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-sky-400 transition-colors mb-2 font-mono"

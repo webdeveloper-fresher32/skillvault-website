@@ -1,7 +1,9 @@
 import os
+import re
 import json
+import asyncio
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Optional
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -121,26 +123,95 @@ async def search_endpoint(req: SearchRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+def classify_conversational_intent(query: str) -> Optional[str]:
+    """
+    Fast rule-based intent router (0ms latency, $0 cost).
+    Classifies conversational greetings, gratitude, and courtesies.
+    Prevents unnecessary database queries and avoids irrelevant PDF preface citations.
+    """
+    cleaned = re.sub(r"[^\w\s]", "", query.strip().lower()).strip()
+    words = cleaned.split()
+    if not words:
+        return "greeting"
+
+    # 1. Gratitude (e.g., 'thanks', 'thank you so much', 'thx a lot')
+    gratitude_phrases = {
+        "thanks", "thank you", "thank u", "thx", "ty", "thanks a lot",
+        "thank you so much", "many thanks", "appreciate it", "much appreciated"
+    }
+    if cleaned in gratitude_phrases or (len(words) <= 5 and any(w in words for w in ["thanks", "thank", "thx", "ty", "appreciated"])):
+        return "gratitude"
+
+    # 2. Greetings (e.g., 'hi', 'hello', 'hey there')
+    greetings = {
+        "hi", "hello", "hey", "hiya", "howdy", "good morning", "good afternoon",
+        "good evening", "hey there", "hello there", "what can you do", "who are you"
+    }
+    if cleaned in greetings or (len(words) <= 3 and any(w in words for w in ["hi", "hello", "hey", "howdy"])):
+        return "greeting"
+
+    # 3. Acknowledgments / Confirmations (e.g., 'ok', 'cool', 'got it')
+    acks = {"ok", "okay", "got it", "cool", "awesome", "great", "nice", "understood", "makes sense", "perfect"}
+    if cleaned in acks or (len(words) <= 3 and any(w in words for w in ["cool", "awesome", "got it", "perfect"])):
+        return "acknowledgment"
+
+    # 4. Farewells (e.g., 'bye', 'see you')
+    farewells = {"bye", "goodbye", "cya", "see you", "see ya", "have a good one"}
+    if cleaned in farewells:
+        return "farewell"
+
+    return None
+
+
 async def generate_rag_stream(
     query: str,
     tenant_id: str,
     top_k: int
 ) -> AsyncGenerator[str, None]:
     """
-    Dual-stage SSE streaming generator powered exclusively by LangChain:
-    1. Retrieves & reranks Top-K passages using LangChain HybridRAGRetriever (BaseRetriever).
-    2. Emits verified citations event frame.
-    3. Streams grounded answer tokens via LangChain LCEL pipeline (ChatPromptTemplate | ChatModel | StrOutputParser).
+    Production-grade Intent-Routed SSE Streaming Generator:
+    1. Fast-Path: Bypasses retrieval for conversational courtesies (e.g. 'thanks', 'hi')
+       with immediate response and empty citations.
+    2. Knowledge-Path: Executes LangChain Hybrid Retrieval (HNSW + BM25 + FlashRank),
+       filters low-confidence noise, emits verified citations, and streams grounded LCEL tokens.
     """
-    r, _, chain = await get_rag_components()
+    # 0. Intent Router Check
+    conversational_intent = classify_conversational_intent(query)
+    if conversational_intent:
+        # Emit empty citations so the UI shows ZERO PDF citations
+        yield "event: citations\ndata: []\n\n"
 
-    # 1. Retrieve & Rerank via LangChain
+        conversational_replies = {
+            "gratitude": "You're very welcome! 😊 If you have any more questions about React, Spring Boot, or Angular, feel free to ask anytime.",
+            "greeting": "Hello! 👋 I'm SkillVault AI, your software engineering mentor. What topic or concept would you like to explore today?",
+            "acknowledgment": "Sounds great! Whenever you're ready, let me know what you'd like to work on next.",
+            "farewell": "Goodbye! Have fun building and coding. Reach out whenever you need assistance!"
+        }
+        reply_text = conversational_replies.get(
+            conversational_intent,
+            "You're welcome! How can I assist you with your software engineering studies today?"
+        )
+
+        for word in reply_text.split(" "):
+            yield f"event: token\ndata: {json.dumps({'token': word + ' '})}\n\n"
+            await asyncio.sleep(0.015)
+
+        yield "event: done\ndata: {}\n\n"
+        return
+
+    # 1. Technical Query: Retrieve & Rerank via LangChain
+    r, _, chain = await get_rag_components()
     docs = await r._aget_relevant_documents(query=query, tenant_id=tenant_id, top_k=top_k)
+
+    # Filter out low-confidence noise chunks (FlashRank score < 0.15)
+    relevant_docs = [d for d in docs if float(d.metadata.get("score", 0.0)) >= 0.15]
+    if not relevant_docs and docs:
+        relevant_docs = [docs[0]] if float(docs[0].metadata.get("score", 0.0)) >= 0.05 else []
 
     citations = []
     context_blocks = []
 
-    for idx, doc in enumerate(docs, 1):
+    for idx, doc in enumerate(relevant_docs, 1):
         meta = doc.metadata
         title = meta.get("document_title", "Document")
         header = meta.get("section_header", "Section")
@@ -160,7 +231,7 @@ async def generate_rag_stream(
 
     context_str = "\n".join(context_blocks)
 
-    # 2. Emit initial citation frame (protocol format: event + data)
+    # 2. Emit verified citation frame
     yield f"event: citations\ndata: {json.dumps(citations)}\n\n"
 
     # 3. Stream grounded tokens via LCEL (prompt | chat_model | StrOutputParser)

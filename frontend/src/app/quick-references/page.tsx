@@ -318,9 +318,9 @@ function QuickReferencesContent() {
   const currentRevisedStatus = formatLastRevised(currentTimestamp);
 
   return (
-    <div className="h-[calc(100vh-4rem)] bg-[#06080e] text-slate-100 flex flex-col overflow-hidden selection:bg-sky-500/25 selection:text-sky-200">
+    <div className="h-[calc(100vh-4rem)] bg-[#090b10] text-slate-100 flex flex-col overflow-hidden selection:bg-sky-500/25 selection:text-sky-200">
       {/* Top Header / Cadence Banner */}
-      <section className="shrink-0 border-b border-white/[0.08] bg-[#0c1019]/90 backdrop-blur-md px-4 sm:px-6 lg:px-8 py-3.5 z-10">
+      <section className="shrink-0 border-b border-white/[0.08] bg-[#0f131c]/95 backdrop-blur-md px-4 sm:px-6 lg:px-8 py-3.5 z-10">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-sky-500/20 to-emerald-600/30 border border-sky-500/30 flex items-center justify-center text-sky-400 shadow-inner">
@@ -342,7 +342,7 @@ function QuickReferencesContent() {
           </div>
 
           {/* Quick Revision Tracker Progress Bar */}
-          <div className="flex flex-wrap items-center gap-4 bg-[#080b12] border border-white/[0.08] px-3.5 py-2 rounded-xl">
+          <div className="flex flex-wrap items-center gap-4 bg-[#141a26] border border-white/[0.08] px-3.5 py-2 rounded-xl">
             <div className="flex flex-col gap-1 min-w-[140px]">
               <div className="flex items-center justify-between text-xs">
                 <span className="text-slate-400 font-medium">Cadence Progress</span>
@@ -418,7 +418,7 @@ function QuickReferencesContent() {
 
         {/* Sidebar: Navigation & Filters (Fixed Left Column on Desktop) */}
         <aside
-          className={`fixed inset-y-0 left-0 z-50 md:z-20 w-80 sm:w-88 h-full bg-[#080b12] border-r border-white/[0.08] p-4 flex flex-col shrink-0 overflow-hidden transform transition-transform duration-200 ease-in-out md:relative md:translate-x-0 ${
+          className={`fixed inset-y-0 left-0 z-50 md:z-20 w-80 sm:w-88 h-full bg-[#0f131c] border-r border-white/[0.08] p-4 flex flex-col shrink-0 overflow-hidden transform transition-transform duration-200 ease-in-out md:relative md:translate-x-0 ${
             isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
           }`}
         >
@@ -693,7 +693,7 @@ function QuickReferencesContent() {
         {/* Main Content Area: Topic Revision Reader */}
         <main ref={mainContentRef} className="flex-1 h-full min-h-0 min-w-0 p-4 sm:p-6 lg:p-8 overflow-y-auto">
           {/* Topic Hero Card */}
-          <div className="rounded-2xl border border-white/[0.08] bg-[#0c1019] p-5 sm:p-7 shadow-xl mb-6 relative overflow-hidden">
+          <div className="rounded-2xl border border-white/[0.08] bg-[#0f131c] p-5 sm:p-7 shadow-xl mb-6 relative overflow-hidden">
             <div className={`absolute top-0 right-0 h-40 w-40 rounded-full blur-3xl pointer-events-none ${
               currentTopic.sectionSlug === 'nodejs'
                 ? 'bg-emerald-500/5'
@@ -900,7 +900,7 @@ function QuickReferencesContent() {
 
               {/* Execution Flow Steps */}
               {currentTopic.internals.flowSteps && currentTopic.internals.flowSteps.length > 0 && (
-                <div className="mb-4 bg-[#080b12] rounded-lg border border-white/[0.06] p-3.5">
+                <div className="mb-4 bg-[#141a26] rounded-lg border border-white/[0.06] p-3.5">
                   <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider mb-2 flex items-center gap-1.5">
                     <TrendingUp className="h-3.5 w-3.5 text-sky-400" />
                     Internal Execution Sequence
@@ -920,7 +920,7 @@ function QuickReferencesContent() {
 
               {/* Memory / Execution Diagram */}
               {currentTopic.internals.diagram && (
-                <div className="rounded-lg bg-[#06080e] border border-white/[0.08] p-3.5 overflow-x-auto">
+                <div className="rounded-lg bg-[#090b10] border border-white/[0.08] p-3.5 overflow-x-auto">
                   <div className="text-[10px] font-mono uppercase tracking-wider text-slate-500 mb-1.5">
                     Component Architecture & Execution Flow
                   </div>
@@ -962,7 +962,7 @@ function QuickReferencesContent() {
             </div>
 
             {/* Code Block */}
-            <div className="rounded-lg bg-[#06080e] border border-white/[0.08] overflow-hidden mb-3">
+            <div className="rounded-lg bg-[#090b10] border border-white/[0.08] overflow-hidden mb-3">
               <div className="flex items-center justify-between px-3.5 py-1.5 bg-white/[0.03] border-b border-white/[0.06] text-[11px] font-mono text-slate-400">
                 <span>node-example.js</span>
                 <span>Node.js / JavaScript</span>
@@ -985,7 +985,7 @@ function QuickReferencesContent() {
             )}
 
             {/* Expected Output Box */}
-            <div className="rounded-lg bg-[#080b12] border border-white/[0.06] p-3 mb-3">
+            <div className="rounded-lg bg-[#141a26] border border-white/[0.06] p-3 mb-3">
               <div className="text-[10px] font-mono uppercase tracking-wider text-slate-500 mb-1">
                 Expected Console Output
               </div>
@@ -1021,7 +1021,7 @@ function QuickReferencesContent() {
               </p>
 
               {currentTopic.nodeJsApplication.codeSnippet && (
-                <div className="rounded-lg bg-[#06080e] border border-white/[0.08] overflow-hidden">
+                <div className="rounded-lg bg-[#090b10] border border-white/[0.08] overflow-hidden">
                   <div className="flex items-center justify-between px-3 py-1 bg-white/[0.02] border-b border-white/[0.04] text-[10px] font-mono text-slate-500">
                     <span>backend-production-pattern.js</span>
                     <button
@@ -1057,7 +1057,7 @@ function QuickReferencesContent() {
               {currentTopic.interviewPrep.questions.map((q, idx) => (
                 <div
                   key={idx}
-                  className="rounded-lg bg-[#080b12] border border-white/[0.06] p-3.5 space-y-2"
+                  className="rounded-lg bg-[#141a26] border border-white/[0.06] p-3.5 space-y-2"
                 >
                   <div className="flex items-start gap-2">
                     <span className="h-5 w-5 rounded-full bg-amber-500/10 text-amber-400 text-xs font-bold flex items-center justify-center shrink-0 mt-0.5">
@@ -1133,7 +1133,7 @@ function QuickReferencesContent() {
             </ul>
 
             {/* 1-Line Definition */}
-            <div className="rounded-lg bg-[#06080e]/80 border border-white/[0.08] p-3 mb-3">
+            <div className="rounded-lg bg-[#090b10]/80 border border-white/[0.08] p-3 mb-3">
               <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider block mb-0.5">
                 One-Line Definition
               </span>
@@ -1210,7 +1210,7 @@ export default function QuickReferencesPage() {
   return (
     <React.Suspense
       fallback={
-        <div className="min-h-screen bg-[#06080e] flex items-center justify-center text-slate-400 text-sm">
+        <div className="min-h-screen bg-[#090b10] flex items-center justify-center text-slate-400 text-sm">
           <div className="flex items-center gap-2">
             <span className="h-2 w-2 rounded-full bg-sky-400 animate-pulse" />
             <span>Loading Quick References...</span>

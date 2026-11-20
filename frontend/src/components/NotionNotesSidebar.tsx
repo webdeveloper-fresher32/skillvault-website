@@ -460,7 +460,7 @@ export default function NotionNotesSidebar({
     <>
       <aside
         style={{ width: isOverlay ? '100%' : `${width}px` }}
-        className={`fixed top-16 bottom-0 right-0 z-40 flex flex-col bg-[#0a0e17] border-l border-white/[0.08] shadow-2xl text-slate-100 ${
+        className={`fixed top-16 bottom-0 right-0 z-40 flex flex-col bg-[#0f131c] border-l border-white/[0.08] shadow-2xl text-slate-100 ${
           isOverlay ? 'max-w-md w-full' : ''
         }`}
       >
@@ -612,7 +612,7 @@ export default function NotionNotesSidebar({
 
         {/* 2. BODY CONTENT: NOTES VIEW */}
         {activeTab === 'notes' && (
-          <div className="flex-1 flex flex-col min-h-0 bg-[#0a0e17]">
+          <div className="flex-1 flex flex-col min-h-0 bg-[#0f131c]">
             {/* Subtle Local Notice when unauthenticated */}
             {!isAuthenticated && (
               <div className="shrink-0 bg-[#0c1019] border-b border-white/[0.06] px-3.5 py-2 flex items-center justify-between gap-2 text-xs">
@@ -917,7 +917,7 @@ export default function NotionNotesSidebar({
 
         {/* 3. BODY CONTENT: OUTLINE VIEW */}
         {activeTab === 'outline' && (
-          <div className="flex-1 overflow-y-auto p-4 sm:p-5 bg-[#0a0e17]">
+          <div className="flex-1 overflow-y-auto p-4 sm:p-5 bg-[#0f131c]">
             <div className="pb-3 border-b border-white/[0.06] mb-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-xs font-bold text-slate-200 uppercase tracking-wider font-mono">
@@ -1033,7 +1033,7 @@ export default function NotionNotesSidebar({
             </div>
 
             {/* Search Input */}
-            <div className="p-4 border-b border-white/[0.06] bg-[#0a0e17]">
+            <div className="p-4 border-b border-white/[0.06] bg-[#0f131c]">
               <div className="relative">
                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
                 <input

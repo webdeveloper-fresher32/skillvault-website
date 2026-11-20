@@ -14,13 +14,14 @@ import {
   HelpCircle,
   Clock,
   ShieldCheck,
-  Cpu,
-  Cloud,
-  Network,
   ChevronRight,
   BookOpen
 } from 'lucide-react';
 import { fetchQuizzes } from '@/lib/api';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
 
 interface ScenarioQuestion {
   id: number;
@@ -254,62 +255,59 @@ export default function PracticePage() {
   const accuracyPct = Math.round((score / Math.max(1, filteredScenarios.length)) * 100);
 
   return (
-    <div className="min-h-screen bg-[#06080e] text-slate-100 pb-20">
-      {/* 1. HEADER BAR */}
-      <section className="border-b border-white/[0.06] bg-[#080c14] py-10 px-4 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-4xl">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <div className="inline-flex items-center gap-2 rounded-md border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 text-xs font-mono text-emerald-400 mb-3">
-                <Zap className="h-3.5 w-3.5 text-emerald-400" />
-                <span>Production Scenario Simulator</span>
-              </div>
-              <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-                Architectural Failure Scenarios & Drills
-              </h1>
-              <p className="mt-1 text-xs sm:text-sm text-slate-400 max-w-2xl leading-relaxed">
-                Test your instincts against real microservices race conditions, cloud network bottlenecks, and database deadlocks.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-3 shrink-0">
-              <div className="rounded-lg border border-white/[0.08] bg-[#0c1019] px-3.5 py-2 text-right">
-                <div className="text-[11px] font-mono text-slate-500 uppercase">Session Score</div>
-                <div className="text-lg font-bold text-white font-mono">
-                  {score} <span className="text-slate-500 text-xs font-normal">/ {filteredScenarios.length}</span>
-                </div>
+    <div className="min-h-screen bg-[#090b10] text-slate-100 pb-20">
+      {/* 1. ENTERPRISE HEADER */}
+      <PageHeader
+        breadcrumbs={[
+          { label: 'Platform', href: '/' },
+          { label: 'Practice' },
+          { label: 'Architectural Scenarios' }
+        ]}
+        badge={
+          <Badge variant="warning" dot>
+            Production Scenario Simulator
+          </Badge>
+        }
+        title="Architectural Failure Scenarios & Drills"
+        description="Test your engineering instincts against real microservices race conditions, cloud network bottlenecks, and distributed data consistency challenges."
+        actions={
+          <div className="flex items-center gap-3">
+            <div className="rounded-lg border border-white/[0.08] bg-[#0f131c] px-4 py-2 text-right">
+              <div className="text-[11px] font-mono text-slate-500 uppercase tracking-wide">Accuracy</div>
+              <div className="text-base font-bold text-white font-mono">
+                {score} <span className="text-slate-500 text-xs font-normal">/ {filteredScenarios.length}</span>
               </div>
             </div>
           </div>
-
-          {/* Category Filter Pills */}
-          <div className="mt-6 flex flex-wrap items-center gap-2 pt-4 border-t border-white/[0.06]">
-            {['All', 'Backend', 'Cloud & Infrastructure', 'System Design', 'Frontend'].map((cat) => {
-              const isActive = activeCategory === cat;
-              return (
-                <button
-                  key={cat}
-                  onClick={() => handleCategoryChange(cat)}
-                  className={`relative px-3 py-1 text-xs font-medium rounded-md transition-colors focus:outline-none cursor-pointer ${
-                    isActive
-                      ? 'text-sky-300 font-semibold'
-                      : 'bg-[#0c1019] text-slate-400 hover:text-white border border-white/[0.06]'
-                  }`}
-                >
-                  {isActive && (
-                    <motion.div
-                      layoutId="practice-category-active"
-                      className="absolute inset-0 rounded-md bg-sky-500/15 border border-sky-500/30"
-                      transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-                    />
-                  )}
-                  <span className="relative z-10">{cat}</span>
-                </button>
-              );
-            })}
-          </div>
+        }
+      >
+        {/* Category Filter Pills */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pt-6 border-t border-white/[0.06] mt-6 scrollbar-none">
+          {['All', 'Backend', 'Cloud & Infrastructure', 'System Design', 'Frontend'].map((cat) => {
+            const isActive = activeCategory === cat;
+            return (
+              <button
+                key={cat}
+                onClick={() => handleCategoryChange(cat)}
+                className={`relative whitespace-nowrap rounded-md px-3 py-1.5 text-xs font-medium transition-colors focus:outline-none cursor-pointer ${
+                  isActive
+                    ? 'text-sky-300 font-semibold'
+                    : 'bg-[#0f131c] text-slate-400 hover:text-white hover:bg-[#141a26] border border-white/[0.06]'
+                }`}
+              >
+                {isActive && (
+                  <motion.div
+                    layoutId="practice-category-active"
+                    className="absolute inset-0 rounded-md bg-sky-500/15 border border-sky-500/30"
+                    transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                  />
+                )}
+                <span className="relative z-10">{cat}</span>
+              </button>
+            );
+          })}
         </div>
-      </section>
+      </PageHeader>
 
       {/* 2. MAIN SCENARIO VIEW */}
       <main className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 mt-8">
@@ -318,203 +316,178 @@ export default function PracticePage() {
             /* COMPLETION DEBRIEF REPORT */
             <motion.div
               key="completed-screen"
-              initial={{ opacity: 0, scale: 0.96 }}
+              initial={{ opacity: 0, scale: 0.98 }}
               animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.96 }}
-              transition={{ duration: 0.3 }}
-              className="rounded-xl border border-white/[0.08] bg-[#0a0e17] p-8 text-center max-w-2xl mx-auto shadow-2xl"
+              exit={{ opacity: 0, scale: 0.98 }}
+              transition={{ duration: 0.25 }}
+              className="rounded-xl border border-white/[0.08] bg-[#0f131c] p-8 text-center max-w-2xl mx-auto shadow-2xl"
             >
-              <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ type: 'spring', stiffness: 400, damping: 20 }}
-                className="flex h-14 w-14 items-center justify-center rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 mx-auto mb-4"
-              >
-                <CheckCircle2 className="h-7 w-7" />
-              </motion.div>
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 mx-auto mb-4">
+                <CheckCircle2 className="h-6 w-6" />
+              </div>
 
-              <h2 className="text-2xl font-bold text-white">Scenario Evaluation Complete</h2>
+              <h2 className="text-xl font-bold text-white">Scenario Evaluation Complete</h2>
               <p className="text-slate-400 text-xs sm:text-sm mt-1">
-                You verified <span className="font-bold text-white">{score}</span> of <span className="font-bold text-white">{filteredScenarios.length}</span> engineering challenges correctly ({accuracyPct}% precision).
+                You evaluated <span className="font-semibold text-white">{score}</span> of <span className="font-semibold text-white">{filteredScenarios.length}</span> architectural challenges correctly ({accuracyPct}% precision).
               </p>
 
-              <div className="mt-6 grid grid-cols-3 gap-3 p-4 rounded-lg bg-[#070a12] border border-white/[0.06] text-center font-mono">
+              <div className="mt-6 grid grid-cols-3 gap-3 p-4 rounded-lg bg-[#141a26] border border-white/[0.06] text-center font-mono">
                 <div>
                   <div className="text-xs text-slate-500">Correct</div>
-                  <div className="text-xl font-bold text-emerald-400 mt-0.5">{score}</div>
+                  <div className="text-lg font-bold text-emerald-400 mt-0.5">{score}</div>
                 </div>
                 <div>
                   <div className="text-xs text-slate-500">Incorrect</div>
-                  <div className="text-xl font-bold text-rose-400 mt-0.5">{filteredScenarios.length - score}</div>
+                  <div className="text-lg font-bold text-rose-400 mt-0.5">{filteredScenarios.length - score}</div>
                 </div>
                 <div>
-                  <div className="text-xs text-slate-500">Accuracy</div>
-                  <div className="text-xl font-bold text-sky-400 mt-0.5">{accuracyPct}%</div>
+                  <div className="text-xs text-slate-500">Precision</div>
+                  <div className="text-lg font-bold text-sky-400 mt-0.5">{accuracyPct}%</div>
                 </div>
               </div>
 
-              <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-                <motion.button
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.97 }}
-                  onClick={handleRestart}
-                  className="inline-flex items-center gap-2 rounded-lg bg-sky-600 hover:bg-sky-500 px-5 py-2.5 text-xs font-semibold text-white shadow-xs transition-colors cursor-pointer"
-                >
-                  <RotateCcw className="h-4 w-4" />
-                  Retake Scenario Battery
-                </motion.button>
-                <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}>
-                  <Link
-                    href="/interview"
-                    className="inline-flex items-center gap-2 rounded-lg border border-white/[0.1] bg-[#0c1019] hover:bg-[#121826] px-5 py-2.5 text-xs font-semibold text-slate-200 transition-colors"
-                  >
-                    <BookOpen className="h-4 w-4 text-sky-400" />
-                    Study 45+ Interview Guides
-                  </Link>
-                </motion.div>
+              <div className="mt-8 flex items-center justify-center gap-3">
+                <Button variant="secondary" onClick={handleRestart} icon={<RotateCcw className="h-4 w-4" />}>
+                  Retry Scenarios
+                </Button>
+                <Link href="/courses">
+                  <Button variant="primary" icon={<ArrowRight className="h-4 w-4" />}>
+                    Explore Curriculum
+                  </Button>
+                </Link>
               </div>
             </motion.div>
           ) : (
             /* ACTIVE SCENARIO CARD */
             <motion.div
-              key={`scenario-${currentScenario.id}-${currentIndex}`}
-              initial={{ opacity: 0, x: 18 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -18 }}
-              transition={{ duration: 0.22, ease: 'easeOut' }}
-              className="rounded-xl border border-white/[0.08] bg-[#0a0e17] p-6 sm:p-8 shadow-xl"
+              key={currentScenario.id}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2 }}
+              className="space-y-6"
             >
-              {/* Meta bar */}
-              <div className="flex flex-wrap items-center justify-between gap-2 pb-4 border-b border-white/[0.06] text-xs">
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-[11px] font-semibold text-sky-400 uppercase tracking-wide">
-                    {currentScenario.topic}
-                  </span>
-                  <span className="text-slate-600">•</span>
-                  <span className="text-[11px] text-slate-400 bg-white/[0.04] px-2 py-0.5 rounded border border-white/[0.06]">
-                    {currentScenario.difficulty}
+              {/* Question Header Card */}
+              <div className="rounded-xl border border-white/[0.08] bg-[#0f131c] p-6 shadow-xl">
+                <div className="flex items-center justify-between gap-4 mb-4 pb-4 border-b border-white/[0.06]">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="primary">
+                      {currentScenario.category}
+                    </Badge>
+                    <Badge variant="neutral">
+                      {currentScenario.difficulty}
+                    </Badge>
+                  </div>
+                  <span className="text-xs font-mono text-slate-400">
+                    Scenario {currentIndex + 1} of {filteredScenarios.length}
                   </span>
                 </div>
-                <div className="font-mono text-slate-400 text-xs">
-                  Scenario {currentIndex + 1} of {filteredScenarios.length}
-                </div>
-              </div>
 
-              {/* Linear Progress Bar */}
-              <div className="mt-4 h-1 w-full rounded-full bg-slate-800 overflow-hidden">
-                <motion.div
-                  className="h-full bg-sky-500 rounded-full"
-                  initial={false}
-                  animate={{ width: `${((currentIndex + 1) / filteredScenarios.length) * 100}%` }}
-                  transition={{ duration: 0.3 }}
-                />
-              </div>
-
-              {/* Real World Engineering Scenario Context */}
-              {currentScenario.scenario && (
-                <div className="mt-6 p-4 rounded-lg bg-[#070a12] border border-white/[0.06] text-xs leading-relaxed text-slate-300">
-                  <span className="font-mono text-[11px] font-semibold uppercase text-slate-500 block mb-1">
-                    Engineering Context & Production Environment
+                <div className="text-xs font-mono text-sky-400 mb-1">{currentScenario.topic}</div>
+                <div className="rounded-lg bg-[#141a26] border border-white/[0.06] p-4 text-xs sm:text-sm text-slate-300 leading-relaxed font-mono mb-4">
+                  <span className="text-slate-500 font-semibold block mb-1 uppercase tracking-wider text-[10px]">
+                    System Scenario & Context
                   </span>
                   {currentScenario.scenario}
                 </div>
-              )}
 
-              {/* Core Architectural Question */}
-              <h3 className="mt-5 text-base sm:text-lg font-bold text-white leading-snug">
-                {currentScenario.question}
-              </h3>
+                <h3 className="text-sm sm:text-base font-semibold text-white leading-snug">
+                  {currentScenario.question}
+                </h3>
+              </div>
 
-              {/* Multiple Choice Options */}
-              <div className="mt-6 space-y-2.5">
-                {currentScenario.options.map((option: string, idx: number) => {
-                  let stateStyle = 'border-white/[0.08] bg-[#0c1019] text-slate-300 hover:border-white/[0.18] hover:bg-[#111724]';
+              {/* Options Grid */}
+              <div className="space-y-3">
+                {currentScenario.options.map((option, idx) => {
+                  const letters = ['A', 'B', 'C', 'D'];
+                  const isSelected = selectedOption === idx;
+                  const isCorrect = idx === currentScenario.correctIndex;
+
+                  let borderClass = 'border-white/[0.08] bg-[#0f131c] hover:bg-[#141a26] hover:border-white/[0.16]';
+                  let badgeClass = 'bg-[#141a26] text-slate-400 border border-white/[0.08]';
 
                   if (isAnswered) {
-                    if (idx === currentScenario.correctIndex) {
-                      stateStyle = 'border-emerald-500/50 bg-emerald-500/10 text-emerald-200 font-medium';
-                    } else if (idx === selectedOption) {
-                      stateStyle = 'border-rose-500/50 bg-rose-500/10 text-rose-300';
+                    if (isCorrect) {
+                      borderClass = 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200';
+                      badgeClass = 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30';
+                    } else if (isSelected) {
+                      borderClass = 'border-rose-500/40 bg-rose-500/10 text-rose-200';
+                      badgeClass = 'bg-rose-500/20 text-rose-300 border-rose-500/30';
                     } else {
-                      stateStyle = 'border-white/[0.04] bg-[#080c14] text-slate-500 opacity-60';
+                      borderClass = 'border-white/[0.04] bg-[#0f131c]/50 opacity-50';
                     }
                   }
 
                   return (
-                    <motion.button
+                    <button
                       key={idx}
                       disabled={isAnswered}
                       onClick={() => handleSelectOption(idx)}
-                      whileHover={!isAnswered ? { x: 3 } : {}}
-                      whileTap={!isAnswered ? { scale: 0.99 } : {}}
-                      className={`w-full flex items-start gap-3.5 p-3.5 rounded-lg border text-left text-xs sm:text-sm transition-colors ${stateStyle} focus:outline-none cursor-pointer disabled:cursor-default`}
+                      className={`w-full rounded-xl border p-4 text-left transition-all duration-150 flex items-start gap-3 cursor-pointer ${borderClass}`}
                     >
-                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-white/[0.06] font-mono text-[11px] font-semibold text-slate-400">
-                        {String.fromCharCode(65 + idx)}
+                      <span className={`shrink-0 flex h-6 w-6 items-center justify-center rounded font-mono text-xs font-bold ${badgeClass}`}>
+                        {letters[idx]}
                       </span>
-                      <span className="leading-relaxed pt-0.5">{option}</span>
-                    </motion.button>
+                      <span className="text-xs sm:text-sm text-slate-200 leading-relaxed pt-0.5">
+                        {option}
+                      </span>
+                    </button>
                   );
                 })}
               </div>
 
-              {/* Keyboard shortcuts reminder */}
-              {!isAnswered && (
-                <div className="mt-4 flex items-center justify-between text-[11px] text-slate-500 font-mono">
-                  <span>Press keys 1-4 or A-D to select</span>
-                  <span>Instant Evaluation</span>
-                </div>
-              )}
-
-              {/* Explanation & Tradeoff Insight */}
+              {/* Post-Answer Architectural Breakdown */}
               <AnimatePresence>
                 {isAnswered && (
                   <motion.div
-                    initial={{ opacity: 0, y: 10, height: 0 }}
-                    animate={{ opacity: 1, y: 0, height: 'auto' }}
-                    exit={{ opacity: 0, height: 0 }}
-                    transition={{ duration: 0.25 }}
-                    className="mt-6 space-y-3 overflow-hidden"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 10 }}
+                    className="rounded-xl border border-white/[0.08] bg-[#0f131c] p-6 space-y-4"
                   >
-                    <div className="p-4 rounded-lg border border-sky-500/20 bg-sky-500/5 text-xs text-slate-300 leading-relaxed">
-                      <div className="font-semibold text-white mb-1 flex items-center gap-1.5">
-                        <Sparkles className="h-3.5 w-3.5 text-sky-400" />
-                        <span>Architectural Rationale & Implementation Detail</span>
+                    <div className="flex items-center justify-between pb-3 border-b border-white/[0.06]">
+                      <div className="flex items-center gap-2">
+                        {selectedOption === currentScenario.correctIndex ? (
+                          <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-400 font-mono">
+                            <CheckCircle2 className="h-4 w-4" />
+                            <span>Optimal Architectural Choice</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5 text-xs font-semibold text-rose-400 font-mono">
+                            <XCircle className="h-4 w-4" />
+                            <span>Suboptimal Trade-off Selected</span>
+                          </div>
+                        )}
                       </div>
-                      {currentScenario.explanation}
+                      <span className="text-xs font-mono text-slate-500">Shortcuts: Enter or Space for Next</span>
                     </div>
 
-                    {currentScenario.architectureTradeoff && (
-                      <div className="p-3.5 rounded-lg border border-amber-500/20 bg-amber-500/5 text-xs text-amber-200/90 leading-relaxed">
-                        <span className="font-semibold text-amber-300 block mb-0.5 font-mono text-[11px]">
-                          Production Trade-off & Gotcha:
-                        </span>
-                        {currentScenario.architectureTradeoff}
+                    <div>
+                      <div className="text-xs font-mono uppercase tracking-wider text-slate-400 font-semibold mb-1">
+                        Technical Rationale
                       </div>
-                    )}
+                      <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                        {currentScenario.explanation}
+                      </p>
+                    </div>
+
+                    <div className="rounded-lg bg-[#141a26] border border-white/[0.06] p-4 text-xs sm:text-sm">
+                      <div className="text-[11px] font-mono uppercase tracking-wider text-amber-400 font-semibold mb-1">
+                        Architectural Trade-Off & Mitigation
+                      </div>
+                      <p className="text-slate-300 leading-relaxed font-mono text-xs">
+                        {currentScenario.architectureTradeoff}
+                      </p>
+                    </div>
+
+                    <div className="pt-2 flex justify-end">
+                      <Button variant="primary" onClick={handleNext} icon={<ArrowRight className="h-4 w-4" />}>
+                        {currentIndex + 1 >= filteredScenarios.length ? 'View Debrief Report' : 'Next Scenario'}
+                      </Button>
+                    </div>
                   </motion.div>
                 )}
               </AnimatePresence>
-
-              {/* Advance Button */}
-              {isAnswered && (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  className="mt-6 pt-4 border-t border-white/[0.06] flex items-center justify-between"
-                >
-                  <span className="text-[11px] text-slate-500 font-mono">Press Space or Enter to continue</span>
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={handleNext}
-                    className="inline-flex items-center gap-2 rounded-lg bg-sky-600 hover:bg-sky-500 px-5 py-2 text-xs font-semibold text-white transition-colors cursor-pointer"
-                  >
-                    <span>{currentIndex + 1 >= filteredScenarios.length ? 'Complete Battery' : 'Next Scenario'}</span>
-                    <ArrowRight className="h-3.5 w-3.5" />
-                  </motion.button>
-                </motion.div>
-              )}
             </motion.div>
           )}
         </AnimatePresence>

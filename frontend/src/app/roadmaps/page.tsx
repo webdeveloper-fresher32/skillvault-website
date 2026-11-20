@@ -2,7 +2,23 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { Layers, ArrowRight, Compass, Terminal, Cpu, Cloud, Database, Brain, Sparkles, CheckCircle2 } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { 
+  Layers, 
+  ArrowRight, 
+  Compass, 
+  Terminal, 
+  Cpu, 
+  Cloud, 
+  Database, 
+  Brain, 
+  Sparkles, 
+  CheckCircle2 
+} from 'lucide-react';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
 
 interface CareerTrack {
   id: string;
@@ -24,7 +40,7 @@ const CAREER_TRACKS: CareerTrack[] = [
     title: 'Full-Stack Engineer',
     badge: 'End-to-End Product Engineering',
     tagline: 'Master the complete stack from reactive frontends to distributed backends, robust database models, and cloud CI/CD delivery.',
-    icon: <Terminal className="h-5 w-5 text-blue-400" />,
+    icon: <Terminal className="h-4 w-4 text-blue-400" />,
     phases: [
       {
         number: 'Phase 1',
@@ -92,7 +108,7 @@ const CAREER_TRACKS: CareerTrack[] = [
     title: 'Backend Engineer',
     badge: 'High-Throughput Systems',
     tagline: 'Architect core business logic, resilient microservices, distributed transaction management, and low-latency database engines.',
-    icon: <Database className="h-5 w-5 text-emerald-400" />,
+    icon: <Database className="h-4 w-4 text-emerald-400" />,
     phases: [
       {
         number: 'Phase 1',
@@ -167,7 +183,7 @@ const CAREER_TRACKS: CareerTrack[] = [
     title: 'AI Engineer',
     badge: 'Foundation Models & Agents',
     tagline: 'Harness the 7 Pillars of AI Engineering: from numerical optimization and neural anatomy to production RAG and multi-agent state machines.',
-    icon: <Brain className="h-5 w-5 text-purple-400" />,
+    icon: <Brain className="h-4 w-4 text-purple-400" />,
     phases: [
       {
         number: 'Pillar 1-3',
@@ -219,7 +235,7 @@ const CAREER_TRACKS: CareerTrack[] = [
     title: 'Cloud & DevOps Engineer',
     badge: 'Infrastructure as Code & SRE',
     tagline: 'Automate zero-downtime deployments, codify immutable cloud infrastructure with Terraform, and operate elastic Kubernetes clusters.',
-    icon: <Cloud className="h-5 w-5 text-sky-400" />,
+    icon: <Cloud className="h-4 w-4 text-sky-400" />,
     phases: [
       {
         number: 'Phase 1',
@@ -289,55 +305,67 @@ export default function RoadmapsPage() {
   const activeTrack = CAREER_TRACKS.find((t) => t.id === activeTab) || CAREER_TRACKS[0];
 
   return (
-    <div className="min-h-screen bg-[#06080e] text-slate-100 pb-20">
-      {/* 1. HEADER */}
-      <section className="border-b border-white/[0.06] bg-[#080c14] py-10 px-4 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-5xl">
-          <div className="inline-flex items-center gap-2 rounded-md border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 text-xs font-mono text-sky-400 mb-3">
-            <Compass className="h-3.5 w-3.5 text-sky-400" />
-            <span>Senior Career Engineering Pathways</span>
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-            Career Roadmaps & Learning Milestones
-          </h1>
-          <p className="mt-1 text-xs sm:text-sm text-slate-400 max-w-2xl leading-relaxed">
-            Progressive engineering pathways modeled after senior industry roles. Sequence core computer science foundations, microservices, and high-scale production operations.
-          </p>
-
-          {/* Tab Selection */}
-          <div className="mt-6 flex flex-wrap gap-2 pt-4 border-t border-white/[0.06]">
-            {CAREER_TRACKS.map((track) => (
+    <div className="min-h-screen bg-[#090b10] text-slate-100 pb-20">
+      {/* 1. ENTERPRISE HEADER */}
+      <PageHeader
+        breadcrumbs={[
+          { label: 'Platform', href: '/' },
+          { label: 'Roadmaps' },
+          { label: activeTrack.title }
+        ]}
+        badge={
+          <Badge variant="primary" dot>
+            Career Engineering Blueprints
+          </Badge>
+        }
+        title="Career Roadmaps & Learning Milestones"
+        description="Progressive, highly structured engineering pathways modeled after senior industry roles. Sequence core computer science foundations, microservices, and high-scale production operations."
+      >
+        {/* Track Selection Tabs */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pt-6 border-t border-white/[0.06] mt-6 scrollbar-none">
+          {CAREER_TRACKS.map((track) => {
+            const isActive = activeTab === track.id;
+            return (
               <button
                 key={track.id}
                 onClick={() => setActiveTab(track.id)}
-                className={`flex items-center gap-2 rounded-md px-3.5 py-1.5 text-xs font-medium transition-colors ${
-                  activeTab === track.id
-                    ? 'bg-sky-500/15 text-sky-400 border border-sky-500/30'
-                    : 'bg-[#0c1019] text-slate-400 hover:text-white border border-white/[0.06]'
+                className={`relative whitespace-nowrap rounded-md px-3.5 py-1.5 text-xs font-medium transition-colors focus:outline-none cursor-pointer flex items-center gap-2 ${
+                  isActive
+                    ? 'text-sky-300 font-semibold'
+                    : 'bg-[#0f131c] text-slate-400 hover:text-white hover:bg-[#141a26] border border-white/[0.06]'
                 }`}
               >
-                {track.icon}
-                <span>{track.title}</span>
+                {isActive && (
+                  <motion.div
+                    layoutId="roadmaps-tab-active"
+                    className="absolute inset-0 rounded-md bg-sky-500/15 border border-sky-500/30"
+                    transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                  />
+                )}
+                <span className="relative z-10 flex items-center gap-2">
+                  {track.icon}
+                  {track.title}
+                </span>
               </button>
-            ))}
-          </div>
+            );
+          })}
         </div>
-      </section>
+      </PageHeader>
 
       {/* 2. SELECTED CAREER TRACK CONTENT */}
-      <main className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 mt-10">
+      <main className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 mt-8">
         {/* Track Overview Card */}
-        <div className="rounded-xl border border-white/[0.08] bg-[#0a0e17] p-6 mb-10">
+        <div className="rounded-xl border border-white/[0.08] bg-[#0f131c] p-6 mb-8">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-4 border-b border-white/[0.06]">
             <div>
-              <span className="inline-block rounded bg-sky-500/10 px-2 py-0.5 text-[11px] font-mono font-semibold text-sky-400 border border-sky-500/20 mb-1.5">
+              <Badge variant="primary" className="mb-2">
                 {activeTrack.badge}
-              </span>
+              </Badge>
               <h2 className="text-xl font-bold text-white tracking-tight">{activeTrack.title} Pathway</h2>
             </div>
-            <span className="text-xs font-mono text-slate-400">
+            <Badge variant="neutral">
               {activeTrack.phases.length} Sequential Milestones
-            </span>
+            </Badge>
           </div>
           <p className="mt-3 text-xs sm:text-sm text-slate-300 leading-relaxed">
             {activeTrack.tagline}
@@ -349,17 +377,17 @@ export default function RoadmapsPage() {
           {activeTrack.phases.map((phase, idx) => (
             <div key={idx} className="relative group">
               {/* Timeline Marker Dot */}
-              <div className="absolute -left-[31px] sm:-left-[39px] top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-[#06080e] border border-sky-400 text-[10px] font-mono font-bold text-sky-400">
+              <div className="absolute -left-[31px] sm:-left-[39px] top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-[#090b10] border border-sky-400 text-[10px] font-mono font-bold text-sky-400">
                 {idx + 1}
               </div>
 
               {/* Milestone Card */}
-              <div className="rounded-xl border border-white/[0.08] bg-[#0a0e17] p-5 hover:border-white/[0.16] transition-colors">
+              <div className="rounded-xl border border-white/[0.08] bg-[#0f131c] p-5 hover:border-sky-500/30 hover:bg-[#141a26] transition-all">
                 <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-sky-400 block mb-1">
                   {phase.number}
                 </span>
 
-                <h3 className="text-base font-bold text-white group-hover:text-sky-300 transition-colors">
+                <h3 className="text-base font-semibold text-white group-hover:text-sky-300 transition-colors">
                   {phase.title}
                 </h3>
 
@@ -369,7 +397,7 @@ export default function RoadmapsPage() {
 
                 {/* Direct Course Links */}
                 <div className="mt-4 pt-3 border-t border-white/[0.06]">
-                  <div className="text-[10px] font-mono uppercase tracking-wider text-slate-500 mb-2">
+                  <div className="text-[10px] font-mono uppercase tracking-wider text-slate-500 mb-2 font-semibold">
                     Core Technical Curricula:
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -377,7 +405,7 @@ export default function RoadmapsPage() {
                       <Link
                         key={cIdx}
                         href={`/courses/${course.slug}`}
-                        className="inline-flex items-center gap-1.5 rounded-md border border-white/[0.08] bg-[#0c1019] px-2.5 py-1 text-xs font-medium text-slate-300 hover:border-sky-500/30 hover:text-white transition-colors"
+                        className="inline-flex items-center gap-1.5 rounded-md border border-white/[0.08] bg-[#141a26] hover:bg-[#1a2232] px-2.5 py-1 text-xs font-medium text-slate-300 hover:border-sky-500/30 hover:text-white transition-colors"
                       >
                         <CheckCircle2 className="h-3 w-3 text-sky-400" />
                         <span>{course.name}</span>

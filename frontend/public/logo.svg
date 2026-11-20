@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Background Gradient -->
+    <linearGradient id="svBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f1422" />
+      <stop offset="100%" stop-color="#070a10" />
+    </linearGradient>
+
+    <!-- Border Subtle Rim -->
+    <linearGradient id="svRim" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="rgba(255,255,255,0.18)" />
+      <stop offset="100%" stop-color="rgba(255,255,255,0.04)" />
+    </linearGradient>
+
+    <!-- S-Ribbon Gradient: Electric Sky to Cobalt -->
+    <linearGradient id="sGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="100%" stop-color="#2563eb" />
+    </linearGradient>
+
+    <!-- V-Foundation Gradient: Royal Blue to Cobalt -->
+    <linearGradient id="vGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1d4ed8" />
+      <stop offset="100%" stop-color="#2563eb" />
+    </linearGradient>
+
+    <!-- Core Diamond: Cyan to Emerald -->
+    <linearGradient id="coreGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="100%" stop-color="#10b981" />
+    </linearGradient>
+  </defs>
+
+  <!-- Container Squircle -->
+  <rect x="25" y="25" width="462" height="462" rx="112" fill="url(#svBg)" stroke="url(#svRim)" stroke-width="2.5" />
+  <rect x="31" y="31" width="450" height="450" rx="106" fill="none" stroke="rgba(56,189,248,0.08)" stroke-width="1.5" />
+
+  <!-- Monolithic Mark: S + V Geometry -->
+  <g id="skillvault-mark">
+    <!-- Lower V Foundation Plate -->
+    <polygon points="
+      92, 235
+      164, 235
+      256, 368
+      348, 235
+      420, 235
+      256, 450
+    " fill="url(#vGrad)" />
+
+    <!-- Upper S Ribbon Plate -->
+    <polygon points="
+      112, 82
+      389, 82
+      389, 164
+      235, 164
+      358, 287
+      358, 358
+      123, 358
+      123, 287
+      276, 287
+      164, 164
+      112, 164
+    " fill="url(#sGrad)" />
+
+    <!-- Center Vault Cryptographic Core -->
+    <polygon points="
+      256, 235
+      276, 256
+      256, 276
+      236, 256
+    " fill="url(#coreGrad)" />
+  </g>
+</svg>
