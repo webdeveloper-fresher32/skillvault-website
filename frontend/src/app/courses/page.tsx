@@ -25,7 +25,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 
 const CATEGORIES = [
   'All',
-  'My Work',
+  // 'My Work',
   'Backend',
   'Cloud & DevOps',
   'DevOps',

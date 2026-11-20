@@ -418,62 +418,34 @@ function QuickReferencesContent() {
 
         {/* Sidebar: Navigation & Filters (Fixed Left Column on Desktop) */}
         <aside
-          className={`fixed inset-y-0 left-0 z-50 md:z-20 w-80 sm:w-88 h-full bg-[#0f131c] border-r border-white/[0.08] p-4 flex flex-col shrink-0 overflow-hidden transform transition-transform duration-200 ease-in-out md:relative md:translate-x-0 ${
+          className={`fixed inset-y-0 left-0 z-50 md:z-20 w-80 sm:w-88 h-full bg-[#0f131c] border-r border-white/[0.08] p-4 flex flex-col shrink-0 overflow-hidden [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden transform transition-transform duration-200 ease-in-out md:relative md:translate-x-0 ${
             isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
           }`}
         >
           {/* Module Switcher: All | JavaScript | Node.js | Async | Express */}
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-1 p-1 bg-[#0c1019] border border-white/[0.08] rounded-lg mb-3">
-            <button
-              onClick={() => setSelectedModule('all')}
-              className={`py-1 text-[11px] font-semibold rounded-md transition-all text-center cursor-pointer ${
-                selectedModule === 'all'
-                  ? 'bg-sky-500/20 text-sky-300 border border-sky-500/30'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              All (91)
-            </button>
-            <button
-              onClick={() => setSelectedModule('javascript')}
-              className={`py-1 text-[11px] font-semibold rounded-md transition-all text-center cursor-pointer ${
-                selectedModule === 'javascript'
-                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              JS Core (25)
-            </button>
-            <button
-              onClick={() => setSelectedModule('nodejs')}
-              className={`py-1 text-[11px] font-semibold rounded-md transition-all text-center cursor-pointer ${
-                selectedModule === 'nodejs'
-                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              Node.js (24)
-            </button>
-            <button
-              onClick={() => setSelectedModule('async')}
-              className={`py-1 text-[11px] font-semibold rounded-md transition-all text-center cursor-pointer ${
-                selectedModule === 'async'
-                  ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              Async (19)
-            </button>
-            <button
-              onClick={() => setSelectedModule('express')}
-              className={`py-1 text-[11px] font-semibold rounded-md transition-all text-center cursor-pointer ${
-                selectedModule === 'express'
-                  ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              Express (23)
-            </button>
+          <div className="flex items-center gap-1 p-1 bg-[#141a26] border border-white/[0.08] rounded-lg mb-3">
+            {[
+              { id: 'all', label: 'All', count: 91 },
+              { id: 'javascript', label: 'JS', count: 25 },
+              { id: 'nodejs', label: 'Node', count: 24 },
+              { id: 'async', label: 'Async', count: 19 },
+              { id: 'express', label: 'Express', count: 23 },
+            ].map((m) => {
+              const isSel = selectedModule === m.id;
+              return (
+                <button
+                  key={m.id}
+                  onClick={() => setSelectedModule(m.id as ModuleFilter)}
+                  className={`flex-1 py-1.5 px-1 text-[11px] font-medium rounded-md transition-all text-center cursor-pointer select-none ${
+                    isSel
+                      ? 'bg-sky-500/20 text-sky-300 font-semibold border border-sky-500/30 shadow-xs'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.03]'
+                  }`}
+                >
+                  <span>{m.label}</span>
+                </button>
+              );
+            })}
           </div>
 
           {/* Search Box */}
@@ -482,70 +454,54 @@ function QuickReferencesContent() {
             <input
               ref={searchInputRef}
               type="text"
-              placeholder={`Search ${scopedTopics.length} topics... (/)`}
+              placeholder={`Search ${scopedTopics.length} topics...`}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full rounded-lg border border-white/[0.08] bg-[#0c1019] pl-9 pr-7 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:border-sky-500/50 focus:outline-none focus:ring-1 focus:ring-sky-500/30 transition-all"
+              className="w-full rounded-lg border border-white/[0.08] bg-[#141a26] pl-9 pr-8 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:border-sky-500/50 focus:bg-[#1a2232] focus:outline-none transition-all"
             />
-            {searchQuery && (
+            {searchQuery ? (
               <button
                 onClick={() => setSearchQuery('')}
-                className="absolute right-2.5 top-2.5 text-slate-500 hover:text-slate-300"
+                className="absolute right-2.5 top-2 text-slate-500 hover:text-slate-300 cursor-pointer"
               >
-                <X className="h-3 w-3" />
+                <X className="h-3.5 w-3.5" />
               </button>
+            ) : (
+              <kbd className="absolute right-2.5 top-2 text-[10px] font-mono text-slate-500 bg-white/[0.06] px-1 py-0.2 rounded pointer-events-none">
+                /
+              </kbd>
             )}
           </div>
 
-          {/* Quick Filter Tabs */}
-          <div className="grid grid-cols-2 gap-1 mb-3">
-            <button
-              onClick={() => setActiveFilter('all')}
-              className={`rounded-md px-2 py-1 text-[11px] font-medium transition-colors text-left truncate cursor-pointer ${
-                activeFilter === 'all'
-                  ? 'bg-sky-500/15 text-sky-300 border border-sky-500/30'
-                  : 'text-slate-400 hover:bg-white/[0.04]'
-              }`}
-            >
-              All in Scope ({scopedTopics.length})
-            </button>
-            <button
-              onClick={() => setActiveFilter('needs-revision')}
-              className={`rounded-md px-2 py-1 text-[11px] font-medium transition-colors text-left truncate flex items-center gap-1 cursor-pointer ${
-                activeFilter === 'needs-revision'
-                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                  : 'text-slate-400 hover:bg-white/[0.04]'
-              }`}
-            >
-              <AlertTriangle className="h-3 w-3 text-amber-400 shrink-0" />
-              <span>Needs Rev ({stats.needsRevCount})</span>
-            </button>
-            <button
-              onClick={() => setActiveFilter('bookmarked')}
-              className={`rounded-md px-2 py-1 text-[11px] font-medium transition-colors text-left truncate flex items-center gap-1 cursor-pointer ${
-                activeFilter === 'bookmarked'
-                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                  : 'text-slate-400 hover:bg-white/[0.04]'
-              }`}
-            >
-              <Star className="h-3 w-3 text-amber-400 fill-amber-400 shrink-0" />
-              <span>Hard ({stats.bookmarkedCount})</span>
-            </button>
-            <button
-              onClick={() => setActiveFilter('revised')}
-              className={`rounded-md px-2 py-1 text-[11px] font-medium transition-colors text-left truncate flex items-center gap-1 cursor-pointer ${
-                activeFilter === 'revised'
-                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                  : 'text-slate-400 hover:bg-white/[0.04]'
-              }`}
-            >
-              <CheckCircle2 className="h-3 w-3 text-emerald-400 shrink-0" />
-              <span>Revised ({stats.revisedCount})</span>
-            </button>
+          {/* Clean Single-Row Filter Strip */}
+          <div className="flex items-center gap-1 mb-3 overflow-x-auto pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+            {[
+              { id: 'all', label: `All (${scopedTopics.length})` },
+              { id: 'needs-revision', label: `Needs Rev (${stats.needsRevCount})`, icon: AlertTriangle, iconClass: 'text-amber-400' },
+              { id: 'bookmarked', label: `Starred (${stats.bookmarkedCount})`, icon: Star, iconClass: 'text-amber-400 fill-amber-400' },
+              { id: 'revised', label: `Done (${stats.revisedCount})`, icon: CheckCircle2, iconClass: 'text-emerald-400' },
+            ].map((f) => {
+              const isAct = activeFilter === f.id;
+              const Icon = f.icon;
+              return (
+                <button
+                  key={f.id}
+                  onClick={() => setActiveFilter(f.id as FilterType)}
+                  className={`shrink-0 flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium transition-colors cursor-pointer select-none ${
+                    isAct
+                      ? 'bg-sky-500/15 text-sky-300 border border-sky-500/30'
+                      : 'bg-white/[0.03] text-slate-400 hover:bg-white/[0.06] hover:text-slate-200 border border-white/[0.04]'
+                  }`}
+                >
+                  {Icon && <Icon className={`h-3 w-3 ${f.iconClass}`} />}
+                  <span>{f.label}</span>
+                </button>
+              );
+            })}
           </div>
 
-          {/* Topics List Grouped by Category */}
-          <div className="flex-1 min-h-0 overflow-y-auto space-y-3 pr-1 scrollbar-thin">
+          {/* Topics List Grouped by Category (Scrollbar Removed) */}
+          <div className="flex-1 min-h-0 overflow-y-auto space-y-4 pr-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
             {activeCategorySummaries.map((cat) => {
               const categoryTopics = filteredTopics.filter((t) => t.categorySlug === cat.slug);
               if (categoryTopics.length === 0) return null;
@@ -553,7 +509,8 @@ function QuickReferencesContent() {
               const isExpanded = expandedCategories[cat.slug] ?? true;
 
               return (
-                <div key={cat.slug} className="rounded-lg border border-white/[0.04] bg-[#0c1019]/50 overflow-hidden">
+                <div key={cat.slug} className="space-y-1">
+                  {/* Clean Typographic Section Header */}
                   <button
                     onClick={() =>
                       setExpandedCategories((prev) => ({
@@ -561,9 +518,9 @@ function QuickReferencesContent() {
                         [cat.slug]: !isExpanded
                       }))
                     }
-                    className="w-full flex items-center justify-between px-2.5 py-2 bg-white/[0.02] hover:bg-white/[0.05] transition-colors text-left cursor-pointer"
+                    className="w-full flex items-center justify-between px-1.5 py-1 text-left text-slate-400 hover:text-slate-200 transition-colors cursor-pointer group select-none"
                   >
-                    <div className="flex items-center gap-1.5 truncate pr-1">
+                    <div className="flex items-center gap-2 truncate pr-1">
                       <span className={`h-1.5 w-1.5 rounded-full shrink-0 ${
                         cat.sectionSlug === 'nodejs'
                           ? 'bg-emerald-400'
@@ -573,28 +530,27 @@ function QuickReferencesContent() {
                           ? 'bg-cyan-400'
                           : 'bg-amber-400'
                       }`} />
-                      <span className="text-[11px] font-semibold text-slate-300 truncate tracking-wide">
+                      <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-slate-400 group-hover:text-slate-200 transition-colors">
                         {cat.name}
                       </span>
                     </div>
-                    <div className="flex items-center gap-1.5 text-[10px] text-slate-500 shrink-0">
+                    <div className="flex items-center gap-1.5 text-[10px] font-mono text-slate-500 shrink-0">
                       <span>{categoryTopics.length}</span>
                       {isExpanded ? (
-                        <ChevronDown className="h-3 w-3 text-slate-400" />
+                        <ChevronDown className="h-3 w-3 text-slate-500 group-hover:text-slate-400" />
                       ) : (
-                        <ChevronRight className="h-3 w-3 text-slate-400" />
+                        <ChevronRight className="h-3 w-3 text-slate-500 group-hover:text-slate-400" />
                       )}
                     </div>
                   </button>
 
+                  {/* Clean Topic Row List */}
                   {isExpanded && (
-                    <div className="p-1 space-y-0.5">
+                    <div className="space-y-0.5 border-l border-white/[0.06] ml-2 pl-2">
                       {categoryTopics.map((topic) => {
                         const isSelected = topic.id === selectedTopicId;
                         const isRev = revisionState.revisedTopicIds.includes(topic.id);
                         const isHard = revisionState.bookmarkedTopicIds.includes(topic.id);
-                        const ts = revisionState.lastRevisedTimestamps[topic.id];
-                        const overdue = needsRevision(ts);
 
                         return (
                           <div
@@ -603,55 +559,45 @@ function QuickReferencesContent() {
                               setSelectedTopicId(topic.id);
                               setIsMobileMenuOpen(false);
                             }}
-                            className={`group relative flex items-center justify-between px-2.5 py-2 rounded-md text-xs cursor-pointer transition-all ${
+                            className={`group relative flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs cursor-pointer transition-all duration-150 select-none ${
                               isSelected
-                                ? 'bg-sky-500/20 text-white font-semibold border border-sky-500/40 shadow-xs'
-                                : 'text-slate-300 hover:bg-white/[0.06] hover:text-white'
+                                ? 'bg-sky-500/15 text-sky-200 font-medium border-l-2 border-sky-400 pl-2'
+                                : 'text-slate-400 hover:bg-white/[0.04] hover:text-slate-200'
                             }`}
                           >
                             <div className="flex items-center gap-2 truncate pr-2">
-                              <span
-                                className={`text-[10px] font-mono rounded px-1 py-0.2 ${
-                                  isSelected
-                                    ? 'bg-sky-500 text-white font-bold'
-                                    : 'bg-white/[0.06] text-slate-400 group-hover:text-slate-200'
-                                }`}
-                              >
-                                {topic.number}
+                              <span className={`text-[10px] font-mono shrink-0 ${isSelected ? 'text-sky-400 font-semibold' : 'text-slate-500'}`}>
+                                {String(topic.number).padStart(2, '0')}
                               </span>
                               <span className="truncate">{topic.title}</span>
                             </div>
 
-                            <div className="flex items-center gap-1.5 shrink-0">
-                              {/* Star bookmark toggle */}
+                            <div className="flex items-center gap-1 shrink-0">
+                              {/* Star Bookmark (shows on hover or when starred) */}
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   toggleBookmark(topic.id);
                                 }}
-                                className="p-0.5 hover:scale-110 transition-transform"
-                                title={isHard ? 'Bookmarked as difficult' : 'Mark as difficult'}
+                                className={`p-0.5 transition-colors ${
+                                  isHard ? 'text-amber-400' : 'text-transparent group-hover:text-slate-600 hover:!text-slate-300'
+                                }`}
+                                title={isHard ? 'Bookmarked' : 'Bookmark topic'}
                               >
                                 <Star
                                   className={`h-3 w-3 ${
                                     isHard
                                       ? 'text-amber-400 fill-amber-400'
-                                      : 'text-slate-600 hover:text-slate-400'
+                                      : ''
                                   }`}
                                 />
                               </button>
 
-                              {/* Revision status icon */}
-                              {isRev ? (
+                              {/* Only show green checkmark if revised */}
+                              {isRev && (
                                 <span title="Revised this week">
                                   <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
                                 </span>
-                              ) : overdue ? (
-                                <span title="Needs revision (> 3 days or never)">
-                                  <span className="h-2 w-2 rounded-full bg-amber-400 inline-block animate-pulse" />
-                                </span>
-                              ) : (
-                                <span className="h-1.5 w-1.5 rounded-full bg-slate-600 inline-block" />
                               )}
                             </div>
                           </div>

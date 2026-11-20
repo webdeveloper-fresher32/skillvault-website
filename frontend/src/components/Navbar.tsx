@@ -75,14 +75,27 @@ export default function Navbar() {
     { label: 'Interview Q&A', href: '/interview', icon: HelpCircle },
     { label: 'Quick Reference', href: '/quick-references', icon: Code2 },
     { label: 'Roadmaps', href: '/roadmaps', icon: Layers },
-    { label: 'My Work', href: '/courses/my-work', icon: Sparkles },
+    // { label: 'My Work', href: '/courses/my-work', icon: Sparkles },
   ];
 
+  // Guaranteed single-winner active tab logic (resolves prefix conflicts)
+  const activeNavItemHref = React.useMemo(() => {
+    if (currentPath === '/') return '/';
+    const matches = navItems.filter(
+      (item) =>
+        item.href !== '/' &&
+        (currentPath === item.href ||
+          currentPath.startsWith(item.href + '/') ||
+          currentPath.startsWith(item.href + '?'))
+    );
+    if (!matches.length) return null;
+    // Pick the most specific (longest href) match so parent routes don't double-highlight
+    matches.sort((a, b) => b.href.length - a.href.length);
+    return matches[0].href;
+  }, [currentPath, navItems]);
+
   const isNavActive = (href: string) => {
-    if (href === '/') {
-      return currentPath === '/';
-    }
-    return currentPath === href || currentPath.startsWith(href + '/') || currentPath.startsWith(href + '?');
+    return href === activeNavItemHref;
   };
 
   return (
