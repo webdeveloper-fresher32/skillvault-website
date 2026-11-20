@@ -25,6 +25,7 @@ import {
 import SearchModal from './SearchModal';
 import { useAuth } from '@/context/AuthContext';
 import { Badge } from './ui/Badge';
+import { SkillVaultLogo } from './ui/SkillVaultLogo';
 
 export default function Navbar() {
   const pathname = usePathname();
@@ -96,15 +97,8 @@ export default function Navbar() {
               onMouseDown={() => setOptimisticPath('/')}
               className="flex items-center gap-2.5 group focus:outline-none"
             >
-              <div className="relative flex h-8 w-8 items-center justify-center rounded-lg border border-white/[0.1] bg-[#10141d] overflow-hidden group-hover:border-sky-500/40 transition-colors">
-                <Image
-                  src="/icon.png"
-                  alt="SkillVault Logo"
-                  width={32}
-                  height={32}
-                  className="h-full w-full object-contain"
-                  priority
-                />
+              <div className="relative flex items-center justify-center shrink-0">
+                <SkillVaultLogo size={32} className="group-hover:scale-105 transition-transform" />
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-sm font-bold tracking-tight text-white font-mono">
